@@ -1,0 +1,28 @@
+{
+  "schema_version": "2",
+  "name": "local-workbench",
+  "default_profile": "local",
+  "system_prompt": "You are a concise assistant.",
+  "profiles": {
+    "local": {
+      "base_url": "http://127.0.0.1:8123/v1",
+      "model": "example-model",
+      "api_key_env": "POCKETCHAT_API_KEY",
+      "timeout_seconds": 60,
+      "max_context_chars": 24000,
+      "summary_prefix_chars": 160,
+      "input_price_per_million": null,
+      "output_price_per_million": null
+    },
+    "hosted": {
+      "base_url": "https://example.invalid/v1",
+      "model": "example-model",
+      "api_key_env": "POCKETCHAT_HOSTED_KEY",
+      "timeout_seconds": 60,
+      "max_context_chars": 24000,
+      "summary_prefix_chars": 160,
+      "input_price_per_million": 0.5,
+      "output_price_per_million": 1.5
+    }
+  }
+}

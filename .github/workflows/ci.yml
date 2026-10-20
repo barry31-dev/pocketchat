@@ -1,0 +1,66 @@
+name: pocketchat-ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pocketchat-ci-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: pocketchat-ci (python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        python: ["3.9", "3.13"]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@a26af69be951a5d160a345f9da088a19bb3d42b5 # v5.6.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Record the runtime under test
+        id: runtime
+        run: |
+          python --version
+          python -m pip --version
+          echo "python=$(python --version)" >> "$GITHUB_OUTPUT"
+          echo "pip=$(python -m pip --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Run the suite
+        run: python -m unittest discover -s tests -v
+
+      - name: Install the package into a clean venv
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/pocketchat-clean
+          /tmp/pocketchat-clean/bin/python -m pip install .
+          /tmp/pocketchat-clean/bin/pocketchat --version
+          /tmp/pocketchat-clean/bin/pocketchat --help
+
+      - name: Write the job summary
+        if: always()
+        run: |
+          {
+            echo "### pocketchat-ci (${{ steps.runtime.outputs.python }}, ${{ steps.runtime.outputs.pip }})"
+            echo ""
+            echo "- commit: \`${{ github.sha }}\`"
+            echo "- python: ${{ steps.runtime.outputs.python }}"
+            echo "- event: ${{ github.event_name }}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pocketchat"
+version = "0.2.0"
+description = "A small single-user CLI chat agent whose trace is a first-class output."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.scripts]
+pocketchat = "pocketchat.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pocketchat*"]
+
+[tool.setuptools.package-data]
+pocketchat = ["schemas/*.json"]

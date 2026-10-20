@@ -1,0 +1,419 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent Trace Doctor trace event",
+  "description": "One trace event = one JSONL line. This schema accepts schema_version \"1\" only.",
+  "type": "object",
+  "required": ["schema_version", "event_id", "timestamp", "type", "run_id"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1",
+      "description": "Schema version. Only \"1\" is accepted by this schema."
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_[0-9]{6}$",
+      "description": "Recorder-generated id, unique within one trace file. Not read from any upstream system."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 instant. Must not decrease within a file (cross-line rule, enforced by the validator, not expressible here)."
+    },
+    "type": {
+      "description": "Event type. The payload contract is selected by this value.",
+      "enum": [
+        "run.started",
+        "run.finished",
+        "run.failed",
+        "run.cancelled",
+        "model.request.started",
+        "model.response.completed",
+        "model.response.failed",
+        "tool.call.started",
+        "tool.call.completed",
+        "tool.call.failed",
+        "permission.requested",
+        "permission.resolved",
+        "context.compacted",
+        "error.recorded"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Groups the events of one run. Schema version 1 files carry exactly one run_id."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Type-specific fields. Known fields are typed; unknown fields are allowed so recorders can extend without a schema bump."
+    }
+  },
+  "$defs": {
+    "error": {
+      "description": "A structured error. type is a stable error class, message is human-readable text.",
+      "type": "object",
+      "required": ["type", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Error class, e.g. file_not_found, command_failed, rate_limited."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error text."
+        }
+      }
+    },
+    "token_usage": {
+      "description": "Token counts for one model response. input/output are required; the cache and reasoning counters are optional because not every provider reports them.",
+      "type": "object",
+      "required": ["input_tokens", "output_tokens"],
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "cache_read_tokens": { "type": "integer", "minimum": 0 },
+        "cache_write_tokens": { "type": "integer", "minimum": 0 },
+        "reasoning_tokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "guard": {
+      "description": "Why a tool call was blocked before doing its work. Absent means the call ran and failed on its own terms. The first seven values come from reverse-engineering a comparable agent implementation; path_escape was added by the mini agent spike, whose sandbox produces exactly that class and no existing member covers it.",
+      "enum": [
+        "nt_namespace",
+        "device_path",
+        "special_file",
+        "denylist",
+        "binary_ext",
+        "dedup_stub",
+        "loop_block",
+        "path_escape"
+      ]
+    },
+    "model_role": {
+      "description": "Which model slot a request or response belongs to. main is the model that owns the run; reference is a second opinion consulted inside one turn; aggregator combines several reference answers. Single-model runs record main only.",
+      "enum": ["main", "reference", "aggregator"]
+    },
+    "effect_disposition": {
+      "description": "Whether a completed tool call left a side effect. none: the call is read-only, nothing outside the process changed. applied: the call completed and its side effect is in place. unknown: the call did not complete cleanly (timeout, unclear outcome), so a side effect may or may not be in place. Absent means the recorder did not classify it.",
+      "enum": ["none", "applied", "unknown"]
+    },
+    "capture": {
+      "description": "Where the body of a model response lives. inline: a summary is in this event. inline_from_stream: the text arrived incrementally and only the tail was kept. db_ref: the body is in a store this event does not carry. Absent means the recorder kept no response body.",
+      "enum": ["inline", "inline_from_stream", "db_ref"]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "run.started" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["input_summary"],
+            "properties": {
+              "input_summary": { "type": "string", "minLength": 1 },
+              "config_summary": {
+                "type": "object",
+                "description": "Run configuration as the recorder saw it. Open for extension; the keys below are the ones this project writes.",
+                "properties": {
+                  "model": { "type": "string" },
+                  "max_steps": { "type": "integer", "minimum": 0 },
+                  "tools": {
+                    "description": "The tool set offered to the model for this run. Tool schemas are hashed rather than inlined: the text is large and the hash is what a reviewer needs to notice a change.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["name", "available"],
+                      "properties": {
+                        "name": { "type": "string", "minLength": 1 },
+                        "schema_hash": { "type": "string" },
+                        "available": {
+                          "type": "boolean",
+                          "description": "False when the tool existed but was withheld from the model this run. Without this flag a trace cannot explain why a tool was never called."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "run.finished" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": { "const": "completed" },
+              "output_summary": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "run.failed" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["status", "error"],
+            "properties": {
+              "status": { "const": "failed" },
+              "error": { "$ref": "#/$defs/error" },
+              "output_summary": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "run.cancelled" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": { "const": "cancelled" },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "model.request.started" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["model"],
+            "properties": {
+              "model": { "type": "string", "minLength": 1 },
+              "messages": { "type": "integer", "minimum": 0 },
+              "role": { "$ref": "#/$defs/model_role" },
+              "slot_label": {
+                "type": "string",
+                "description": "Recorder-chosen label for this slot within the turn, e.g. planner or critic. Only meaningful together with role."
+              },
+              "request_snapshot": {
+                "type": "string",
+                "description": "Path of this request's snapshot, relative to the run root. Absent when the snapshot could not be written; that run carries an error.recorded event instead."
+              },
+              "request_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$",
+                "description": "SHA-256 of the snapshot's canonical request bytes. A reader recomputes it from the snapshot rather than trusting this value."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "model.response.completed" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["model", "usage", "duration_ms"],
+            "properties": {
+              "model": { "type": "string", "minLength": 1 },
+              "usage": { "$ref": "#/$defs/token_usage" },
+              "duration_ms": { "type": "integer", "minimum": 0 },
+              "finish_reason": { "type": "string" },
+              "role": { "$ref": "#/$defs/model_role" },
+              "slot_label": { "type": "string" },
+              "streamed": {
+                "type": "boolean",
+                "description": "True when the response arrived incrementally. Orthogonal to capture: a streamed response can still be captured inline."
+              },
+              "capture": { "$ref": "#/$defs/capture" },
+              "output_summary": {
+                "type": "string",
+                "description": "Short summary of the response body. Only meaningful when capture says the body is inline."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "model.response.failed" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["model", "error"],
+            "properties": {
+              "model": { "type": "string", "minLength": 1 },
+              "error": { "$ref": "#/$defs/error" },
+              "duration_ms": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "tool.call.started" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["tool"],
+            "properties": {
+              "tool": { "type": "string", "minLength": 1 },
+              "tool_call_id": { "type": "string" },
+              "args_summary": {
+                "type": "string",
+                "description": "Short human-readable summary of the arguments. Full arguments are deliberately not part of the trace."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "tool.call.completed" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["tool", "status", "duration_ms"],
+            "properties": {
+              "tool": { "type": "string", "minLength": 1 },
+              "status": { "const": "completed" },
+              "duration_ms": { "type": "integer", "minimum": 0 },
+              "result_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Size in bytes of the full result body the tool produced, before any truncation. It measures the result, not the thing the tool acted on: a write tool reports the size of its confirmation message, not of the bytes it wrote. Pair it with result_truncated to tell a small result from a clipped one."
+              },
+              "result_truncated": {
+                "type": "boolean",
+                "description": "True when the recorder truncated the result. Truncation is always explicit, never silent."
+              },
+              "effect_disposition": { "$ref": "#/$defs/effect_disposition" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "tool.call.failed" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["tool", "status", "error", "duration_ms"],
+            "properties": {
+              "tool": { "type": "string", "minLength": 1 },
+              "status": { "const": "failed" },
+              "error": { "$ref": "#/$defs/error" },
+              "duration_ms": { "type": "integer", "minimum": 0 },
+              "guard": { "$ref": "#/$defs/guard" },
+              "guardrail_refusal": {
+                "type": "boolean",
+                "description": "True when the failure is a guardrail refusal (the call was blocked on purpose). Consumers must not count these as tool errors."
+              },
+              "result_bytes": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "permission.requested" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["action"],
+            "properties": {
+              "action": { "type": "string", "minLength": 1 },
+              "resource": { "type": "string" },
+              "tool": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "permission.resolved" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["decision"],
+            "properties": {
+              "decision": { "enum": ["approved", "denied"] },
+              "decided_by": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "context.compacted" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["strategy"],
+            "properties": {
+              "strategy": { "type": "string", "minLength": 1 },
+              "before_messages": { "type": "integer", "minimum": 0 },
+              "after_messages": { "type": "integer", "minimum": 0 },
+              "before_tokens": { "type": "integer", "minimum": 0 },
+              "after_tokens": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "error.recorded" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["error"],
+            "properties": {
+              "error": { "$ref": "#/$defs/error" },
+              "fatal": {
+                "type": "boolean",
+                "description": "True when this error ends the run. Defaults to false when absent: an error.recorded event does not terminate a run by itself."
+              },
+              "related_event_id": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
