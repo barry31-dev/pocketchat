@@ -11,6 +11,7 @@ credential is real.
 """
 
 import json
+import errno
 import os
 import pty
 import signal
@@ -553,6 +554,13 @@ class ProfileRunTests(unittest.TestCase):
                     # Nothing to read yet: the child is parked in readline(),
                     # which is exactly the state this test wants to interrupt.
                     data = None
+                except OSError as error:
+                    # A Linux pty reports EOF with EIO instead of an empty
+                    # read. Treat that as "no more output"; anything else is a
+                    # real test failure.
+                    if error.errno != errno.EIO:
+                        raise
+                    data = b""
                 if not data and proc.poll() is not None:
                     break
                 if proc.poll() is not None:

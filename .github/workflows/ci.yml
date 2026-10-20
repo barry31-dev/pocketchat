@@ -17,7 +17,9 @@ concurrency:
 jobs:
   test:
     name: pocketchat-ci (python ${{ matrix.python }})
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04 still provides the actions/setup-python builds for 3.9;
+    # ubuntu-latest now resolves to a newer image that does not.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
