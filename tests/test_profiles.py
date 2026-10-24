@@ -26,10 +26,20 @@ from pathlib import Path
 
 from pocketchat.config import ConfigError, load_config, profile_config
 
+try:
+    from tests import _helpers as hp
+except ImportError:  # unittest discover puts tests/ itself on sys.path
+    import _helpers as hp
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def _cli(args, cwd, env=None):
+    return hp.run_cli(args, cwd, env=env)
+
+
+def _cli_subprocess(args, cwd, env=None):
+    """The golden path: a real interpreter, a real pipe, a real exit."""
     environ = {"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin"}
     if env:
         environ.update(env)
@@ -263,6 +273,14 @@ class ProfileListCommandTests(unittest.TestCase):
         self.config = self.base / "pocketchat.json"
         self.config.write_text(json.dumps(_v2_config()), encoding="utf-8")
 
+    def test_the_cli_runs_end_to_end_as_a_subprocess(self):
+        # One real interpreter for the profile family: the subprocess path
+        # stays in the suite; everything else here runs in process for speed.
+        result = _cli_subprocess(["profile", "list", "--config",
+                                  str(self.config)], self.base)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("local", result.stdout)
+
     def test_profile_list_never_prints_the_credential_value(self):
         secret = "sk-not-a-real-key-0123456789"
         result = _cli(["profile", "list", "--config", str(self.config)],
@@ -407,7 +425,7 @@ class ProfileRunTests(unittest.TestCase):
 
         self.server = HTTPServer(("127.0.0.1", 0), Stub)
         self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
         self.thread.start()
         self.addCleanup(self._stop_server)
         self.temp = tempfile.TemporaryDirectory()
@@ -440,17 +458,13 @@ class ProfileRunTests(unittest.TestCase):
         self.thread.join(timeout=10)
 
     def _run(self, *extra, env=None):
-        environ = {"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
-                   "POCKETCHAT_LOCAL_KEY": "local-fake",
+        environ = {"POCKETCHAT_LOCAL_KEY": "local-fake",
                    "POCKETCHAT_HOSTED_KEY": "hosted-fake"}
         if env:
             environ.update(env)
-        return subprocess.run(
-            [sys.executable, "-m", "pocketchat", "run", "hi", "--quiet",
-             "--config", str(self.config)] + list(extra),
-            cwd=str(self.base), env=environ, capture_output=True, text=True,
-            timeout=120,
-        )
+        return hp.run_cli(
+            ["run", "hi", "--quiet", "--config", str(self.config)] + list(extra),
+            self.base, env=environ)
 
     def _trace(self):
         traces = list((self.base / "traces").glob("*.jsonl"))

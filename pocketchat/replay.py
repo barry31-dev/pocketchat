@@ -77,6 +77,12 @@ def _snapshot_paths(workspace: Path, target: str) -> List[Path]:
     Current snapshots live beside their trace at
     ``traces/requests/<run-id>.turn-N.json``. The legacy ``requests`` directory
     remains readable so an older local snapshot is not silently unreplayable.
+
+    Session files resolve by a different rule --
+    ``sessions.resolve_session_argument`` -- because a replay target names a
+    run, not a conversation. The two artifact classes keep their own lookup;
+    what they share is the refusal shape: a target that names nothing is an
+    error, never an empty answer.
     """
     workspace = Path(workspace)
     direct = Path(target)

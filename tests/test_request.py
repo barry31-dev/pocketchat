@@ -39,6 +39,11 @@ from pocketchat.request import (
     write_request_snapshot,
 )
 
+try:
+    from tests import _helpers as hp
+except ImportError:  # unittest discover puts tests/ itself on sys.path
+    import _helpers as hp
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -97,11 +102,16 @@ class BuildPayloadTests(unittest.TestCase):
                 pass
 
         server = HTTPServer(("127.0.0.1", 0), Stub)
+        # Cleanups run last-registered-first: shutdown must run before join,
+        # or join waits out its full timeout against a still-serving thread.
+        # The thread does not exist yet, so join is deferred through a holder.
+        running = []
+        self.addCleanup(lambda: running[0].join(10))
         self.addCleanup(server.shutdown)
         self.addCleanup(server.server_close)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread = threading.Thread(target=lambda s=server: s.serve_forever(poll_interval=0.05), daemon=True)
         thread.start()
-        self.addCleanup(thread.join, 10)
+        running.append(thread)
 
         from pocketchat.provider import complete
         messages = [{"role": "user", "content": "hello"}]
@@ -397,7 +407,7 @@ class SnapshotRunTests(unittest.TestCase):
 
         self.server = HTTPServer(("127.0.0.1", 0), Stub)
         self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
         self.thread.start()
         self.addCleanup(self._stop)
         return self.port
@@ -408,6 +418,12 @@ class SnapshotRunTests(unittest.TestCase):
         self.thread.join(timeout=10)
 
     def _run(self, *args):
+        return hp.run_cli(
+            ["run", "hi", "--quiet", "--config", str(self.config)] + list(args),
+            self.base, env={"POCKETCHAT_LOCAL_KEY": "local-fake"})
+
+    def _run_subprocess(self, *args):
+        """The golden path: a real interpreter, a real pipe, a real exit."""
         return subprocess.run(
             [sys.executable, "-m", "pocketchat", "run", "hi", "--quiet",
              "--config", str(self.config)] + list(args),
@@ -415,6 +431,24 @@ class SnapshotRunTests(unittest.TestCase):
             env={"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
                  "POCKETCHAT_LOCAL_KEY": "local-fake"},
             capture_output=True, text=True, timeout=120)
+
+    def test_the_cli_runs_end_to_end_as_a_subprocess(self):
+        # One real interpreter for the snapshot and replay families: run once
+        # through a real pipe, then verify the snapshot it wrote with the
+        # replay command, also through a real pipe.
+        result = self._run_subprocess()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        snapshots = list((self.base / "traces" / "requests").glob("*.json"))
+        self.assertEqual(len(snapshots), 1)
+        replayed = subprocess.run(
+            [sys.executable, "-m", "pocketchat", "replay", str(snapshots[0]),
+             "--dry-run"],
+            cwd=str(self.base),
+            env={"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
+                 "POCKETCHAT_LOCAL_KEY": "local-fake"},
+            capture_output=True, text=True, timeout=120)
+        self.assertEqual(replayed.returncode, 0,
+                         replayed.stdout + replayed.stderr)
 
     def test_a_run_writes_a_snapshot_the_trace_points_at(self):
         result = self._run()
@@ -439,13 +473,10 @@ class SnapshotRunTests(unittest.TestCase):
         self.assertNotIn("local-fake", snapshot.read_text("utf-8"))
 
     def _chat(self, *args):
-        return subprocess.run(
-            [sys.executable, "-m", "pocketchat", "chat", "--quiet",
-             "--config", str(self.config)] + list(args),
-            cwd=str(self.base),
-            env={"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
-                 "POCKETCHAT_LOCAL_KEY": "local-fake"},
-            input="hi\n/exit\n", capture_output=True, text=True, timeout=120)
+        return hp.run_cli(
+            ["chat", "--quiet", "--config", str(self.config)] + list(args),
+            self.base, env={"POCKETCHAT_LOCAL_KEY": "local-fake"},
+            stdin="hi\n/exit\n")
 
     def test_a_resumed_session_keeps_writing_snapshots(self):
         # A resumed session adopts the run id and the trace of the run it
@@ -504,13 +535,10 @@ class SnapshotRunTests(unittest.TestCase):
         # earlier -- an unknown profile -- leaves no file claiming a request
         # was made.
         self._run()
-        missing = subprocess.run(
-            [sys.executable, "-m", "pocketchat", "run", "hi", "--quiet",
-             "--config", str(self.config), "--profile", "nope"],
-            cwd=str(self.base),
-            env={"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
-                 "POCKETCHAT_LOCAL_KEY": "local-fake"},
-            capture_output=True, text=True, timeout=120)
+        missing = hp.run_cli(
+            ["run", "hi", "--quiet", "--config", str(self.config),
+             "--profile", "nope"],
+            self.base, env={"POCKETCHAT_LOCAL_KEY": "local-fake"})
         self.assertEqual(missing.returncode, 2, missing.stdout + missing.stderr)
         self.assertEqual(
             len(list((self.base / "traces" / "requests").glob("*.json"))), 1)

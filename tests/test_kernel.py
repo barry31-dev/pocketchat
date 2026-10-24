@@ -29,6 +29,11 @@ from unittest import mock
 from pocketchat.provider import ProviderError, complete
 from pocketchat.request import verify_request_snapshot
 
+try:
+    from tests import _helpers as hp
+except ImportError:  # unittest discover puts tests/ itself on sys.path
+    import _helpers as hp
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -114,7 +119,7 @@ class KernelTests(unittest.TestCase):
     def setUpClass(cls):
         cls.server = HTTPServer(("127.0.0.1", 0), StubHandler)
         cls.port = cls.server.server_address[1]
-        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread = threading.Thread(target=lambda s=cls.server: s.serve_forever(poll_interval=0.05), daemon=True)
         cls.thread.start()
 
     @classmethod
@@ -147,15 +152,13 @@ class KernelTests(unittest.TestCase):
         return path
 
     def _run(self, args, config=None, env=None):
-        environ = {"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
-                   "POCKETCHAT_API_KEY": "test-key-not-real"}
+        environ = {"POCKETCHAT_API_KEY": "test-key-not-real"}
         if env:
             environ.update(env)
-        cmd = [sys.executable, "-m", "pocketchat"] + args
+        cmd = list(args)
         if config is not None:
             cmd += ["--config", str(config)]
-        return subprocess.run(cmd, cwd=str(self.base), env=environ,
-                              capture_output=True, text=True, timeout=120)
+        return hp.run_cli(cmd, self.base, env=environ)
 
     def _events(self, trace_path):
         return [json.loads(line) for line in

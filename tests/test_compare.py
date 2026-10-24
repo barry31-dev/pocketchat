@@ -28,8 +28,14 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from pocketchat.config import profile_config
-from pocketchat.compare import (ComparisonManifestError, comparison_manifest_path,
-                                run_comparison, write_comparison_manifest)
+from pocketchat.compare import (
+    ComparisonManifestError, comparison_manifest_path,
+    run_comparison, write_comparison_manifest)
+
+try:
+    from tests import _helpers as hp
+except ImportError:  # unittest discover puts tests/ itself on sys.path
+    import _helpers as hp
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -107,7 +113,7 @@ class _StubServer:
 
         self.server = HTTPServer(("127.0.0.1", 0), Stub)
         self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
         self.thread.start()
 
     def stop(self):
@@ -621,6 +627,13 @@ class ComparisonCliTests(unittest.TestCase):
         self.config_path.write_text(json.dumps(self.config), encoding="utf-8")
 
     def _cli(self, *extra):
+        environ = {"POCKETCHAT_LOCAL_KEY": "local-fake",
+                   "POCKETCHAT_HOSTED_KEY": "hosted-fake"}
+        return hp.run_cli(["compare", "hello", "--config", str(self.config_path)]
+                          + list(extra), self.workspace, env=environ)
+
+    def _cli_subprocess(self, *extra):
+        """The golden path: a real interpreter, a real pipe, a real exit."""
         environ = {"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
                    "POCKETCHAT_LOCAL_KEY": "local-fake",
                    "POCKETCHAT_HOSTED_KEY": "hosted-fake"}
@@ -633,6 +646,13 @@ class ComparisonCliTests(unittest.TestCase):
 
     def _manifests(self):
         return sorted((self.workspace / "comparisons").glob("*.json"))
+
+    def test_the_cli_runs_end_to_end_as_a_subprocess(self):
+        # One real interpreter for the compare family: the subprocess path
+        # stays in the suite; everything else here runs in process for speed.
+        result = self._cli_subprocess("--profiles", "local")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(self._manifests()), 1)
 
     def test_compare_writes_a_manifest_and_prints_the_path(self):
         result = self._cli("--profiles", "local,hosted")
@@ -726,13 +746,12 @@ class ComparisonCliTests(unittest.TestCase):
         # runs without the second profile's key rather than clearing this
         # process's. Nothing may be written: a comparison that started and
         # then discovered the missing key would leave half a measurement.
-        result = subprocess.run(
-            [sys.executable, "-m", "pocketchat", "compare", "hello",
-             "--config", str(self.config_path), "--profiles", "local,hosted"],
-            cwd=str(self.workspace),
-            env={"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
-                 "POCKETCHAT_LOCAL_KEY": "local-fake"},
-            capture_output=True, text=True, timeout=120)
+        result = hp.run_cli(
+            ["compare", "hello", "--config", str(self.config_path),
+             "--profiles", "local,hosted"],
+            self.workspace,
+            env={"POCKETCHAT_LOCAL_KEY": "local-fake",
+                 "POCKETCHAT_HOSTED_KEY": None})
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("POCKETCHAT_HOSTED_KEY", result.stderr)
         self.assertFalse((self.workspace / "traces").exists())
@@ -891,12 +910,7 @@ class ComparisonCliTests(unittest.TestCase):
 
     def _help_options(self, *command):
         """The option names `pocketchat <command> --help` lists."""
-        result = subprocess.run(
-            [sys.executable, "-m", "pocketchat"] + list(command) + ["--help"],
-            cwd=str(self.workspace),
-            env={"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin"},
-            capture_output=True, text=True, timeout=120,
-        )
+        result = hp.run_cli(list(command) + ["--help"], self.workspace)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         listed = set()
         for line in result.stdout.splitlines():

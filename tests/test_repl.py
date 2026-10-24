@@ -85,7 +85,7 @@ class ReplTests(unittest.TestCase):
         # dependent: the same file passed alone and failed in a full run.
         self.server = HTTPServer(("127.0.0.1", 0), StubHandler)
         self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
         self.thread.start()
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

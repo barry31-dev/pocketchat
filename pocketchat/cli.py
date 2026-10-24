@@ -17,19 +17,29 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional
 
 from . import __version__
-from .compare import (ComparisonManifestError, comparison_manifest_path,
-                      run_comparison, write_comparison_manifest)
+from .branching import BranchError, create_branch_from
 from .config import (CONFIG_TEMPLATE, ConfigError, load_api_key, load_config,
                      profile_config)
+from .compare import (ComparisonManifestError, comparison_manifest_path,
+                      run_comparison, write_comparison_manifest)
+from .indexing import (IndexingError, build_index, dump_rows, index_path,
+                       index_status)
+from .queries import (QueryError, collect_history, diff_sessions,
+                      render_diff_lines, render_history_lines,
+                      render_search_lines, search_messages)
 from .replay import ReplayError, replay_snapshots
+from .selection import SelectionError, record_selection
 from .repl import echo_reply, goodbye, read_lines
-from .sessions import (SessionFileError, looks_like_session,
-                       looks_like_trace, read_header, read_messages,
-                       resolve_session_path, session_for_trace)
+from .service import export_session, session_overview
+from .sessions import (SessionFileError, read_header, read_messages,
+                       resolve_session_argument, resolve_session_path,
+                       NOT_RECORDED)
 from .session import Session, SessionError, new_run_id
+from .workspace import (WorkspaceError, as_dict, collect_workspace,
+                        render_lines)
 
 EXIT_OK = 0
 EXIT_RUN_FAILED = 1
@@ -61,25 +71,6 @@ def _session_path_for(args: argparse.Namespace) -> Optional[Path]:
     if getattr(args, "session", None) is None:
         return None
     return resolve_session_path(args.session, DEFAULT_SESSIONS_DIR)
-
-
-def _read_target(args: argparse.Namespace) -> Optional[Path]:
-    """The file a read-only command was pointed at, checked for existence.
-
-    A bare name is looked up under ``./sessions``, so ``show notes`` and
-    ``show sessions/notes.jsonl`` address the same file. Anything else is taken
-    as written, which is how a trace path is given directly.
-    """
-    target = Path(args.session)
-    if target.exists() and target.is_file():
-        return target
-    if target.parent == Path("."):
-        candidate = Path(DEFAULT_SESSIONS_DIR) / (
-            target.name if target.name.endswith(".jsonl") else target.name + ".jsonl"
-        )
-        if candidate.is_file():
-            return candidate
-    return None
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -166,6 +157,20 @@ def _parser() -> argparse.ArgumentParser:
                         help="output file (default: <session>.export.<format>; "
                              "trace uses .export.trace.jsonl)")
 
+    branch = subparsers.add_parser(
+        "branch", help="derive a branch from one completed turn of a session")
+    branch.add_argument("session", type=Path,
+                        help="a session file, or the trace it recorded; a bare "
+                             "name is read from ./sessions")
+    branch.add_argument("--from", dest="from_turn", required=True, metavar="TURN",
+                        help="the completed turn (turn_NNNNNN) the branch "
+                             "continues from")
+    branch.add_argument("--name", type=str, default=None,
+                        help="name the new branch file (default: derived from "
+                             "the parent's name)")
+    branch.add_argument("--json", action="store_true", dest="as_json",
+                        help="print one JSON object instead of a human line")
+
     profile = subparsers.add_parser(
         "profile", help="show the profiles a configuration offers")
     profile_subparsers = profile.add_subparsers(dest="profile_command", required=True)
@@ -199,6 +204,70 @@ def _parser() -> argparse.ArgumentParser:
     replay.add_argument("--json", action="store_true", dest="as_json",
                         help="print one JSON object instead of one line per request")
 
+    workspace = subparsers.add_parser(
+        "workspace", help="rebuild the workspace's relationships from its files")
+    workspace.add_argument("path", type=Path, nargs="?", default=None,
+                           help="workspace directory to read (default: the "
+                                "current directory)")
+    workspace.add_argument("--json", action="store_true", dest="as_json",
+                           help="print one JSON object instead of a tree")
+
+    history = subparsers.add_parser(
+        "history", help="list the turns the sessions in this workspace record")
+    history.add_argument("target", nargs="?", default=None,
+                         help="a session file, a conversation id or a branch "
+                              "id (default: every conversation in this "
+                              "workspace)")
+    history.add_argument("--json", action="store_true", dest="as_json",
+                         help="print one JSON object instead of a tree")
+
+    search = subparsers.add_parser(
+        "search", help="find literal text in the messages the sessions record")
+    search.add_argument("text",
+                        help="the exact text to look for (case-sensitive)")
+    search.add_argument("--session", type=Path, default=None,
+                        help="search one session only; a bare name is read "
+                             "from ./sessions")
+    search.add_argument("--json", action="store_true", dest="as_json",
+                        help="print one JSON object instead of one line per hit")
+
+    diff = subparsers.add_parser(
+        "diff", help="compare two sessions turn by turn")
+    diff.add_argument("session_a", type=Path,
+                      help="one session file; a bare name is read from "
+                           "./sessions")
+    diff.add_argument("session_b", type=Path,
+                      help="the other session file")
+    diff.add_argument("--json", action="store_true", dest="as_json",
+                      help="print one JSON object instead of a summary")
+
+    select = subparsers.add_parser(
+        "select", help="record which answer of a comparison was kept")
+    select.add_argument("comparison",
+                        help="a comparison id or manifest path")
+    select.add_argument("run", metavar="RUN_OR_PROFILE",
+                        help="the run id, or an unambiguous profile name, "
+                             "whose answer is kept")
+    select.add_argument("--note", default=None,
+                        help="why this one (recorded, optional)")
+    select.add_argument("--into", type=Path, default=None,
+                        help="append the selected exchange to this session "
+                             "(a new one is started if absent; requires the "
+                             "comparison to have run with --verbose)")
+    select.add_argument("--json", action="store_true", dest="as_json",
+                        help="print one JSON object instead of a summary")
+
+    index = subparsers.add_parser(
+        "index", help="rebuild or inspect the derived workspace index")
+    index.add_argument("path", type=Path, nargs="?", default=None,
+                       help="workspace directory (default: the current "
+                            "directory)")
+    index.add_argument("--rebuild", action="store_true",
+                       help="replace an existing index (the build is always "
+                            "whole; there is no incremental update)")
+    index.add_argument("--json", action="store_true", dest="as_json",
+                       help="print one JSON object instead of a report")
+
     return parser
 
 
@@ -215,12 +284,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         return _cmd_show(args)
     if args.command == "export":
         return _cmd_export(args)
+    if args.command == "branch":
+        return _cmd_branch(args)
     if args.command == "profile":
         return _cmd_profile(args)
     if args.command == "compare":
         return _cmd_compare(args)
     if args.command == "replay":
         return _cmd_replay(args)
+    if args.command == "workspace":
+        return _cmd_workspace(args)
+    if args.command == "history":
+        return _cmd_history(args)
+    if args.command == "search":
+        return _cmd_search(args)
+    if args.command == "diff":
+        return _cmd_diff(args)
+    if args.command == "select":
+        return _cmd_select(args)
+    if args.command == "index":
+        return _cmd_index(args)
     print("pocketchat: unknown command %r" % args.command, file=sys.stderr)
     return EXIT_USAGE
 
@@ -235,6 +318,49 @@ def _cmd_init(args: argparse.Namespace) -> int:
     target.write_text(CONFIG_TEMPLATE, encoding="utf-8")
     print("wrote %s" % target)
     print("set %s before running a real provider" % "POCKETCHAT_API_KEY")
+    return EXIT_OK
+
+
+def _cmd_branch(args: argparse.Namespace) -> int:
+    """Create the session file a branch continues, and name its links.
+
+    A branch is a second path through one conversation, so the only thing it
+    records beyond the parent's own is *where it left*: the branch it came
+    from, and the turn it came in at. Everything else -- the conversation id,
+    the inherited messages -- is copied, which makes the child a real session
+    that `run --session <name>` continues rather than a note about one.
+
+    The parent is never written to. Writing the links there would force a
+    second branch's file into the one conversation that owns it, and the
+    append-only promise -- a session keeps its own history -- is worth more
+    than the saved bytes.
+
+    The turn id must name an exchange that finished. Forking from an
+    unanswered user line would make the child start from a question the
+    parent asked and never sent.
+    """
+    try:
+        source = resolve_session_argument(args.session, DEFAULT_SESSIONS_DIR)
+    except SessionFileError as exc:
+        print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+
+    try:
+        result = create_branch_from(source, args.from_turn, args.name,
+                                    DEFAULT_SESSIONS_DIR)
+    except BranchError as exc:
+        print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+
+    if args.as_json:
+        print(json.dumps(result, sort_keys=True))
+        return EXIT_OK
+
+    print("branch %s  from %s  at %s  (turns 1-%d)"
+          % (result["branch_id"], result["parent_branch_id"] or NOT_RECORDED,
+             result["parent_turn_id"], result["turns"]))
+    print("conversation %s  session %s" % (result["conversation_id"],
+                                           result["session"]))
     return EXIT_OK
 
 
@@ -487,6 +613,196 @@ def _cmd_replay(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_workspace(args: argparse.Namespace) -> int:
+    """Print the relationships the workspace's files record.
+
+    Nothing is written and no key is read: the graph comes from the session
+    headers, the message lines and the comparison manifests that are already
+    on disk, so it describes the workspace after the fact and cannot be
+    changed by anything this process does. A relation the files do not record
+    is printed as absent -- a manifest says nothing about which answer was
+    kept, so the graph says that instead of choosing.
+    """
+    workspace = Path(args.path) if args.path is not None else Path(".")
+    try:
+        graph = collect_workspace(workspace)
+    except WorkspaceError as exc:
+        print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+
+    if args.as_json:
+        print(json.dumps(as_dict(graph), sort_keys=True, indent=2))
+        return EXIT_OK
+
+    for line in render_lines(graph):
+        print(line)
+    return EXIT_OK
+
+
+def _cmd_history(args: argparse.Namespace) -> int:
+    """Print the turns the workspace's sessions record, read-only.
+
+    Like `workspace`, this command reads files that already exist and writes
+    nothing: no configuration, no credential, no socket. A target narrows the
+    answer to one session, conversation or branch; without one, every
+    conversation the workspace holds is listed, branches sorted by path so
+    two processes describe the same workspace the same way.
+    """
+    try:
+        record = collect_history(Path("."), args.target)
+    except QueryError as exc:
+        print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps(record, sort_keys=True, indent=2))
+        return EXIT_OK
+    for line in render_history_lines(record):
+        print(line)
+    return EXIT_OK
+
+
+def _cmd_search(args: argparse.Namespace) -> int:
+    """Find literal text in the sessions' message lines.
+
+    Zero hits is a result, not a failure: the command answers "the text is in
+    no session" with exit 0, because a script looking for a wording it hopes
+    is absent needs that answer on stdout rather than an error on stderr.
+    The text is matched exactly as given -- case and whitespace included --
+    so a hit is always a wording a file actually holds.
+    """
+    session = str(args.session) if args.session is not None else None
+    try:
+        record = search_messages(args.text, Path("."), session)
+    except QueryError as exc:
+        print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps(record, sort_keys=True, indent=2))
+        return EXIT_OK
+    for line in render_search_lines(record):
+        print(line)
+    return EXIT_OK
+
+
+def _cmd_diff(args: argparse.Namespace) -> int:
+    """Compare two sessions turn by turn, common prefix first.
+
+    The diff is over the words the files hold, not over their identities:
+    which turns the two share from the start, and which turns each side adds
+    after the first disagreement. When one side records the other as its
+    parent, the fork point it records is checked against the prefix the
+    words support, and a disagreement is printed rather than resolved.
+    """
+    try:
+        record = diff_sessions(str(args.session_a), str(args.session_b),
+                               Path("."))
+    except QueryError as exc:
+        print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps(record, sort_keys=True, indent=2))
+        return EXIT_OK
+    for line in render_diff_lines(record):
+        print(line)
+    return EXIT_OK
+
+
+def _cmd_select(args: argparse.Namespace) -> int:
+    """Record which answer of a comparison was kept, optionally into a session.
+
+    The manifest is never rewritten -- it is exclusive-create evidence of the
+    measurement, and the decision gets its own record beside it, also
+    exclusive-create: one comparison keeps one decision. Everything ``--into``
+    needs is checked before the first byte lands, so a refused selection
+    leaves the workspace byte-identical, and the session it writes is a run
+    of its own -- a fresh run id and trace seeded with the selected exchange,
+    the way a branch is a fresh run seeded with inherited turns.
+    """
+    try:
+        result = record_selection(
+            Path("."), args.comparison, args.run,
+            note=args.note,
+            into=str(args.into) if args.into is not None else None)
+    except SelectionError as exc:
+        print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+
+    record = result["record"]
+    if args.as_json:
+        payload = {
+            "selection": str(result["selection_path"]),
+            "comparison_id": record["comparison_id"],
+            "run_id": record["run_id"],
+            "profile": record["profile"],
+        }
+        if args.into is not None:
+            payload["session"] = str(result["session_path"])
+        print(json.dumps(payload, sort_keys=True))
+        return EXIT_OK
+
+    line = "selection %s  (%s)  %s" % (record["run_id"],
+                                       record["profile"] or "-",
+                                       result["selection_path"])
+    if args.note:
+        line += "  %s" % args.note
+    print(line)
+    if args.into is not None:
+        print("session %s" % result["session_path"])
+    return EXIT_OK
+
+
+def _cmd_index(args: argparse.Namespace) -> int:
+    """Rebuild or inspect the derived index.
+
+    The index holds no fact of its own and no command reads it: it exists
+    for tools and UI that want the workspace's rows without re-reading every
+    file. What this command does promise is honesty about the index itself
+    -- a stale one names the files it disagrees with and exits non-zero,
+    because a derived index that silently describes a workspace that no
+    longer exists is worse than none.
+    """
+    workspace = Path(args.path) if args.path is not None else Path(".")
+    try:
+        if args.rebuild:
+            report = build_index(workspace, rebuild=True)
+        else:
+            report = index_status(workspace)
+    except IndexingError as exc:
+        print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+
+    if args.as_json:
+        print(json.dumps({
+            "status": report["status"],
+            "index": str(report["path"]),
+            "sources": report["sources"],
+            "counts": report["counts"],
+            "stale_files": report["mismatched"],
+        }, sort_keys=True))
+        return EXIT_OK if report["status"] != "stale" else EXIT_RUN_FAILED
+
+    index = report["path"]
+    status = report["status"]
+    counts = report["counts"]
+    if status == "missing":
+        print("index %s  missing  (build one with --rebuild)" % index)
+        return EXIT_OK
+    detail = ("%d conversation branches, %d comparisons, %d runs, "
+              "%d problems" % (counts.get("conversation_branches", 0),
+                               counts.get("comparisons", 0),
+                               counts.get("comparison_runs", 0),
+                               counts.get("problems", 0)))
+    print("index %s  %s  (%d sources; %s)" % (index, status,
+                                              report["sources"], detail))
+    if status == "stale":
+        for name in report["mismatched"]:
+            print("  changed: %s" % name)
+        print("pocketchat: the index disagrees with the workspace; "
+              "rebuild it with --rebuild")
+        return EXIT_RUN_FAILED
+    return EXIT_OK
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     prepared = _prepare(args)
     if isinstance(prepared, int):
@@ -594,251 +910,68 @@ def _cmd_show(args: argparse.Namespace) -> int:
 
     Both are read from the files rather than from a running process, so this
     command works after the fact and cannot be changed by what an operator did
-    since. The two sides of the pair are each acceptable as an argument, and
-    the link between them comes from the session's own header -- the trace is
-    named after the run id and the session after whatever the operator called
-    it, so matching the file names would pair the wrong conversation.
+    since. The reading lives in the service layer; what is left here is the
+    printing -- the conversation first, then the trace, then the reason no
+    trace follows when there is none.
     """
-    target = _read_target(args)
-    if target is None:
-        print("pocketchat: no such session: %s" % args.session, file=sys.stderr)
-        return EXIT_USAGE
-
     try:
-        session, trace = _resolve_pair(target)
+        record = session_overview(args.session, DEFAULT_SESSIONS_DIR)
     except SessionFileError as exc:
         print("pocketchat: %s" % exc, file=sys.stderr)
         return EXIT_USAGE
 
-    if session is not None:
-        header = read_header(session)
-        messages = read_messages(session)
+    part = record["session"]
+    if part is not None:
+        header = part["header"]
+        turns = part["turns"]
         print("session %s  started %s  messages %d"
-              % (header.get("session"), header.get("created"), len(messages)))
-        for message in messages:
+              % (header.get("session"), header.get("created"), len(turns)))
+        # The two ids are the file's own. A v0.1/v0.2 file has neither, and
+        # the honest line says so rather than printing an empty string that
+        # reads as "this session has no identity".
+        print("conversation %s  branch %s"
+              % (header.get("conversation_id") or NOT_RECORDED,
+                 header.get("branch_id") or NOT_RECORDED))
+        for message in turns:
             label = "you" if message["role"] == "user" else "model"
             print("")
-            print("%s> %s" % (label, message["content"]))
+            print("turn %s  %s> %s"
+                  % (message["turn_id"], label, message["content"]))
         print("")
 
-    if trace is None:
-        print("pocketchat: %s has no trace to show" % args.session,
-              file=sys.stderr)
-        return EXIT_USAGE
-    if not trace.is_file():
-        print("pocketchat: trace not found: %s (recorded by %s)"
-              % (trace, session or args.session), file=sys.stderr)
+    problem = record["trace_problem"]
+    if problem is not None:
+        print("pocketchat: %s" % problem["message"], file=sys.stderr)
         return EXIT_USAGE
 
-    print("trace %s" % trace)
-    for number, line in enumerate(
-            trace.read_text(encoding="utf-8").splitlines(), 1):
-        if not line.strip():
+    trace = record["trace"]
+    print("trace %s" % trace["path"])
+    for entry in trace["lines"]:
+        if "error" in entry:
+            print("  line %d: invalid JSON: %s"
+                  % (entry["number"], entry["error"]))
             continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError as exc:
-            print("  line %d: invalid JSON: %s" % (number, exc))
-            continue
-        print("%4d  %-12s %s" % (number, event.get("event_id", "-"),
-                                  event.get("type", "-")))
+        print("%4d  %-12s %s"
+              % (entry["number"], entry["event_id"], entry["type"]))
     return EXIT_OK
-
-
-def _resolve_pair(target: Path) -> Tuple[Optional[Path], Optional[Path]]:
-    """Map the named file to its (session, trace) pair.
-
-    Either side is accepted as the argument. A file that is neither -- a JSONL
-    file someone else's tool wrote, a log, an empty file -- is refused rather
-    than treated as a trace with no events, because "this file is not a
-    session" and "this session recorded no events" need different fixes.
-    """
-    if looks_like_session(target):
-        recorded = read_header(target).get("trace")
-        trace = None
-        if isinstance(recorded, str) and recorded.strip():
-            trace = (target.parent / recorded).resolve()
-        return target, trace
-    if looks_like_trace(target):
-        return session_for_trace(target), target
-    raise SessionFileError("%s is not a pocketchat session or trace file" % target)
 
 
 def _cmd_export(args: argparse.Namespace) -> int:
-    """Write one self-contained copy of a session, deterministic by construction.
+    """Write one self-contained copy of a session, in one of three formats.
 
-    Exporting twice must produce two identical files. That is not a nicety: a
-    diff between two exports is the only way to tell "this session changed"
-    from "the exporter is not deterministic", so nothing time-dependent, path
-    dependent or id-dependent may enter the output unless it is read back from
-    the session's own files.
+    The whole orchestration -- resolving the pair, rendering the body,
+    refusing an existing output, writing the file -- lives in the service
+    layer and is shared with whatever surface comes next; this command is
+    the argument parse and the one-line result.
     """
-    target = _read_target(args)
-    if target is None:
-        print("pocketchat: no such session: %s" % args.session, file=sys.stderr)
-        return EXIT_USAGE
-    if args.format == "trace":
-        return _cmd_export_trace(args, target)
     try:
-        session, trace = _resolve_pair(target)
-        if session is not None:
-            header = read_header(session)
-            messages = read_messages(session)
-            trace_text = trace.read_text(encoding="utf-8") if (
-                trace is not None and trace.is_file()) else ""
+        result = export_session(args.session, args.format, args.out,
+                                DEFAULT_SESSIONS_DIR)
     except (SessionFileError, OSError) as exc:
         print("pocketchat: %s" % exc, file=sys.stderr)
         return EXIT_USAGE
-
-    if session is None:
-        # A trace alone carries the events, not the conversation. Exporting it
-        # would produce a file that reads as a session but is missing half of
-        # what one is, so the session is required rather than optional.
-        print("pocketchat: %s has no session file to export" % args.session,
-              file=sys.stderr)
-        return EXIT_USAGE
-
-    if args.format == "md":
-        body = _render_markdown(header, messages)
-    else:
-        body = _render_jsonl(header, messages, trace_text)
-
-    out = args.out
-    if out is None:
-        out = session.with_suffix("")
-        out = Path(str(out) + ".export." + args.format)
-    if out.exists():
-        print("pocketchat: %s already exists (use --out)" % out, file=sys.stderr)
-        return EXIT_USAGE
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(body, encoding="utf-8")
-    print(json.dumps({"format": args.format, "session": str(session),
-                      "out": str(out), "messages": len(messages),
-                      "trace_events": len(_trace_events(trace_text))},
-                     sort_keys=True))
+    print(json.dumps(result, sort_keys=True))
     return EXIT_OK
-
-
-def _reject_json_constant(value: str) -> None:
-    raise ValueError("non-finite JSON value")
-
-
-def _read_export_jsonl(path: Path) -> Tuple[bytes, List[Tuple[int, Dict]]]:
-    """Read every record before writing, retaining the original bytes and lines."""
-    body = path.read_bytes()
-    records = []
-    for number, line in enumerate(body.split(b"\n"), 1):
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line.decode("utf-8"),
-                                parse_constant=_reject_json_constant)
-        except ValueError as exc:
-            raise SessionFileError(
-                "%s line %d: invalid JSON or UTF-8" % (path, number)
-            ) from exc
-        if not isinstance(record, dict):
-            raise SessionFileError(
-                "%s line %d: expected a JSON object" % (path, number)
-            )
-        records.append((number, record))
-    if not records:
-        raise SessionFileError("%s has no records to export" % path)
-    return body, records
-
-
-def _cmd_export_trace(args: argparse.Namespace, target: Path) -> int:
-    """Copy existing events only; full schema validation stays with Trace Doctor."""
-    try:
-        source = target
-        body, records = _read_export_jsonl(target)
-        first = records[0][1]
-        if "session" in first and "kind" not in first:
-            recorded = first.get("trace")
-            if not isinstance(recorded, str) or not recorded.strip():
-                raise SessionFileError("%s has no trace to export" % target)
-            source = (target.parent / recorded).resolve()
-            body, records = _read_export_jsonl(source)
-
-        required = {"schema_version", "event_id", "timestamp", "run_id", "type"}
-        for number, event in records:
-            if "kind" in event or any(
-                    not isinstance(event.get(field), str) or not event[field]
-                    for field in required):
-                raise SessionFileError(
-                    "%s line %d: expected a trace event, not a session archive"
-                    % (source, number)
-                )
-
-        out = args.out or Path(str(target.with_suffix("")) + ".export.trace.jsonl")
-        out.parent.mkdir(parents=True, exist_ok=True)
-        # Exclusive creation also protects the input when --out names it.
-        with out.open("xb") as handle:
-            handle.write(body)
-    except FileExistsError:
-        print("pocketchat: %s already exists (use --out)" % out, file=sys.stderr)
-        return EXIT_USAGE
-    except (SessionFileError, OSError) as exc:
-        print("pocketchat: %s" % exc, file=sys.stderr)
-        return EXIT_USAGE
-
-    print(json.dumps({"format": "trace", "source": str(source), "out": str(out),
-                      "trace_events": len(records)}, sort_keys=True))
-    return EXIT_OK
-
-
-def _trace_events(trace_text: str) -> List[Dict]:
-    """The events in a trace text, under the archive's own rules.
-
-    The mixed archive skips a blank line and a malformed one rather than
-    failing the export, so the count of what it copied has to be taken the
-    same way. Counting lines instead reports evidence the file does not
-    contain.
-    """
-    events = []
-    for line in trace_text.splitlines():
-        if not line.strip():
-            continue
-        try:
-            events.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return events
-
-
-def _render_jsonl(header: Dict, messages: List[Dict[str, str]],
-                  trace_text: str) -> str:
-    """A single JSONL document: a header, every message, every event.
-
-    One file, one line per record, the session's own ordering. Nothing is
-    generated here except the ``kind`` field that tells a reader which of the
-    three a line is.
-    """
-    lines = [json.dumps({"kind": "session", **header},
-                        sort_keys=True, ensure_ascii=False)]
-    for message in messages:
-        lines.append(json.dumps({"kind": "message", **message},
-                                sort_keys=True, ensure_ascii=False))
-    for event in _trace_events(trace_text):
-        lines.append(json.dumps({"kind": "event", **event},
-                                sort_keys=True, ensure_ascii=False))
-    return "\n".join(lines) + "\n"
-
-
-def _render_markdown(header: Dict, messages: List[Dict[str, str]]) -> str:
-    """The same conversation as prose, for reading rather than for parsing."""
-    out = ["# pocketchat session %s" % header.get("session"), ""]
-    created = header.get("created")
-    if created:
-        out.append("started %s" % created)
-        out.append("")
-    for message in messages:
-        label = "You" if message["role"] == "user" else "Model"
-        out.append("**%s.**" % label)
-        out.append("")
-        out.append(message["content"])
-        out.append("")
-    return "\n".join(out)
 
 
 if __name__ == "__main__":

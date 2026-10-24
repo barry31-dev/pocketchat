@@ -6,6 +6,147 @@ All notable changes to `pocketchat` are recorded here. The format follows
 The versions below describe the public source tree. They do not describe a
 package-index publication.
 
+## [0.3.0] - 2026-10-24
+
+The v0.3 workspace model: an identity layer on the session file, branching,
+read-only reconstruction and queries, selection records, a derived index, and
+format documentation. Trace events are untouched, so no previously released
+artifact changes shape.
+
+On 2026-10-24 the whole loop ran once against a real provider -- the local
+cc-switch free aggregate route (`auto` and `qd-Qwen3.8-Flash`): a real
+two-turn conversation, a verbose two-profile comparison seeded from it, a
+selection written into a session, a real continuation of that session, a
+branch derived from it and continued, exports, all five traces validated, a
+request snapshot replayed dry-run, and a zero-hit credential scan over every
+artifact. That evidence covers only those route inputs on that day; the
+stub-backed suite remains the regression net.
+
+### Added
+
+- Session files record a `conversation_id` and a `branch_id` in the header, and
+  a `turn_id` on every message line. The ids are minted when the file is
+  created and read back when it is resumed, so one conversation keeps one
+  identity across the runs that append to it.
+- Turn ids are derived from a message's position in the file, so two readers of
+  the same bytes name the same exchange without consulting a counter.
+- `pocketchat show` prints the conversation and branch ids, and the turn id of
+  each message.
+- `pocketchat branch SESSION --from turn_NNNNNN [--name NAME]` derives a branch
+  from one completed turn and writes its session file. The child keeps the
+  parent's conversation id, carries the turns it inherited with their turn ids,
+  and records `parent_branch_id` and `parent_turn_id` so a later reader can find
+  its way back. The parent file is never written to.
+
+### Reconstruction
+
+- `pocketchat workspace [PATH] [--json]` reads a workspace back as a graph:
+  which session files are branches of one conversation, which turn each branch
+  forked from, which run and trace each file records, and which runs each
+  comparison manifest measured. It is read-only -- no socket, no configuration,
+  no credential, no byte written -- so the same files give the same graph in
+  two processes, and every path in it is relative to the workspace.
+- The graph reports what the files do not say instead of filling it in: a
+  comparison manifest records no selection, so `selection` is `not recorded`;
+  traces and request snapshots that no file claims are listed as unlinked;
+  links that point at an absent branch, turn, trace, snapshot or base session
+  are listed as unresolved; two files claiming one run id or one trace are
+  listed as a conflict; a file that is not a session or a manifest is listed as
+  unreadable. Nothing is skipped silently.
+- v0.1 and v0.2 session files read as they are: one conversation per file with
+  `conversation_id` reported as `not recorded`, rather than several unrelated
+  files merged into a conversation nothing links.
+
+### Format versions
+
+- New session files carry a `schema_version` in the header (`"1"`), naming
+  the file's format — distinct from `pocketchat_version`, which names the
+  program. A file without the key is a legacy v0.1/v0.2 file and reads
+  unchanged, byte for byte; a file with an unknown schema version was
+  written by a newer pocketchat and is refused with the version named,
+  everywhere sessions are read.
+- `docs/security.md` (and `docs/security.zh-CN.md`) consolidates the rules
+  the package enforces about credentials and the evidence it writes, each
+  traced to the module that owns it.
+- `docs/formats.md` (and `docs/formats.zh-CN.md`) describes every file the
+  package writes — session, trace, request snapshot, comparison manifest,
+  selection record, derived index — with its version key, fields and the
+  migration rules: old files read unchanged and are never backfilled,
+  migration means a new file beside the old one, and an unknown version is
+  refused, never guessed at.
+
+### Queries
+
+- `pocketchat history [TARGET] [--json]` lists the turns the sessions in a
+  workspace record, grouped by conversation and branch. A target narrows the
+  answer to one session, conversation or branch. A v0.1/v0.2 file is listed
+  with the turn ids its positions name and no invented identity.
+- `pocketchat search TEXT [--session NAME] [--json]` finds literal,
+  case-sensitive text in the sessions' message lines. A hit names the file,
+  conversation, branch and turn it was found in. Zero hits is a result
+  (exit 0); an empty text is refused.
+- `pocketchat diff SESSION_A SESSION_B [--json]` compares two sessions turn
+  by turn: the common prefix, then the turns each side adds after the first
+  disagreement. When one side records the other as its parent, the recorded
+  fork point is checked against the prefix the words support, and a
+  disagreement is reported rather than resolved.
+- All three are read-only: no configuration, no credential, no socket and no
+  byte written; every path is relative to the workspace, and the same files
+  give the same answer in any process.
+
+### Selection
+
+- `pocketchat select COMPARISON RUN_OR_PROFILE [--note TEXT] [--json]` records
+  which answer of a comparison was kept, in
+  `comparisons/<comparison-id>.selection.json` (exclusive-create). The
+  manifest itself is never rewritten, and a second selection of one
+  comparison is refused: the first decision is evidence too.
+- `--into SESSION` appends the selected prompt and reply to a session,
+  starting one if absent, with its own run id and trace. It writes only what
+  the run's trace records as complete: a comparison that ran without
+  `--verbose` carries a summary, and a summary written into a session would
+  be read as the whole answer, so it is refused. Everything is checked before
+  the first byte is written; a refused selection leaves the workspace
+  byte-identical.
+- `pocketchat workspace` reports the selection when one exists and still says
+  `not recorded` when there is none.
+
+### Index
+
+- `pocketchat index [PATH] [--rebuild] [--json]` builds or inspects
+  `index.sqlite`, a derived index over the workspace's evidence files: one
+  row per conversation branch, comparison, comparison run and problem the
+  reconstruction reports, with the sha256 of every source file beside them.
+  The index holds no fact of its own and no command reads it; delete it and
+  every answer is unchanged.
+- A build is always whole -- there is no incremental update -- and replacing
+  an existing index requires `--rebuild`. A build that fails halfway removes
+  the half it wrote rather than leaving a file that looks like an answer.
+- `index` without `--rebuild` checks the index against the workspace and
+  reports `fresh`, or `stale` at exit 1, naming every file the two disagree
+  about. Two builds over the same bytes produce byte-identical files on the
+  SQLite this was verified with (the index carries no clock); the promise
+  that holds everywhere is logical equivalence -- the same sources give the
+  same rows.
+
+### Changed
+
+- The README is the overview and the quickstart again; the command reference
+  (comparisons, request snapshots, replay, sessions, branches, the workspace
+  graph, the queries, the index, show, export, the trace) moved verbatim to
+  `docs/cli.md` and `docs/cli.zh-CN.md`. The security rules are consolidated
+  in `docs/security.md` / `docs/security.zh-CN.md`, and the file formats in
+  `docs/formats.md` / `docs/formats.zh-CN.md`.
+
+### Compatibility
+
+- v0.1 and v0.2 session files read unchanged. A file with no `conversation_id`
+  or `branch_id` reports `not recorded` rather than an invented value, and no
+  existing file is rewritten: reading never adds the keys it did not have.
+- The `jsonl` and `md` exports keep their existing contracts and now carry the
+  turn ids the session file itself carries. The event-only trace export is
+  byte-identical to its source.
+
 ## [0.2.0] - 2026-10-20
 
 The multi-profile comparison and replay layer. The local implementation is
