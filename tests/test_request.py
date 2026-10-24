@@ -39,10 +39,7 @@ from pocketchat.request import (
     write_request_snapshot,
 )
 
-try:
-    from tests import _helpers as hp
-except ImportError:  # unittest discover puts tests/ itself on sys.path
-    import _helpers as hp
+from tests import _helpers as hp
 
 ROOT = Path(__file__).resolve().parents[1]
 

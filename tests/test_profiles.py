@@ -26,10 +26,7 @@ from pathlib import Path
 
 from pocketchat.config import ConfigError, load_config, profile_config
 
-try:
-    from tests import _helpers as hp
-except ImportError:  # unittest discover puts tests/ itself on sys.path
-    import _helpers as hp
+from tests import _helpers as hp
 
 ROOT = Path(__file__).resolve().parents[1]
 

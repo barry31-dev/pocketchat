@@ -29,10 +29,7 @@ from unittest import mock
 from pocketchat.provider import ProviderError, complete
 from pocketchat.request import verify_request_snapshot
 
-try:
-    from tests import _helpers as hp
-except ImportError:  # unittest discover puts tests/ itself on sys.path
-    import _helpers as hp
+from tests import _helpers as hp
 
 ROOT = Path(__file__).resolve().parents[1]
 
