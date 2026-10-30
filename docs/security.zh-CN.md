@@ -10,7 +10,7 @@
   没有任何可以填 key 的字段。（`pocketchat.config`）
 - `pocketchat profile list` 只打印每个 profile 的模型、base URL、变量名与
   是否已设置。值从不出现——文本输出没有，`--json` 里也没有。（`cli._cmd_profile`）
-- key 只来自环境变量。桌面端系统钥匙串是计划中的第二个来源（M5）；没有第三个。
+- key 只来自环境变量。没有桌面端系统钥匙串，也没有其他凭据来源。
 
 ## 请求与快照
 
@@ -31,6 +31,13 @@
 - provider 错误在进入 trace 或 manifest 之前按字面凭据脱敏：回抄 key 的
   响应体不会被存下来。（`pocketchat.provider`）
 
+## Provider 适配器边界
+
+每次模型调用都经过 provider 适配器。适配器负责构造精确 payload 并发起调用；适配器名称
+记录在 run 的 config summary 中。详见
+[`provider-adapters.zh-CN.md`](provider-adapters.zh-CN.md)。下面的安全规则适用于所有
+适配器，包括未来新增的原生适配器。
+
 ## 写什么、写在哪
 
 本包写出的证据都在命令所运行的工作区之内：`sessions/`、`traces/`
@@ -40,8 +47,28 @@
 `diff`）不携带绝对路径。没有 telemetry、没有默认上传、没有静默默认端点：
 某个 provider 被使用，是因为某个 profile 点了它的名。
 
+## 本地工具边界
+
+`tool read` 是唯一的本地工具面：必须显式 allowlist、限制在工作区、拒绝敏感名称
+与二进制数据；不写文件、不执行命令，并记录权限/工具事件而不保存完整参数。
+
+`tool write` 是独立的显式 allowlist 写入面：只接受 UTF-8 文本，上限 16 KiB，
+使用原子替换，替换已有文件必须显式 `--overwrite`；不提供删除、shell、执行或网络
+操作。
+
+模型自动 tool call 默认关闭。profile 只提供它显式启用的本地工具（`read_file`、
+create-only `write_file` 或只读 `memory_search`），路径来自显式 allowlist，
+调用次数和结果大小受限。禁用/未知工具、缺参数和 guard 拒绝返回有界失败结果，
+让模型纠错；底层 I/O/存储错误、结果超限和预算耗尽仍结束 run。run trace 记录
+tool schema hash 与 call id；shell、执行和网络工具仍不可用。
+
+启用 `tool_write_enabled` 时，`write_file` 只能 create-only。模型不能请求
+overwrite 或 delete，目标必须显式 allowlist；已有文件在写入前 fail-closed。
+
+启用 `memory_search` 时它是只读的：只搜索显式本地记录，返回有界元数据/内容；
+模型不能新增、修改或删除记忆。记忆也不会被静默注入 prompt。
+
 ## 还没有的（因此也不承诺）
 
-本地 UI（M4）尚不存在。它落地时的规格是只监听 loopback 并要求短期 token；
-在这一里程碑之前，除操作者自行配置的 provider 请求外，不存在需要设防的
-网络面。Windows 支持与桌面端钥匙串按计划在 M5。
+PocketChat 只做 CLI。没有计划中的单 profile chat 发送路由、远程访问模式、TLS、
+账号体系、分析服务、telemetry、打包桌面端、Windows 桌面支持或桌面端钥匙串。

@@ -1,12 +1,9 @@
-"""The application seam: what the CLI prints, the UI will call.
+"""The application seam between CLI argument handling and file rendering.
 
 Every read-only command does two jobs -- read the workspace into a record,
-then print it. The printing belongs to whatever surface is in front (today
-the CLI, later the local API and the desktop UI); the reading belongs here,
+then print it. The printing belongs to the CLI; the reading belongs here,
 once, in functions that take what the operator named and return data.
-Nothing here opens a socket, reads the environment or touches a credential:
-the read-only surface has no credentials to hold, and the commands that do
-will migrate with their key-provider when the UI needs them.
+Nothing here opens a socket, reads the environment or touches a credential.
 
 Extraction is by record, not by copy. `workspace`, `history`, `search` and
 `diff` already return records from their own modules, so this facade
@@ -22,17 +19,29 @@ after printing half the conversation.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .queries import (QueryError, collect_history, diff_sessions,  # noqa: F401
                       render_diff_lines, render_history_lines,
                       render_search_lines, search_messages)
+from .context import ContextBudgetExceeded, context_chars, preview_budget
 from .sessions import (SessionFileError, looks_like_session,
-                       looks_like_trace, read_header, read_turns,
+                       looks_like_trace, read_context_messages,
+                       read_export_messages, read_header, read_turns,
                        resolve_named_path, session_for_trace)
 from .workspace import (WorkspaceError, as_dict, collect_workspace,  # noqa: F401
                         render_lines)
+
+def _relative(path: Path, workspace: Path) -> str:
+    """Return a workspace-relative path without leaking the absolute root."""
+    try:
+        return os.path.relpath(str(Path(path).resolve()),
+                               str(Path(workspace).resolve()))
+    except ValueError:
+        return Path(path).name
+
 
 __all__ = [
     "QueryError", "WorkspaceError",
@@ -40,6 +49,7 @@ __all__ = [
     "as_dict", "render_lines", "render_history_lines", "render_search_lines",
     "render_diff_lines", "search_messages",
     "session_overview", "export_session",
+    "show_record", "export_record", "context_preview",
 ]
 
 
@@ -109,11 +119,107 @@ def session_overview(target, sessions_dir: str = "sessions",
             except json.JSONDecodeError as exc:
                 lines.append({"number": number, "error": str(exc)})
                 continue
-            lines.append({"number": number,
-                          "event_id": event.get("event_id", "-"),
-                          "type": event.get("type", "-")})
+            entry = {"number": number,
+                     "event_id": event.get("event_id", "-"),
+                     "type": event.get("type", "-")}
+            # Compaction is the one event whose counts a human reader needs
+            # in `show`: every other event's body stays in the trace file.
+            if event.get("type") == "context.compacted":
+                entry["payload"] = event.get("payload", {})
+            lines.append(entry)
         record["trace"] = {"path": str(trace), "lines": lines}
     return record
+
+
+def context_preview(target, sessions_dir: str = "sessions",
+                    workspace=None, budget_chars: Optional[int] = None,
+                    keep_recent: int = 2) -> Dict[str, Any]:
+    """Read one session and describe its context trim without writing."""
+    resolved = resolve_named_path(Path(target), sessions_dir, workspace)
+    if resolved is None:
+        raise SessionFileError("no such session: %s" % target)
+    session, trace = _resolve_pair(resolved)
+    messages = read_context_messages(session)
+    if budget_chars is None:
+        budget_chars = 24000
+        if trace is not None and trace.is_file():
+            for line in trace.read_text(encoding="utf-8").splitlines():
+                try:
+                    event = json.loads(line)
+                except (TypeError, ValueError):
+                    continue
+                payload = event.get("payload") if isinstance(event, dict) else None
+                config = payload.get("config_summary") if isinstance(payload, dict) else None
+                value = config.get("max_context_chars") if isinstance(config, dict) else None
+                if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                    budget_chars = value
+                    break
+    try:
+        preview = preview_budget(messages, budget_chars, keep_recent)
+    except ContextBudgetExceeded:
+        raise
+    root = Path(workspace) if workspace is not None else Path.cwd()
+    return {
+        "ok": True,
+        "schema_version": "1",
+        "session": _relative(session, root),
+        "message_count": len(messages),
+        "messages": [{
+            "index": index,
+            "role": message["role"],
+            "chars": context_chars([message]),
+        } for index, message in enumerate(messages)],
+        **preview,
+    }
+
+
+def show_record(target, sessions_dir: str = "sessions",
+                workspace=None) -> Dict[str, Any]:
+    """The `show` record as a stable JSON document with relative artifact paths."""
+    root = Path(workspace) if workspace is not None else Path.cwd()
+    overview = session_overview(target, sessions_dir, workspace)
+    session = overview["session"]
+    trace = overview["trace"]
+    problem = overview["trace_problem"]
+    safe_session = None
+    if session is not None:
+        safe_session = {
+            "path": _relative(Path(session["path"]), root),
+            "header": session["header"],
+            "turns": session["turns"],
+        }
+    safe_trace = None
+    if trace is not None:
+        safe_trace = {
+            "path": _relative(Path(trace["path"]), root),
+            "events": [{
+                "line": entry["number"],
+                "event_id": entry.get("event_id"),
+                "type": entry.get("type"),
+                **({"error": "invalid JSON"} if "error" in entry else {}),
+                **({"payload": entry["payload"]}
+                   if "payload" in entry else {}),
+            } for entry in trace["lines"]],
+        }
+    safe_problem = None
+    if problem is not None:
+        if problem["message"].startswith("trace not found:"):
+            safe_problem = {
+                "code": "trace_not_found",
+                "message": "trace not found",
+            }
+        else:
+            safe_problem = {
+                "code": "trace_missing",
+                "message": "session has no trace",
+            }
+    return {
+        "ok": True,
+        "schema_version": "1",
+        "session": safe_session,
+        "trace": safe_trace,
+        "trace_problem": safe_problem,
+    }
 
 
 def export_session(target, fmt: str, out: Optional[Path] = None,
@@ -138,7 +244,7 @@ def export_session(target, fmt: str, out: Optional[Path] = None,
         session, trace = _resolve_pair(resolved)
         if session is not None:
             header = read_header(session)
-            messages = read_turns(session)
+            messages = read_export_messages(session)
             trace_text = trace.read_text(encoding="utf-8") if (
                 trace is not None and trace.is_file()) else ""
     except OSError as exc:
@@ -164,6 +270,28 @@ def export_session(target, fmt: str, out: Optional[Path] = None,
     return {"format": fmt, "session": str(session), "out": str(out),
             "messages": len(messages),
             "trace_events": len(_trace_events(trace_text))}
+
+
+def export_record(target, fmt: str, out: Optional[Path] = None,
+                  sessions_dir: str = "sessions",
+                  workspace=None) -> Dict[str, Any]:
+    """The `export` result as a stable JSON document with relative paths."""
+    root = Path(workspace) if workspace is not None else Path.cwd()
+    result = export_session(target, fmt, out, sessions_dir, workspace)
+    source = result.get("source") or result.get("session")
+    if not isinstance(source, str) or not source:
+        raise SessionFileError("export result names no source artifact")
+    return {
+        "ok": True,
+        "schema_version": "1",
+        "format": result["format"],
+        "source": _relative(Path(source), root),
+        "session": (_relative(Path(result["session"]), root)
+                    if result.get("session") else None),
+        "out": _relative(Path(result["out"]), root),
+        "messages": result.get("messages"),
+        "trace_events": result["trace_events"],
+    }
 
 
 def _export_trace(target: Path, out: Optional[Path]) -> Dict[str, Any]:
@@ -248,7 +376,7 @@ def _trace_events(trace_text: str) -> List[Dict]:
     return events
 
 
-def _render_jsonl(header: Dict, messages: List[Dict[str, str]],
+def _render_jsonl(header: Dict, messages: List[Dict[str, Any]],
                   trace_text: str) -> str:
     """A single JSONL document: a header, every message, every event.
 
@@ -267,7 +395,7 @@ def _render_jsonl(header: Dict, messages: List[Dict[str, str]],
     return "\n".join(lines) + "\n"
 
 
-def _render_markdown(header: Dict, messages: List[Dict[str, str]]) -> str:
+def _render_markdown(header: Dict, messages: List[Dict[str, Any]]) -> str:
     """The same conversation as prose, for reading rather than for parsing."""
     out = ["# pocketchat session %s" % header.get("session"), ""]
     created = header.get("created")
@@ -275,9 +403,21 @@ def _render_markdown(header: Dict, messages: List[Dict[str, str]]) -> str:
         out.append("started %s" % created)
         out.append("")
     for message in messages:
-        label = "You" if message["role"] == "user" else "Model"
+        if message["role"] == "user":
+            label = "You"
+            body = message["content"]
+        elif message["role"] == "tool":
+            label = "Tool result"
+            body = message["content"]
+        elif message.get("tool_calls"):
+            label = "Tool request"
+            body = json.dumps(message["tool_calls"], sort_keys=True,
+                              ensure_ascii=False)
+        else:
+            label = "Model"
+            body = message["content"]
         out.append("**%s.**" % label)
         out.append("")
-        out.append(message["content"])
+        out.append(body)
         out.append("")
     return "\n".join(out)

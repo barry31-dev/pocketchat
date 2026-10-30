@@ -24,10 +24,12 @@ import json
 import subprocess
 import sys
 import tempfile
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+
+
+from tests import _helpers as hp
 
 from pocketchat.queries import (QueryError, collect_history, diff_sessions,
                                 render_diff_lines, render_history_lines,
@@ -73,6 +75,19 @@ def write_session(base: Path, name: str, messages, conversation_id=None,
             record["turn_id"] = "turn_%06d" % number
         lines.append(json.dumps(record, sort_keys=True))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    trace_value = header.get("trace")
+    if isinstance(trace_value, str) and trace_value.strip():
+        trace = (path.parent / trace_value).resolve()
+        trace.parent.mkdir(parents=True, exist_ok=True)
+        run_id = header["session"]
+        trace.write_text("\n".join([
+            json.dumps({"schema_version": "1", "event_id": "evt_000001",
+                        "timestamp": "2026-10-24T00:00:00.000Z",
+                        "run_id": run_id, "type": "run.started"}),
+            json.dumps({"schema_version": "1", "event_id": "evt_000002",
+                        "timestamp": "2026-10-24T00:00:01.000Z",
+                        "run_id": run_id, "type": "run.finished"}),
+        ]) + "\n", encoding="utf-8")
     return path
 
 
@@ -359,11 +374,9 @@ class RealWorkspaceTests(QueryTestBase):
                               capture_output=True, text=True, timeout=120)
 
     def _build(self):
-        server = HTTPServer(("127.0.0.1", 0), StubHandler)
-        port = server.server_address[1]
-        thread = threading.Thread(target=lambda s=server: s.serve_forever(poll_interval=0.05), daemon=True)
-        thread.start()
-        self.addCleanup(lambda: (server.shutdown(), server.server_close()))
+        stub = hp.StubHTTPServer(StubHandler)
+        port = stub.port
+        self.addCleanup(stub.close)
         config = self.base / "pocketchat.json"
         config.write_text(json.dumps({
             "schema_version": "2", "name": "workbench",
@@ -412,6 +425,52 @@ class RealWorkspaceTests(QueryTestBase):
                        self._run("diff", "notes", "fork")):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self._digests(), before)
+
+    def test_corrupt_session_refuses_all_queries_and_names_the_path(self):
+        workspace_with_fork(self.base)
+        (self.base / "sessions" / "broken.jsonl").write_text(
+            '{"bad":', encoding="utf-8")
+        for command in (("history",), ("search", "q1"),
+                        ("diff", "notes", "fork")):
+            result = self._cli(*command)
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+            self.assertIn("sessions/broken.jsonl", result.stderr)
+
+    def test_concurrent_append_is_visible_to_queries_and_stales_the_index(self):
+        from pocketchat.indexing import build_index, index_status
+
+        workspace_with_fork(self.base)
+        build_index(self.base)
+        session = self.base / "sessions" / "notes.jsonl"
+        with session.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps({
+                "role": "user", "content": "late question",
+                "turn_id": "turn_000005"}) + "\n")
+            handle.write(json.dumps({
+                "role": "assistant", "content": "late answer",
+                "turn_id": "turn_000006"}) + "\n")
+        history = collect_history(self.base)
+        notes = next(branch for conversation in history["conversations"]
+                     for branch in conversation["branches"]
+                     if branch["path"] == "sessions/notes.jsonl")
+        self.assertEqual(6, len(notes["turns"]))
+        self.assertEqual("stale", index_status(self.base)["status"])
+        self.assertIn("sessions/notes.jsonl",
+                      index_status(self.base)["mismatched"])
+
+    def test_old_format_history_and_index_rows_agree(self):
+        from pocketchat.indexing import build_index, dump_rows
+
+        write_session(self.base, "old", [
+            ("user", "old question"), ("assistant", "old answer"),
+        ], turn_ids=False, version="0.2.0")
+        history = collect_history(self.base)
+        self.assertEqual("not recorded",
+                         history["conversations"][0]["conversation_id"])
+        build_index(self.base)
+        rows = dump_rows(self.base / "index.sqlite")
+        self.assertEqual(1, len(rows["conversation_branches"]))
+        self.assertEqual(2, rows["conversation_branches"][0][7])
 
 
 class StubHandler(BaseHTTPRequestHandler):

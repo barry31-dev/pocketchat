@@ -19,17 +19,17 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sqlite3
 import sys
 import tempfile
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from tests import _helpers as hp
 
 from pocketchat.indexing import (INDEX_FILENAME, IndexingError, build_index,
-                                 dump_rows, index_status)
+                                 dump_rows)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -58,21 +58,15 @@ class StubHandler(BaseHTTPRequestHandler):
 
 class IndexTestBase(unittest.TestCase):
     def setUp(self):
-        self.server = HTTPServer(("127.0.0.1", 0), StubHandler)
-        self.port = self.server.server_address[1]
-        self.thread = threading.Thread(
-            target=lambda s=self.server: s.serve_forever(poll_interval=0.05),
-            daemon=True)
-        self.thread.start()
+        self._stub = hp.StubHTTPServer(StubHandler)
+        self.port = self._stub.port
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(self._stop_server)
         self.base = Path(self.temp.name)
 
     def _stop_server(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=10)
+        self._stub.close()
 
     def _cli(self, *args):
         environ = {"POCKETCHAT_LOCAL_KEY": "test-key-not-real"}
@@ -190,7 +184,7 @@ class IndexBuildTests(IndexTestBase):
         # The CLI's plain `index` is a status report; the refusal lives at
         # the build API, where a silent replacement would be a rebuild the
         # operator never asked for.
-        config = self._conversation()
+        self._conversation()
         self._cli("index", "--rebuild")
         with self.assertRaises(IndexingError) as caught:
             build_index(self.base, rebuild=False)
@@ -209,7 +203,7 @@ class IndexBuildTests(IndexTestBase):
 
 class IndexFreshnessTests(IndexTestBase):
     def test_a_changed_source_marks_the_index_stale_by_name(self):
-        config = self._conversation()
+        self._conversation()
         self._cli("index", "--rebuild")
         victim = self.base / "sessions" / "notes.jsonl"
         victim.write_text(victim.read_text(encoding="utf-8") + "\n",
@@ -246,6 +240,37 @@ class IndexFreshnessTests(IndexTestBase):
     def test_the_index_refuses_a_workspace_that_is_not_there(self):
         result = self._cli("index", "no-such-workspace")
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+
+    def test_corrupt_index_rows_are_inconsistent_even_when_digests_match(self):
+        self._conversation()
+        self._cli("index", "--rebuild")
+        con = sqlite3.connect(str(self.base / INDEX_FILENAME))
+        with con:
+            con.execute(
+                "UPDATE conversation_branches SET turns = turns + 1")
+        con.close()
+
+        result = self._cli("index", "--json")
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        status = json.loads(result.stdout)
+        self.assertEqual("inconsistent", status["status"])
+        self.assertIn("conversation_branches", status["mismatched_rows"])
+
+    def test_query_rows_and_index_rows_describe_the_same_workspace(self):
+        from pocketchat.queries import collect_history
+
+        self._conversation()
+        self._cli("index", "--rebuild")
+        history = collect_history(self.base)
+        query_rows = sorted(
+            (branch["path"], branch["run_id"], len(branch["turns"]))
+            for conversation in history["conversations"]
+            for branch in conversation["branches"])
+        index_rows = sorted(
+            (row[2], row[3], row[7])
+            for row in dump_rows(self.base / INDEX_FILENAME)[
+                "conversation_branches"])
+        self.assertEqual(query_rows, index_rows)
 
 
 class IndexDisposableTests(IndexTestBase):

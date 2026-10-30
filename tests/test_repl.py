@@ -16,15 +16,20 @@ from __future__ import annotations
 import json
 import signal
 import os
-import pty
+try:
+    import pty
+except ImportError:  # Windows has no pty module.
+    pty = None
 import subprocess
 import sys
 import tempfile
 import threading
 import time
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+
+from tests import _helpers as hp
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -83,19 +88,15 @@ class ReplTests(unittest.TestCase):
         # still be arriving when the next one starts counting. Sharing the
         # server and its request log across tests made the counts order
         # dependent: the same file passed alone and failed in a full run.
-        self.server = HTTPServer(("127.0.0.1", 0), StubHandler)
-        self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
-        self.thread.start()
+        self._stub = hp.StubHTTPServer(StubHandler)
+        self.port = self._stub.port
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(self._stop_server)
         self.base = Path(self.temp.name)
 
     def _stop_server(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=10)
+        self._stub.close()
 
     def _config(self, **overrides):
         provider = {
@@ -279,6 +280,7 @@ class ReplTests(unittest.TestCase):
 
     # --- the interruption paths ----------------------------------------
 
+    @unittest.skipIf(pty is None, "requires a POSIX pty")
     def test_ctrl_c_while_a_line_is_being_read_ends_the_run(self):
         # Nothing is in flight: the interrupt lands while the REPL waits for
         # input. The conversation still ends as cancelled, because an

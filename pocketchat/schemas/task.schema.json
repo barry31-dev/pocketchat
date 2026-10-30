@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PocketChat task contract",
+  "description": "Three closed shapes: the policy an operator signed, the record a run leaves behind, and the summary a report prints. Every level refuses unknown fields, so a field this schema does not name cannot be read as a grant or as a fact.",
+  "$defs": {
+    "tool_grant": {
+      "description": "read_file and write_file grant paths; memory_search bounds results. create_only is declared so that widening it is visible as a schema change rather than a value change.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/\\\\][^\\\\]*$",
+            "description": "Workspace-relative. No leading '/', no backslash, and the parser separately refuses empty, '.' and '..' segments."
+          }
+        },
+        "create_only": {
+          "const": true,
+          "description": "The only write mode. A policy asking for false is refused by the parser."
+        },
+        "max_results": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "policy": {
+      "description": "What a bounded task run is allowed to do, and under which budgets.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "objective",
+        "max_steps",
+        "max_tool_calls",
+        "max_context_chars",
+        "max_turn_tokens"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "pocketchat-task-policy.v1"
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The single sentence the task is trying to make true."
+        },
+        "workspace_root": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/\\\\][^\\\\]*$",
+          "description": "Directory inside the workspace the task works in; '.' is the workspace itself."
+        },
+        "max_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "description": "Hard ceiling on recorded steps. A task that reaches it stops; it is never extended silently."
+        },
+        "max_tool_calls": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "description": "Tool calls across the whole task, including calls that fail. A refusal costs budget, because it consumed a decision."
+        },
+        "max_context_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 400000,
+          "description": "Character budget handed to the existing context compaction; the task layer does not implement a second one."
+        },
+        "max_turn_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4000000,
+          "description": "Per-turn token budget enforced by the existing cost guardrail."
+        },
+        "max_session_tokens": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 4000000,
+          "description": "Whole-task token budget. Must be at least max_turn_tokens; absent means no session budget."
+        },
+        "tools": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Only these three tools exist. A tool not named here is not offered and not executable.",
+          "properties": {
+            "read_file": { "$ref": "#/$defs/tool_grant" },
+            "write_file": { "$ref": "#/$defs/tool_grant" },
+            "memory_search": { "$ref": "#/$defs/tool_grant" }
+          }
+        },
+        "delegate": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Finite serial delegation, off by default. Children cannot delegate; this is a batch, not an orchestration tree.",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "max_children": { "type": "integer", "minimum": 1, "maximum": 8 }
+          }
+        }
+      }
+    },
+    "step": {
+      "description": "One recorded action. The summary reports these; it never invents one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "kind", "state", "recorded"],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Order within the task, 1-based. Not a run id and not a request ordinal."
+        },
+        "kind": {
+          "enum": ["model", "tool", "checkpoint", "recovery"],
+          "description": "model = one model turn; tool = one tool call; checkpoint = a recorded recovery boundary; recovery = a resume or rewind."
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How this step ended, in the recorder's own words: running, completed, failed, refused, cancelled."
+        },
+        "tool": {
+          "type": ["string", "null"],
+          "description": "Tool name for kind=tool, absent otherwise."
+        },
+        "detail": {
+          "type": ["string", "null"],
+          "description": "Workspace-relative path or a one-line reason. Never a credential, never a message body."
+        },
+        "run_id": {
+          "type": ["string", "null"],
+          "description": "The run that produced this step, when one exists. It is the link to the trace; the task record copies no trace fact."
+        },
+        "checkpoint_id": {
+          "type": ["string", "null"],
+          "description": "Recovery boundary this step created or resumed from."
+        },
+        "recorded": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the step was recorded, RFC 3339 UTC."
+        }
+      }
+    },
+    "task_record": {
+      "description": "The one answer to 'where did this task stop'. Written once, appended to, never rewritten.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "task_id",
+        "created",
+        "objective",
+        "policy_sha256",
+        "state",
+        "max_steps",
+        "max_tool_calls",
+        "steps"
+      ],
+      "properties": {
+        "schema_version": { "const": "pocketchat-task.v1" },
+        "task_id": {
+          "type": "string",
+          "pattern": "^task_[0-9a-f]{16,32}$",
+          "description": "Also the record's filename stem, so it must stay a safe path segment."
+        },
+        "created": { "type": "string", "format": "date-time" },
+        "objective": { "type": "string", "minLength": 1 },
+        "policy_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Digest of the canonical policy bytes. A resume whose policy digests differently is refused, because it would be a different task."
+        },
+        "state": {
+          "enum": [
+            "created",
+            "running",
+            "checkpointed",
+            "interrupted",
+            "completed",
+            "failed",
+            "cancelled"
+          ],
+          "description": "created/running/checkpointed/interrupted are active; completed/failed/cancelled are terminal and cannot restart."
+        },
+        "max_steps": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "max_tool_calls": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "workspace_root": { "type": "string", "minLength": 1 },
+        "terminal_reason": {
+          "type": ["string", "null"],
+          "description": "Why a terminal state was reached, as recorded. Absent means the record does not say; it is never inferred."
+        },
+        "steps": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/step" }
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/policy" },
+    { "$ref": "#/$defs/task_record" }
+  ]
+}

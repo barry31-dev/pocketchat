@@ -22,11 +22,12 @@ Two rules this file owes to the reverse-engineered references:
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from .trace import utc_now
 
@@ -34,6 +35,7 @@ HEADER_KEY = "session"
 CONVERSATION_KEY = "conversation_id"
 BRANCH_KEY = "branch_id"
 TURN_KEY = "turn_id"
+TOOL_CONTEXT_KEY = "tool_context"
 PARENT_BRANCH_KEY = "parent_branch_id"
 PARENT_TURN_KEY = "parent_turn_id"
 SCHEMA_VERSION_KEY = "schema_version"
@@ -198,6 +200,108 @@ def _validate_header_schema(header: Dict[str, Any], path: Path) -> None:
             % (path, recorded, SESSION_SCHEMA_VERSION))
 
 
+def _validated_tool_context(value: Any, path: Path) -> List[Dict[str, Any]]:
+    """Return provider-shaped tool messages, or refuse malformed context."""
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise SessionFileError("%s: tool_context must be an array" % path)
+    result: List[Dict[str, Any]] = []
+    requested_ids = set()
+    resolved_ids = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise SessionFileError(
+                "%s: tool_context entries must be objects" % path)
+        role = item.get("role")
+        if role == "assistant":
+            content = item.get("content")
+            calls = item.get("tool_calls")
+            if (not isinstance(content, str)
+                    or not isinstance(calls, list) or not calls):
+                raise SessionFileError(
+                    "%s: assistant tool_context requires content and tool_calls"
+                    % path)
+            cleaned_calls = []
+            for call in calls:
+                function = call.get("function") if isinstance(call, dict) else None
+                if (not isinstance(call, dict)
+                        or not isinstance(call.get("id"), str)
+                        or not call["id"].strip()
+                        or call.get("type") != "function"
+                        or not isinstance(function, dict)
+                        or not isinstance(function.get("name"), str)
+                        or not isinstance(function.get("arguments"), str)):
+                    raise SessionFileError(
+                        "%s: malformed tool_calls in tool_context" % path)
+                if call["id"] in requested_ids:
+                    raise SessionFileError(
+                        "%s: duplicate tool_call id in tool_context" % path)
+                requested_ids.add(call["id"])
+                cleaned_calls.append({
+                    "id": call["id"],
+                    "type": "function",
+                    "function": {
+                        "name": function["name"],
+                        "arguments": function["arguments"],
+                    },
+                })
+            result.append({
+                "role": "assistant",
+                "content": content,
+                "tool_calls": cleaned_calls,
+            })
+        elif role == "tool":
+            if (not isinstance(item.get("tool_call_id"), str)
+                    or not item["tool_call_id"].strip()
+                    or not isinstance(item.get("name"), str)
+                    or not isinstance(item.get("content"), str)):
+                raise SessionFileError(
+                    "%s: malformed tool result in tool_context" % path)
+            call_id = item["tool_call_id"]
+            if call_id not in requested_ids or call_id in resolved_ids:
+                raise SessionFileError(
+                    "%s: tool result does not pair with a pending tool_call"
+                    % path)
+            resolved_ids.add(call_id)
+            result.append({
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": item["name"],
+                "content": item["content"],
+            })
+        else:
+            raise SessionFileError(
+                "%s: unsupported role %r in tool_context" % (path, role))
+    if requested_ids != resolved_ids:
+        raise SessionFileError(
+            "%s: tool_context has unresolved tool_calls" % path)
+    return result
+
+
+def _record_tool_context(record: Dict[str, Any],
+                         path: Path) -> List[Dict[str, Any]]:
+    tool_context = _validated_tool_context(record.get(TOOL_CONTEXT_KEY), path)
+    if tool_context and record.get("role") != "assistant":
+        raise SessionFileError(
+            "%s: tool_context is only valid on assistant messages" % path)
+    return tool_context
+
+
+def _expanded_context_messages(records: Iterable[Dict[str, Any]],
+                               path: Path) -> List[Dict[str, Any]]:
+    messages: List[Dict[str, Any]] = []
+    for record in records:
+        if record.get("role") not in MESSAGE_ROLES:
+            continue
+        messages.extend(_record_tool_context(record, path))
+        messages.append({
+            "role": record["role"],
+            "content": record.get("content") or "",
+        })
+    return messages
+
+
 def _relative_to(path: Path, start: Path) -> str:
     try:
         return os.path.relpath(str(path), str(start))
@@ -209,7 +313,7 @@ def _relative_to(path: Path, start: Path) -> str:
 def create_branch(path: Path, run_id: str, trace_path: Path, version: str,
                   conversation_id: str, branch_id: str,
                   parent_branch_id: Optional[str], parent_turn_id: str,
-                  messages: List[Dict[str, str]]) -> "SessionFile":
+                  messages: List[Dict[str, Any]]) -> "SessionFile":
     """Write a new session file that continues another branch.
 
     The parent is never opened for writing: the child is created whole, with
@@ -229,7 +333,8 @@ def create_branch(path: Path, run_id: str, trace_path: Path, version: str,
     # branch that renumbered them would make "turn three" mean two different
     # exchanges.
     for message in messages:
-        store.append(message["role"], message["content"])
+        store.append(message["role"], message["content"],
+                     tool_context=message.get(TOOL_CONTEXT_KEY))
     return store
 
 
@@ -286,7 +391,7 @@ class SessionFile:
         return self._parent_turn_id
 
     @property
-    def turns(self) -> List[Dict[str, str]]:
+    def turns(self) -> List[Dict[str, Any]]:
         """Every message with the turn id that names it in this conversation.
 
         The id comes from the message's ordinal in the file, so it is the same
@@ -297,6 +402,11 @@ class SessionFile:
             dict(message, **{TURN_KEY: turn_id_for(number)})
             for number, message in enumerate(self.messages, 1)
         ]
+
+    @property
+    def context_messages(self) -> List[Dict[str, Any]]:
+        """The provider messages these records reconstruct on resume."""
+        return _expanded_context_messages(self.messages, self.path)
 
     @property
     def trace_display(self) -> str:
@@ -341,28 +451,47 @@ class SessionFile:
             trace = Path(trace_path)
 
         created = header.get("created")
-        messages = [
-            {"role": record["role"], "content": record.get("content") or ""}
-            for record in records[1:]
-            if record.get("role") in MESSAGE_ROLES
-        ]
-        conversation_id = header.get(CONVERSATION_KEY)
-        branch_id = header.get(BRANCH_KEY)
-        parent_branch_id = header.get(PARENT_BRANCH_KEY)
-        parent_turn_id = header.get(PARENT_TURN_KEY)
-        if not isinstance(conversation_id, str) or not conversation_id.strip():
-            conversation_id = None
-        if not isinstance(branch_id, str) or not branch_id.strip():
-            branch_id = None
-        if not isinstance(parent_branch_id, str) or not parent_branch_id.strip():
-            parent_branch_id = None
-        if not isinstance(parent_turn_id, str) or not parent_turn_id.strip():
-            parent_turn_id = None
+        messages = []
+        for record in records[1:]:
+            if record.get("role") not in MESSAGE_ROLES:
+                continue
+            message = {
+                "role": record["role"],
+                "content": record.get("content") or "",
+            }
+            tool_context = _record_tool_context(record, path)
+            if tool_context:
+                message[TOOL_CONTEXT_KEY] = tool_context
+            messages.append(message)
+        conversation_value = header.get(CONVERSATION_KEY)
+        branch_value = header.get(BRANCH_KEY)
+        parent_branch_value = header.get(PARENT_BRANCH_KEY)
+        parent_turn_value = header.get(PARENT_TURN_KEY)
+        existing_conversation_id: Optional[str] = (
+            conversation_value
+            if isinstance(conversation_value, str) and conversation_value.strip()
+            else None
+        )
+        existing_branch_id: Optional[str] = (
+            branch_value
+            if isinstance(branch_value, str) and branch_value.strip()
+            else None
+        )
+        existing_parent_branch_id: Optional[str] = (
+            parent_branch_value
+            if isinstance(parent_branch_value, str) and parent_branch_value.strip()
+            else None
+        )
+        existing_parent_turn_id: Optional[str] = (
+            parent_turn_value
+            if isinstance(parent_turn_value, str) and parent_turn_value.strip()
+            else None
+        )
         return cls(path, stored_id, trace,
                    created if isinstance(created, str) else utc_now(),
                    str(header.get("pocketchat_version") or version),
-                   messages, True, conversation_id, branch_id,
-                   parent_branch_id, parent_turn_id)
+                   messages, True, existing_conversation_id, existing_branch_id,
+                   existing_parent_branch_id, existing_parent_turn_id)
 
     def _write_header(self) -> None:
         record = {
@@ -390,7 +519,8 @@ class SessionFile:
         except OSError as exc:
             raise SessionFileError("cannot write %s: %s" % (self.path, exc))
 
-    def append(self, role: str, content: str) -> None:
+    def append(self, role: str, content: str,
+               tool_context: Optional[List[Dict[str, Any]]] = None) -> None:
         """Append one message. This is the only write that happens per turn."""
         if role not in MESSAGE_ROLES:
             raise SessionFileError(
@@ -399,6 +529,13 @@ class SessionFile:
             )
         record = {"role": role, "content": content, TURN_KEY: turn_id_for(
             len(self.messages) + 1)}
+        cleaned_context = _validated_tool_context(tool_context, self.path)
+        if cleaned_context and role != "assistant":
+            raise SessionFileError(
+                "%s: tool_context is only valid on assistant messages"
+                % self.path)
+        if cleaned_context:
+            record[TOOL_CONTEXT_KEY] = cleaned_context
         try:
             with open_appending(self.path) as handle:
                 handle.write(
@@ -408,7 +545,7 @@ class SessionFile:
                 os.fsync(handle.fileno())
         except OSError as exc:
             raise SessionFileError("cannot append to %s: %s" % (self.path, exc))
-        self.messages.append(dict(record))
+        self.messages.append(copy.deepcopy(record))
 
 
 def read_header(path: Path) -> Dict[str, Any]:
@@ -430,7 +567,32 @@ def read_messages(path: Path) -> List[Dict[str, str]]:
     ]
 
 
-def read_turns(path: Path) -> List[Dict[str, str]]:
+def read_context_messages(path: Path) -> List[Dict[str, Any]]:
+    """The provider messages a resumed session would reconstruct."""
+    return _expanded_context_messages(_read_records(path)[1:], path)
+
+
+def read_export_messages(path: Path) -> List[Dict[str, Any]]:
+    """The resumable messages with the file's own user/assistant turn ids."""
+    result: List[Dict[str, Any]] = []
+    for number, record in enumerate(
+            (r for r in _read_records(path)[1:]
+             if r.get("role") in MESSAGE_ROLES), 1):
+        recorded = record.get(TURN_KEY)
+        turn_id = (recorded if isinstance(recorded, str) and recorded.strip()
+                   else turn_id_for(number))
+        result.extend(
+            dict(message, **{TURN_KEY: turn_id})
+            for message in _record_tool_context(record, path))
+        result.append({
+            "role": record["role"],
+            "content": record.get("content") or "",
+            TURN_KEY: turn_id,
+        })
+    return result
+
+
+def read_turns(path: Path) -> List[Dict[str, Any]]:
     """The recorded messages, each with the turn id that names it.
 
     A v0.3 file carries the id on the line itself. A v0.1/v0.2 one does not,
@@ -438,17 +600,21 @@ def read_turns(path: Path) -> List[Dict[str, str]]:
     either file point at the same exchange -- the alternative is two spellings
     of "turn three", which is the ambiguity this layer exists to remove.
     """
-    turns: List[Dict[str, str]] = []
+    turns: List[Dict[str, Any]] = []
     for number, record in enumerate(
             (r for r in _read_records(path)[1:]
              if r.get("role") in MESSAGE_ROLES), 1):
         recorded = record.get(TURN_KEY)
-        turns.append({
+        turn = {
             "role": record["role"],
             "content": record.get("content") or "",
             TURN_KEY: recorded if isinstance(recorded, str) and recorded.strip()
             else turn_id_for(number),
-        })
+        }
+        tool_context = _record_tool_context(record, path)
+        if tool_context:
+            turn[TOOL_CONTEXT_KEY] = tool_context
+        turns.append(turn)
     return turns
 
 

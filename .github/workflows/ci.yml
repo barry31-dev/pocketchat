@@ -17,14 +17,13 @@ concurrency:
 jobs:
   test:
     name: pocketchat-ci (python ${{ matrix.python }})
-    # Ubuntu 24.04 still provides the actions/setup-python builds for 3.9;
-    # ubuntu-latest now resolves to a newer image that does not.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
         python: ["3.9", "3.13"]
     steps:
       - name: Check out the repository
@@ -49,18 +48,26 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: Install the package into a clean venv
+        shell: bash
         run: |
           set -euo pipefail
-          python -m venv /tmp/pocketchat-clean
-          /tmp/pocketchat-clean/bin/python -m pip install .
-          /tmp/pocketchat-clean/bin/pocketchat --version
-          /tmp/pocketchat-clean/bin/pocketchat --help
+          python -m venv "$RUNNER_TEMP/pocketchat-clean"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            PY="$RUNNER_TEMP/pocketchat-clean/Scripts/python.exe"
+            CLI="$RUNNER_TEMP/pocketchat-clean/Scripts/pocketchat.exe"
+          else
+            PY="$RUNNER_TEMP/pocketchat-clean/bin/python"
+            CLI="$RUNNER_TEMP/pocketchat-clean/bin/pocketchat"
+          fi
+          "$PY" -m pip install .
+          "$CLI" --version
+          "$CLI" --help
 
       - name: Write the job summary
         if: always()
         run: |
           {
-            echo "### pocketchat-ci (${{ steps.runtime.outputs.python }}, ${{ steps.runtime.outputs.pip }})"
+            echo "### pocketchat-ci (${{ matrix.os }}, ${{ steps.runtime.outputs.python }}, ${{ steps.runtime.outputs.pip }})"
             echo ""
             echo "- commit: \`${{ github.sha }}\`"
             echo "- python: ${{ steps.runtime.outputs.python }}"

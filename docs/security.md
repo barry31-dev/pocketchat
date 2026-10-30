@@ -14,8 +14,8 @@ docstrings.
 - `pocketchat profile list` prints each profile's model, base URL, the
   variable's name and whether it is set. The value never appears — not in
   the text output, not in `--json`. (`cli._cmd_profile`)
-- Keys come from the environment and nothing else. A desktop keychain is
-  the planned second source (M5); there is no third.
+- Keys come from the environment and nothing else. There is no desktop
+  keychain and no other credential source.
 
 ## Requests and snapshots
 
@@ -41,6 +41,13 @@ docstrings.
   reach a trace or a manifest: a response body that echoes the key back is
   not stored. (`pocketchat.provider`)
 
+## Provider adapter boundary
+
+Every model call goes through a provider adapter. The adapter builds the exact
+payload and performs the call; the adapter name is recorded in the run's config
+summary. See [provider-adapters.md](provider-adapters.md). The security rules
+below apply to every adapter, including future native adapters.
+
 ## What is written where
 
 The evidence the package writes lives inside the workspace the commands run
@@ -52,10 +59,37 @@ the records are relative to the workspace; the JSON records
 no telemetry, no default upload, no silent default endpoint: a provider is
 used because a profile named it.
 
+## Local tool boundary
+
+`tool read` is the only local tool surface. It requires explicit allowlisted
+paths, stays inside the workspace, refuses sensitive names and binary data,
+never writes or executes commands, and records permission/tool events without
+storing full arguments.
+
+`tool write` is a separate explicit-allowlist write surface. It accepts UTF-8
+text only, caps writes at 16 KiB, uses atomic replacement, and requires
+`--overwrite` to replace an existing file. It provides no delete, shell,
+execute or network operation.
+
+Automatic model tool calls are off by default. A profile offers only the local
+tools it explicitly enables (`read_file`, create-only `write_file` or read-only
+`memory_search`), paths come from explicit allowlists, and calls/results are
+bounded. Disabled or unknown tools, invalid arguments and guard refusals return
+bounded failure results so the model can correct; underlying I/O/store errors,
+oversized results and exhausted budgets end the run. Tool schemas and call ids
+are recorded in the run trace; shell, execute and network tools remain
+unavailable.
+
+When `tool_write_enabled` is enabled, `write_file` is create-only. The model
+cannot request overwrite or delete, and every target must be explicitly
+allowlisted. Existing files fail closed before any write.
+
+`memory_search`, when enabled, is read-only. It searches explicit local
+records and returns bounded metadata/content; the model cannot add, edit or
+delete memories. Memory is never silently injected into prompts.
+
 ## Not yet (and therefore not promised)
 
-The local UI (M4) does not exist yet. When it does, it is specified to
-listen on loopback only and to require a short-lived token; until that
-milestone lands, there is no network surface to secure beyond the provider
-requests the operator configures. Windows support and the desktop
-keychain follow in M5.
+PocketChat is CLI-only. There is no planned single-profile chat-send route,
+remote-access mode, TLS, account system, analytics, telemetry, packaged desktop
+client, Windows desktop support or desktop keychain.

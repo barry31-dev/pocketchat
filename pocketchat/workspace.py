@@ -312,6 +312,11 @@ def _read_selection(path: Path,
         record = read_selection(path)
     except ValueError as exc:
         return None, {"path": _relative(path, workspace), "reason": str(exc)}
+    if record is None:
+        return None, {
+            "path": _relative(path, workspace),
+            "reason": "selection record names no selection",
+        }
     selection = {
         "path": _relative(path, workspace),
         "run_id": record["run_id"],
@@ -340,14 +345,14 @@ def collect(workspace: Path = Path(".")) -> WorkspaceGraph:
     branches: List[BranchRelation] = []
     turn_ids: Dict[str, List[str]] = {}
     comparisons: List[ComparisonRelation] = []
-    unreadable: List[Dict[str, str]] = []
-    unresolved: List[Dict[str, str]] = []
-    conflicts: List[Dict[str, str]] = []
+    unreadable: List[Dict[str, Any]] = []
+    unresolved: List[Dict[str, Any]] = []
+    conflicts: List[Dict[str, Any]] = []
     trace_owners: Dict[str, str] = {}
     request_owners: Dict[str, str] = {}
     run_owners: Dict[str, str] = {}
-    trace_targets: List[Tuple[str, str, Path]] = []
-    request_targets: List[Tuple[str, str, Path]] = []
+    trace_targets: List[Tuple[str, Optional[str], Path]] = []
+    request_targets: List[Tuple[str, Optional[str], Path]] = []
 
     def claim_run(run_id: str, source: str) -> None:
         previous = run_owners.get(run_id)
@@ -374,17 +379,17 @@ def collect(workspace: Path = Path(".")) -> WorkspaceGraph:
 
     for path in _jsonl_files(workspace / SESSIONS_DIRNAME):
         try:
-            relation, trace_target, ids = _read_branch(path, workspace)
+            branch, trace_target, ids = _read_branch(path, workspace)
         except WorkspaceError as exc:
             unreadable.append({"path": _relative(path, workspace),
                                "reason": str(exc)})
             continue
-        branches.append(relation)
-        turn_ids[relation.path] = ids
-        claim_run(relation.run_id, relation.path)
+        branches.append(branch)
+        turn_ids[branch.path] = ids
+        claim_run(branch.run_id, branch.path)
         if trace_target is not None:
-            claim_trace(trace_target, relation.path)
-            trace_targets.append((relation.path, relation.trace, trace_target))
+            claim_trace(trace_target, branch.path)
+            trace_targets.append((branch.path, branch.trace, trace_target))
 
     comparisons_dir = workspace / COMPARISONS_DIRNAME
     for path in _snapshot_files(comparisons_dir, "*.json"):
@@ -394,31 +399,31 @@ def collect(workspace: Path = Path(".")) -> WorkspaceGraph:
         if path.name.endswith(SELECTION_SUFFIX):
             continue
         try:
-            relation, targets, problems = _read_comparison(path, workspace)
+            comparison, targets, problems = _read_comparison(path, workspace)
         except WorkspaceError as exc:
             unreadable.append({"path": _relative(path, workspace),
                                "reason": str(exc)})
             continue
         selection, selection_problem = _read_selection(
-            comparisons_dir / (relation.comparison_id + SELECTION_SUFFIX),
+            comparisons_dir / (comparison.comparison_id + SELECTION_SUFFIX),
             workspace)
         if selection_problem is not None:
             unreadable.append(selection_problem)
         if selection is not None or selection_problem is not None:
-            relation = replace(relation, selection=selection)
-        comparisons.append(relation)
+            comparison = replace(comparison, selection=selection)
+        comparisons.append(comparison)
         unreadable.extend(problems)
-        for run in relation.runs:
-            claim_run(run.run_id, relation.path)
+        for run in comparison.runs:
+            claim_run(run.run_id, comparison.path)
         for key, target in targets:
             if key == "trace":
-                claim_trace(target, relation.path)
-                trace_targets.append((relation.path, _relative(target, workspace),
-                                      target))
+                claim_trace(target, comparison.path)
+                trace_targets.append(
+                    (comparison.path, _relative(target, workspace), target))
             else:
-                request_owners[str(target)] = relation.path
-                request_targets.append((relation.path, _relative(target, workspace),
-                                        target))
+                request_owners[str(target)] = comparison.path
+                request_targets.append(
+                    (comparison.path, _relative(target, workspace), target))
 
     for source, display, target in trace_targets:
         if not target.is_file():
@@ -435,47 +440,47 @@ def collect(workspace: Path = Path(".")) -> WorkspaceGraph:
                           "workspace" % display,
             })
 
-    for relation in comparisons:
-        if relation.base_session is None:
+    for comparison in comparisons:
+        if comparison.base_session is None:
             continue
-        if not (workspace / relation.base_session).is_file():
+        if not (workspace / comparison.base_session).is_file():
             unresolved.append({
-                "path": relation.path,
+                "path": comparison.path,
                 "reason": "records base session %s, which is not in this "
-                          "workspace" % relation.base_session,
+                          "workspace" % comparison.base_session,
             })
 
     by_branch: Dict[str, BranchRelation] = {}
-    for relation in branches:
-        if relation.branch_id is not None:
-            by_branch.setdefault(relation.branch_id, relation)
-    for relation in branches:
-        if relation.parent_branch_id is None:
+    for branch in branches:
+        if branch.branch_id is not None:
+            by_branch.setdefault(branch.branch_id, branch)
+    for branch in branches:
+        if branch.parent_branch_id is None:
             continue
-        parent = by_branch.get(relation.parent_branch_id)
+        parent = by_branch.get(branch.parent_branch_id)
         if parent is None:
             unresolved.append({
-                "path": relation.path,
+                "path": branch.path,
                 "reason": "records parent branch %s, which is not in this "
-                          "workspace" % relation.parent_branch_id,
+                          "workspace" % branch.parent_branch_id,
             })
             continue
         if (parent.conversation_id is not None
-                and parent.conversation_id != relation.conversation_id):
+                and parent.conversation_id != branch.conversation_id):
             unresolved.append({
-                "path": relation.path,
+                "path": branch.path,
                 "reason": "records parent branch %s, which belongs to "
-                          "conversation %s" % (relation.parent_branch_id,
+                          "conversation %s" % (branch.parent_branch_id,
                                                parent.conversation_id),
             })
             continue
-        if relation.parent_turn_id is None:
+        if branch.parent_turn_id is None:
             continue
-        if relation.parent_turn_id not in turn_ids.get(parent.path, []):
+        if branch.parent_turn_id not in turn_ids.get(parent.path, []):
             unresolved.append({
-                "path": relation.path,
+                "path": branch.path,
                 "reason": "records parent turn %s, which %s does not hold"
-                          % (relation.parent_turn_id, parent.path),
+                          % (branch.parent_turn_id, parent.path),
             })
 
     groups: Dict[str, List[BranchRelation]] = {}
@@ -618,16 +623,17 @@ def render_lines(graph: WorkspaceGraph) -> List[str]:
             lines.append(line)
         else:
             lines.append("    selection %s" % NOT_RECORDED)
-    for title, items in (("unlinked traces", graph.unlinked_traces),
-                         ("unlinked request snapshots", graph.unlinked_requests)):
-        if items:
+    for title, unlinked in (("unlinked traces", graph.unlinked_traces),
+                            ("unlinked request snapshots",
+                             graph.unlinked_requests)):
+        if unlinked:
             lines.append("%s:" % title)
-            lines.extend("  %s" % item for item in items)
-    for title, items in (("unresolved", graph.unresolved),
-                         ("conflicts", graph.conflicts),
-                         ("unreadable", graph.unreadable)):
-        if items:
+            lines.extend("  %s" % item for item in unlinked)
+    for title, problem_items in (("unresolved", graph.unresolved),
+                                 ("conflicts", graph.conflicts),
+                                 ("unreadable", graph.unreadable)):
+        if problem_items:
             lines.append("%s:" % title)
             lines.extend("  %s: %s" % (item["path"], item["reason"])
-                         for item in items)
+                         for item in problem_items)
     return lines

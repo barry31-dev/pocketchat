@@ -14,6 +14,7 @@ protected by a rule.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Tuple
 
 from .provider import estimate_tokens
@@ -30,11 +31,21 @@ def build_initial_messages(system_prompt: str) -> List[Dict[str, str]]:
     return messages
 
 
-def _message_chars(message: Dict[str, str]) -> int:
-    return len(message.get("content") or "")
+def _message_chars(message: Dict[str, Any]) -> int:
+    total = len(message.get("content") or "")
+    for key in ("tool_calls", "name", "tool_call_id"):
+        value = message.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            total += len(value)
+        else:
+            total += len(json.dumps(value, sort_keys=True, ensure_ascii=False,
+                                    separators=(",", ":")))
+    return total
 
 
-def context_chars(messages: List[Dict[str, str]]) -> int:
+def context_chars(messages: List[Dict[str, Any]]) -> int:
     return sum(_message_chars(m) for m in messages)
 
 
@@ -59,6 +70,13 @@ def apply_budget(messages: List[Dict[str, str]], max_context_chars: int,
     rest = [m for m in messages if m.get("role") != "system"]
 
     pinned = rest[-keep_recent:] if keep_recent > 0 else []
+    if (pinned and pinned[0].get("role") == "assistant"
+            and len(rest) > len(pinned)
+            and rest[-len(pinned) - 1].get("role") == "user"):
+        pinned = rest[-len(pinned) - 1:]
+    if (len(pinned) > 1 and pinned[-1].get("role") == "user"
+            and context_chars(system) + context_chars(pinned) > max_context_chars):
+        pinned = pinned[-1:]
     droppable = rest[:len(rest) - len(pinned)]
 
     # The system prompt always survives; the budget applies to what is left.
@@ -71,13 +89,25 @@ def apply_budget(messages: List[Dict[str, str]], max_context_chars: int,
             % (fixed, max_context_chars)
         )
 
-    kept = list(pinned)
+    groups: List[List[Dict[str, str]]] = []
+    current: List[Dict[str, str]] = []
+    for message in droppable:
+        if message.get("role") == "user" and current:
+            groups.append(current)
+            current = [message]
+        else:
+            current.append(message)
+    if current:
+        groups.append(current)
+
+    kept_groups: List[List[Dict[str, str]]] = []
     used = fixed
-    for message in reversed(droppable):
-        size = _message_chars(message)
+    for group in reversed(groups):
+        size = sum(_message_chars(message) for message in group)
         if used + size <= max_context_chars:
-            kept.insert(0, message)
+            kept_groups.insert(0, group)
             used += size
+    kept = [message for group in kept_groups for message in group] + pinned
 
     kept_ids = {id(m) for m in kept}
     dropped = [m for m in messages if id(m) not in kept_ids]
@@ -95,4 +125,26 @@ def apply_budget(messages: List[Dict[str, str]], max_context_chars: int,
         "budget_chars": max_context_chars,
         "estimated_tokens_before": estimate_tokens(messages),
         "estimated_tokens_after": estimate_tokens(system + kept),
+    }
+
+
+def preview_budget(messages: List[Dict[str, str]], max_context_chars: int,
+                   keep_recent: int = 2) -> Dict[str, Any]:
+    """Describe a budget trim without changing the supplied messages."""
+    original = list(messages)
+    trimmed, report = apply_budget(original, max_context_chars, keep_recent)
+    kept_ids = {id(message) for message in trimmed}
+    kept_indices = [index for index, message in enumerate(original)
+                    if id(message) in kept_ids]
+    dropped_indices = [index for index in range(len(original))
+                       if index not in set(kept_indices)]
+    return {
+        "total_chars": context_chars(original),
+        "budget_chars": int(max_context_chars),
+        "estimated_tokens_before": estimate_tokens(original),
+        "estimated_tokens_after": estimate_tokens(trimmed),
+        "compacted": bool(report),
+        "kept_indices": kept_indices,
+        "dropped_indices": dropped_indices,
+        "report": report,
     }

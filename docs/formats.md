@@ -32,7 +32,12 @@ Header (schema version 1):
 | `parent_turn_id` | the parent turn this file continues from |
 
 Message line: `role` (`user` or `assistant`), `content`, and `turn_id`
-(`turn_NNNNNN`, derived from the line's position).
+(`turn_NNNNNN`, derived from the line's position). A completed assistant line
+may carry additive `tool_context`: the ordered provider messages from that
+turn's tool loop, including assistant `tool_calls` and matching `role: tool`
+results, before the final assistant `content`. New readers validate and expand
+it when rebuilding model context; readers that consume only `role` and
+`content` continue to see the same user/final-assistant exchange.
 
 Compatibility:
 
@@ -47,6 +52,9 @@ Compatibility:
   old conversation under the identity model, copy it into a new session and
   keep the original; `branch` refuses files without a conversation id for
   the same reason.
+- `tool_context` is optional and additive within schema 1. Files without it are
+  never rewritten to gain it. A malformed or unpaired tool context is refused
+  rather than partially sent to a provider.
 
 ## Traces — `traces/<run-id>.jsonl`
 
@@ -54,6 +62,19 @@ Owner: `pocketchat.trace`. Schema: Agent Trace Doctor `trace.schema.json`
 v1 (shipped in `pocketchat/schemas/`). Event-only export (`export --format
 trace`) copies the bytes unchanged; schema and cross-event validation stay
 with `trace-doctor validate`.
+
+For streamed responses, `time_to_first_token_ms` remains the first non-empty
+reasoning or content delta. Additive `first_delta_kind`,
+`time_to_first_reasoning_ms` and `time_to_first_content_ms` distinguish those
+two delta kinds. They describe PocketChat's recorder, not a provider's
+official TTFT definition, and are absent when the corresponding delta did not
+arrive.
+
+`retry.attempt` and `fallback.activated` are additive trace events. The first
+records a planned physical request retry and its backoff; the second records
+one-hop fallback activation after the primary budget is exhausted. Neither
+event means recovery succeeded: the terminal `run.*` event remains the only
+outcome.
 
 ## Request snapshots — `traces/requests/<run-id>.turn-N.json`
 
@@ -86,6 +107,104 @@ Keys: `schema_version`, `comparison_id`, `created`, `prompt`,
 copies none of it. Created exclusively, never rewritten, so the measurement
 it records cannot be revised.
 
+## Recovery records — `.pocketchat/recovery/`
+
+Owner: `pocketchat.recovery`. Checkpoint manifests use schema version
+`pocketchat-checkpoint.v1`; rewind transactions use
+`pocketchat-rewind.v1`. A checkpoint records the source session/trace, the
+completed `turn_id`, message count and SHA-256 digest of that exact message
+prefix, including additive `tool_context` when present. A rewind transaction records its checkpoint, generated target,
+branch identity and `prepared`/`completed` state.
+
+Checkpoint manifests are created once and never rewritten. A rewind
+transaction is intentionally updated from `prepared` to `completed` after the
+generated target verifies; this is the crash-recovery boundary. Neither file
+rewrites the source session or trace. Unknown schema versions are refused.
+
+A Task Run checkpoint adds `task_id`, `step_id` and `policy_sha256` to the same
+manifest. The three fields are all present or all absent: legacy checkpoints
+keep their old checkpoint/rewind semantics, while `task resume` refuses legacy
+or partial bindings. A task checkpoint is only written after the latest task
+step ended `completed` or `refused`, and the checkpoint step itself counts
+against `max_steps`. Resume validates policy digest, task record state/order,
+checkpoint identity and tool context before the first new byte; a prepared
+rewind transaction is recovered rather than duplicated.
+
+## Task policy — operator-supplied JSON
+
+Owner: `pocketchat.task_policy`. Schema version: **`pocketchat-task-policy.v1`**
+(`schemas/task.schema.json`, `$defs.policy`).
+
+A task policy is the document that authorizes a bounded task run, so it is read
+strictly: an unknown field at any level is refused rather than ignored. A policy
+that silently accepted a field nobody declared would read as a narrower grant
+than it actually was.
+
+| key | meaning |
+|---|---|
+| `schema_version` | `pocketchat-task-policy.v1` |
+| `objective` | the one sentence the task tries to make true |
+| `workspace_root` | directory inside the workspace the task works in; `.` is the workspace |
+| `max_steps` | hard ceiling on recorded steps (1-64); reaching it stops the task |
+| `max_tool_calls` | tool calls across the task (1-64), including ones that fail |
+| `max_context_chars` | character budget handed to the existing compaction |
+| `max_turn_tokens` | per-turn token budget enforced by the existing guardrail |
+| `max_session_tokens` | optional whole-task budget; must be at least `max_turn_tokens` |
+| `tools` | grants for `read_file`, `write_file` (create-only) and `memory_search` |
+| `delegate` | optional finite serial delegation, `enabled` false by default |
+
+Allowlisted paths are workspace-relative. An absolute path, an empty segment, a
+`.` segment and any `..` are refused rather than normalized away: the grant is
+compared against what the tool layer resolves, and a path that only becomes safe
+after rewriting is a path nobody read. `write_file` cannot be widened to
+overwrite. Only these three tools exist; a tool the policy names but the package
+does not implement is a refusal, not a no-op.
+
+## Task records — `.pocketchat/tasks/<task-id>.json`
+
+Owner: `pocketchat.tasking`. Schema version: **`pocketchat-task.v1`**
+(`schemas/task.schema.json`, `$defs.task_record`).
+
+One record per task, holding what no other artifact owns: how many steps the
+task took, which state it is in, and why it stopped. It is created exclusively
+and appended to through an atomic replace, so a crash leaves either the old
+record or the new one and never half of either.
+
+| key | meaning |
+|---|---|
+| `schema_version` | `pocketchat-task.v1` |
+| `task_id` | `task_<hex>`; also the record's filename stem |
+| `created` | RFC 3339 UTC |
+| `objective` | copied from the policy |
+| `policy_sha256` | digest of the canonical policy document |
+| `state` | one of the states below |
+| `max_steps` / `max_tool_calls` | the bounds the policy declared |
+| `workspace_root` | the root the task worked in |
+| `terminal_reason` | present only when the record says one; never inferred |
+| `steps` | appended list of `index`, `kind`, `state`, optional `tool`, `detail`, `run_id`, `checkpoint_id`, `recorded` |
+
+States and the closed transition table:
+
+```text
+created      --start-->      running
+running      --checkpoint--> checkpointed --resume--> running
+running      --interrupt-->  interrupted  --resume--> running
+running      --complete-->   completed
+running      --fail------>   failed
+running|checkpointed|interrupted --cancel--> cancelled
+```
+
+`created`, `running`, `checkpointed` and `interrupted` are active; `completed`,
+`failed` and `cancelled` are terminal and cannot restart. An event the table
+does not name is refused rather than ignored, and a terminal transition requires
+a recorded reason.
+
+The record is an index, not a copy: a step names the `run_id` whose trace holds
+the model and tool evidence, and names the `checkpoint_id` whose manifest holds
+the recovery boundary. It duplicates no trace fact, so it cannot disagree with
+one. `policy_sha256` is what makes a resume honest — a resume under a policy
+that digests differently is a different task and is refused.
+
 ## Selection records — `comparisons/<comparison-id>.selection.json`
 
 Owner: `pocketchat.selection`. Schema version: **1**.
@@ -117,6 +236,13 @@ records whose `schema_version` is `1` where they carry one (the workspace
 graph and the query records do; the index report does not). Paths inside
 them are relative to the workspace and no record carries a clock except
 where a file itself records one.
+
+## Compatibility policy
+
+The stable v1.0 compatibility promise, including runtime matrix and deprecation,
+is in [compatibility.md](compatibility.md). A format version listed here is
+stable within v1.0.x; adding fields is additive, while changing an existing
+field's meaning requires a new major version.
 
 ## Migration rules
 

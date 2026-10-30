@@ -16,9 +16,9 @@ import json
 import subprocess
 import sys
 import tempfile
-import threading
+import time
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from pocketchat.sessions import (SessionFile, SessionFileError,
@@ -82,19 +82,15 @@ class SessionTests(unittest.TestCase):
         # One server per test, not one shared by the module: a request from a
         # previous test can still be arriving when the next one starts
         # counting, which makes shared logs order dependent.
-        self.server = HTTPServer(("127.0.0.1", 0), StubHandler)
-        self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
-        self.thread.start()
+        self._stub = hp.StubHTTPServer(StubHandler)
+        self.port = self._stub.port
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(self._stop_server)
         self.base = Path(self.temp.name)
 
     def _stop_server(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=10)
+        self._stub.close()
 
     def _config(self, **overrides):
         provider = {
@@ -270,7 +266,6 @@ class SessionTests(unittest.TestCase):
         self.assertIn("hello", result.stdout)
 
     def test_show_reports_a_session_that_does_not_exist(self):
-        config = self._config()
         result = self._run("show", "no-such-session")
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("no-such-session", result.stderr)
@@ -471,7 +466,6 @@ class SessionTests(unittest.TestCase):
         self.assertIn("model.response.failed", [e["type"] for e in events])
 
     def test_a_session_offered_that_is_not_one_is_refused(self):
-        config = self._config()
         (self.base / "sessions").mkdir(parents=True, exist_ok=True)
         (self.base / "sessions" / "bogus.jsonl").write_text("not a session\n")
         result = self._run("show", "bogus")
@@ -653,7 +647,7 @@ class SessionIdentityTests(SessionTests):
         self.assertIn("turn turn_000002", shown.stdout)
 
     def test_the_read_only_commands_report_a_legacy_file_as_not_recorded(self):
-        legacy = self._write_legacy(self.base / "sessions" / "legacy.jsonl")
+        self._write_legacy(self.base / "sessions" / "legacy.jsonl")
 
         shown = self._run("show", "legacy")
         self.assertEqual(shown.returncode, 0, shown.stdout + shown.stderr)
@@ -768,6 +762,30 @@ class SessionIdentityTests(SessionTests):
                              if line.strip().startswith("--session ")]
             self.assertEqual(len(session_lines), 1, result.stdout)
             self.assertNotIn("default", session_lines[0], session_lines[0])
+
+    def test_a_mixed_export_is_not_accepted_as_an_event_trace(self):
+        # The jsonl archive carries the session header, messages and events in
+        # one file. It is useful for reading and diffing, but it is not the
+        # event-only trace that Trace Doctor accepts; a reader must use
+        # --format trace for that. This pins the property independently of
+        # the wording of any one README section.
+        config = self._config()
+        self._run("run", "hello", "--session", "notes", "--config", str(config))
+        out = self.base / "notes.export.jsonl"
+        self.assertEqual(self._run("export", "notes", "--out", str(out)).returncode, 0)
+        schema = json.loads(
+            (ROOT / "pocketchat" / "schemas" / "trace.schema.json")
+            .read_text(encoding="utf-8"))
+        required = set(schema["required"])
+        allowed = set(schema["properties"])
+        records = [json.loads(line) for line in
+                   out.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(records[0]["kind"], "session")
+        for record in records:
+            keys = set(record)
+            self.assertFalse(
+                required <= keys and keys <= allowed,
+                "export line %r would pass the trace schema" % (sorted(keys),))
 
     def test_trace_help_explains_the_resume_ownership_rule(self):
         for command in ("run", "chat"):

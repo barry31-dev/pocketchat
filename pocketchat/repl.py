@@ -17,13 +17,23 @@ event.
 from __future__ import annotations
 
 import sys
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Protocol
 
 PROMPT = "you> "
 EXIT_WORDS = ("/exit", "/quit", "/bye")
 
 
-def read_lines(stream: Optional[object] = None,
+class _LineInput(Protocol):
+    def readline(self) -> str: ...
+    def isatty(self) -> bool: ...
+
+
+class _TextOutput(Protocol):
+    def write(self, text: str) -> object: ...
+    def flush(self) -> None: ...
+
+
+def read_lines(stream: Optional[_LineInput] = None,
                prompt: str = PROMPT) -> Iterator[str]:
     """Yield one prompt per line, until EOF or an explicit exit word.
 
@@ -73,7 +83,7 @@ def read_lines(stream: Optional[object] = None,
         yield stripped
 
 
-def echo_reply(text: str, stream: Optional[object] = None) -> None:
+def echo_reply(text: str, stream: Optional[_TextOutput] = None) -> None:
     """Print one reply. The trace already has it; this is for the human."""
     handle = stream if stream is not None else sys.stdout
     handle.write("%s\n" % text)
@@ -83,7 +93,7 @@ def echo_reply(text: str, stream: Optional[object] = None) -> None:
         pass
 
 
-def goodbye(stream: Optional[object] = None) -> None:
+def goodbye(stream: Optional[_TextOutput] = None) -> None:
     handle = stream if stream is not None else sys.stdout
     handle.write("bye\n")
     try:

@@ -1,22 +1,35 @@
 # pocketchat
 
-`pocketchat` 是一个很小的单用户命令行对话 agent。它**不是**通用 agent：没有工具、没有
-文件访问、没有代码执行，也没有任何多 agent 相关的东西。它只做一件事 —— 与你配置的模型
-保持一段多轮对话，并写下这段对话的 trace，供别的工具事后核查。
+`pocketchat` 是一个很小的单用户命令行对话 agent。它**不是**通用 agent：没有代码执行、
+shell 或无边界工具面；可选的本地工具都显式 allowlist 并限制在 workspace。它与你配置的
+模型保持多轮对话，并写下这段对话的 trace，供别的工具事后核查。
 
 trace 才是重点。其余一切都只是为了让「模型到底看到了什么、到底答了什么」这个问题有一个
 文件可以打开，而不是靠记忆去信。
 
 ## 它不是什么
 
-- 没有工具调用，也没有 function calling。首版只有对话。
-- 没有 GUI、没有 Web UI、没有云服务、没有账号、没有同步。
-- 没有检索、没有记忆库，除了当前会话之外没有长期记忆。
-- 没有自动重试。一次请求失败就结束这一回合。
+- 没有通用工具调用。可选本地工具只包括 allowlist 读取、create-only 写入和只读记忆搜索。
+- 没有 Web UI、本地服务产品或打包桌面 App；同样没有云服务、账号体系或同步。
+- 没有向量检索或自动长期记忆。本地记忆必须显式写入，也不会静默注入 prompt。
+- 没有无界重试。可选 retry/fallback 有上限且全程记录。
 - 不带任何 provider SDK。它用 `urllib` 讲 OpenAI 兼容的 HTTP API，指向你配置的
   `base_url`。
 
 ## 版本边界
+
+`v1.0.0` 是稳定的 CLI-only 发布候选。它承诺
+[兼容与弃用策略](docs/compatibility.zh-CN.md) 与
+[provider 适配器契约](docs/provider-adapters.zh-CN.md) 以及
+[开发与发布流程](docs/development-and-release.zh-CN.md) 中记录的命令、退出码、
+JSON envelope、文件格式与适配器边界。v1.0 的版本专属候选记录见
+[发布检查表](docs/release-1.0.zh-CN.md)。未来 Agent 基础能力的证据门槛见
+[开发规划总则](docs/agent-development-master-plan.zh-CN.md)。候选下一步切片见
+[pc 下一步计划](docs/pc-next-steps.zh-CN.md)，入队后才开工；已实现证据字段与缺口见
+[证据矩阵](docs/pocketchat-evidence-matrix.md)。运行目标是 Linux、macOS、Windows 上的 CPython 3.9 与 3.13；当前本机验证只在
+macOS 上完成。包内保留跨平台 CI workflow；某个候选 SHA 是否实际跑绿，按该次
+Release 记录读取，不从运行目标或 workflow 存在本身外推。
+不包含 Web UI、本地 API、桌面端、远程服务或通用工具调用。
 
 `v0.1.0` 是单 profile 的基础版：可安装的 CLI、一个配置好的 provider、
 `run`、`chat`、`show`、`export`、带终止事件的 trace，以及会话续接。2026-10-20
@@ -26,7 +39,7 @@ trace SHA-256 `9102fab4a549ff398265d0094c38bf74cd81a33241db7bf77fbcd64621453e45`
 
 `v0.2.0` 增加多 profile 配置与选择、串行对比、请求快照、对比 manifest、成本与
 延迟，以及 replay dry-run。它不增加工具调用、自动重试、分支树、流式输出、
-Web UI 或第二个 provider SDK。
+Web UI、本地服务产品或第二个 provider SDK。
 
 ## 环境要求
 
@@ -38,6 +51,22 @@ Python 3.9 或更高。运行时没有第三方依赖。
 python3 -m pip install .
 pocketchat --help
 ```
+
+### 使用本机 newnewrouter 模型目录
+
+如果 newnewrouter 正在 `127.0.0.1:8137` 运行，可为目录里的每个模型生成一个
+PocketChat profile：
+
+```bash
+python3 scripts/sync_newnewrouter_models.py
+python3 -m pocketchat doctor --config ~/.pocketchat/newnewrouter.json
+python3 -m pocketchat agent --config ~/.pocketchat/newnewrouter.json
+```
+
+生成的 profile 使用 `requires_api_key: false`：上游凭据由 newnewrouter 管理，
+PocketChat 不保存、不打印它们。目录里有稳定别名 `pgt` 时，生成器优先
+把它设为默认；没有时回退到目录第一项。newnewrouter 的
+`/v1/models` 目录变化后，重跑同步脚本即可。
 
 ## 配置
 
@@ -98,6 +127,26 @@ pocketchat profile list
 pocketchat profile list --json
 ```
 
+```bash
+pocketchat profile set staging \
+  --base-url https://example.invalid/v1 \
+  --model example-model \
+  --api-key-env POCKETCHAT_STAGING_KEY
+pocketchat profile use staging
+pocketchat profile remove staging
+```
+
+`profile set` 创建或整体替换一个 schema `"2"` profile，且从不接受凭据值。
+`profile use` 修改默认 profile，`profile remove` 拒绝删除当前默认项。每次被拒绝
+的写入都保持文件不变；成功写入会整体校验候选、保留文件权限并原子替换。`--json`
+在参数解析完成后提供稳定的成功与配置/写入错误对象。完整选项见[命令手册](docs/cli.zh-CN.md)。
+
+schema `"2"` profile 还可声明 `retry_max_attempts`、`retry_backoff_ms`、
+`fallback_max_attempts` 与只能一跳的 `fallback_profile`。默认值保持现有行为：
+不自动重试、不 fallback。
+可选 `max_turn_tokens` 与 `max_session_tokens` 提供 fail-closed token 预算，
+它们不是货币上限。
+
 `run` 与 `chat` 都接受 `--profile NAME`。名字不存在时，在创建任何 trace 文件之前
 就会拒绝，错误信息里列出确实存在的 profile。某个 profile 的凭据没有设置时同样
 失败 —— 不会退回去用一个有凭据的 profile。运行自己的 trace 会记录它用的是哪个
@@ -125,6 +174,48 @@ pocketchat chat
 读一行、发一行、打印回复，如此重复，直到 EOF、Ctrl-C 或 `/exit`、`/quit`、`/bye`
 之一。空行不算 prompt。`--session FILE` 命名或续接会话，与 `run` 用的是同一个参数。
 
+## Agent 对话
+
+`pocketchat agent` 是全屏交互入口。它把对话保存在 session 中，并允许
+下一条消息切换 profile、思考强度和上下文预算。斜杠命令是控制输入，不会变成用户
+消息，也不会产生 trace 事件。
+
+```bash
+pocketchat
+```
+
+直接输入 `pocketchat` 会进入交互式 agent。在终端中会打开全屏界面：首屏显示紧凑品牌与配置摘要，对话采用紧凑 gutter 与
+轮次分隔，底部是带上下规则的输入框和单行状态规则，支持历史记录与斜杠命令选择菜单。`Enter` 发送，`Ctrl+J` 换行，`↑/↓` 取历史，`Ctrl+T` 展开/收起思考，
+`PgUp/PgDn` 翻阅对话历史，`Ctrl+C` 中断正在生成的回复，`Ctrl+D` 退出。输入 `/` 后用 Up/Down 选择命令、Tab 应用；Enter 对半截命令先补全，完整命令才执行。
+输入不带参数的 `/model` 会打开 profile 选择器。请求运行时会持续显示
+`thinking...`、已等待秒数，并实时显示思考内容与正文增量；收到完整回复后写入 session 与
+trace。状态规则随后从 trace 读取已报告 token（`tok`）、按配置价格计算的估算成本（`cost~`）、
+最近 TTFT、物理请求序号（`req`）和压缩事实（`cmp`）。缺 usage、价格或 TTFT 时显示 `?`；
+`req` 不是 retry 次数。管道输入仍走原来的逐行 REPL，供脚本和测试使用。
+
+若当前目录有 `pocketchat.json` 就使用它，否则使用
+`~/.pocketchat/newnewrouter.json`；显式 `--config` 优先。`pocketchat run` 等具名子命令
+继续可用。
+
+```bash
+pocketchat --profile hosted --reasoning high --session notes
+```
+
+```text
+/model hosted
+/session another-conversation
+/reasoning high
+/context 16000
+/status
+/exit
+```
+
+每条普通消息都是独立 run，并有自己的终止 trace 事件；session 文件负责在两轮之间
+携带对话。思考强度始终记录在 run 配置中；只有 profile 显式声明
+`reasoning_effort_supported: true` 时，才会把 `reasoning_effort` 发给
+OpenAI-compatible 端点，因为兼容端点对该扩展并不统一。在首版中，这个入口不包含
+工具、skill、记忆或文件访问。
+
 ## 对比
 
 `compare` 用同一段上下文把一个 prompt 发给多个 profile，并把回复、延迟、token、
@@ -134,9 +225,63 @@ pocketchat chat
 pocketchat compare "summarize this" --profiles local,hosted
 ```
 
-完整手册——对比的参数与 manifest、请求快照、Replay、会话与分支、工作区关系图、
+完整手册——对比的参数与 manifest、请求快照、Replay、会话与分支、checkpoint/rewind、工作区关系图、
 查询命令、派生索引、show 与 export、trace——在
 [docs/cli.zh-CN.md](docs/cli.zh-CN.md)。
+
+脚本可对 `init`、`run`、`chat`、`branch`、`checkpoint`、`rewind`、`task`、
+`show`、`context`、`export` 使用 `--json`。
+执行对象包含状态、run id、turn 数、回复与工作区相对 trace；branch 对象不输出
+消息正文；读取/导出对象报告相对工件路径。失败使用稳定错误对象，默认输出不变。
+
+`checkpoint` 记录一个已完成的 session 边界，`rewind` 从它创建新分支。源 session
+与 trace 保持不变；恢复 manifest 让边界和被中断的 rewind 事务可以回查。
+
+`task run --policy FILE --session NAME` 通过同一 provider、工具、session 与 trace
+路径执行一个有界任务。`task status` 报告封闭任务状态，
+`task resume TASK --checkpoint ID --policy FILE` 恢复 task checkpoint 并报告 recovery
+step，`task report TASK` 只聚合已存在的 steps、tools、budgets、checkpoints、trace
+和 artifacts。四个命令都支持稳定 `--json`；report 未收到 policy 或摘要不匹配时，
+token 预算保持 `unknown`。确定性的本地 smoke demo 是
+`examples/task-demo/demo.py`。
+
+`context` 预览 session 的消息预算，并按当前 drop-oldest-turns 策略干跑压缩，
+不发送请求、不写文件。
+
+`tool read PATH --allow PATH` 读取工作区内一个显式 allowlist 的 UTF-8 文件；
+只读、有大小上限，拒绝敏感或二进制路径；`tool read` 本身不写文件。
+
+`tool write PATH CONTENT --allow PATH` 原子写入一个 allowlist UTF-8 文件；
+已有文件必须显式 `--overwrite`。不提供删除、shell、执行或网络工具。
+
+profile 可通过 `tool_read_enabled`、`tool_read_allow_paths`、
+`tool_call_max_count`、`tool_result_max_bytes` 启用模型自动调用只读
+`read_file`；默认关闭，且只提供这一个工具。
+
+profile 可另外通过 `tool_write_enabled`、`tool_write_allow_paths` 启用
+create-only 的自动 `write_file`；模型不能覆盖或删除文件，`--no-tool-write`
+可关闭该工具。
+
+profile 也可通过 `tool_memory_search_enabled`、
+`tool_memory_search_max_results` 启用只读自动 `memory_search`；模型不能新增、
+修改或删除记忆。
+
+自动 tool loop 中，禁用/未知工具、缺参数和 workspace guard 拒绝会返回有界的
+`status: failed` 工具结果，让模型在既有调用预算内纠错。底层 I/O 或记忆存储错误、
+结果超限、预算耗尽、Provider 错误和中断仍结束 run。权限与工具 trace 事件都带
+tool call id。已完成的 tool call 与结果会作为 additive session `tool_context`
+保留，因此下一条 prompt、进程续跑和派生分支都能在最终回复前看到同一段工具交互。
+
+`memory add/list/search/remove` 管理 `.pocketchat/memory.jsonl` 中的显式本地记忆；
+记忆不会自动注入 prompt。
+
+`delegate run PROMPT...` 串行执行有界的独立子 run 批次并写 delegation manifest；
+它不是递归多 Agent 编排，也不共享父 session。
+
+## 范围
+
+PocketChat 只做 CLI。不规划、不支持、也不接受针对 Web UI、本地 API、桌面端、
+移动端、远程服务或通用工具调用的新开发。上面的显式本地工具边界就是完整工具面。
 
 
 本包对凭据与证据所强制执行的安全规则收拢在
@@ -145,9 +290,14 @@ pocketchat compare "summarize this" --profiles local,hosted
 
 ## 状态
 
-早期开发。对话内核、REPL 与会话持久化已实现。PocketChat 现在按多版本产品推进：
-面向 AI 构建者与技术团队的本地优先、trace-native 多模型对话工作台。
-CLI 是第一个产品界面，桌面端属于后续里程碑。
+稳定 CLI 候选。对话内核、REPL 与会话持久化已实现。PocketChat 是面向 AI 构建者与
+技术团队的本地优先、trace-native、多模型对话 **CLI**。CLI 是唯一产品面；
+Web UI、桌面端与通用工具调用均不在范围内；显式本地工具面仍按上文提供。
+
+2026-10-28 的 CLI-only 回归在 CPython 3.9.6 与 3.13 上各通过 **371 tests**。
+另用 CPython 3.9 从源码建立干净 venv：模块从 `site-packages` 导入，包含 trace
+schema，不包含 `web` 包，`pocketchat serve` 以 exit 2 拒绝。安装后的 CLI 还完成了
+init/doctor JSON、失败 run 的 exit 1 JSON 与终止 trace，以及字节一致的 trace 导出。
 
 CLI 现在可以在一份配置里放多个 profile，并用 `--profile` 跑你选的那一个；
 不选时用配置里的 `default_profile`。每个请求都会在 trace 旁边存成一份快照，
@@ -173,7 +323,8 @@ Apache-2.0。见 `LICENSE`。
 
 ## 发布状态
 
-`v0.3.0` 的源码版本已公开。它尚未发布到包索引；请按上面的安装命令直接从
+`v0.3.0` 的源码版本已公开。当前树是尚未发布的 **v1.0.0 CLI-only 发布候选**；
+尚未发布到包索引，也还没有 v1.0.0 tag 或 Release。请按上面的安装命令直接从
 仓库源码安装。
 
 本文的中文版与英文版逐命令一致，英文版见 [`README.md`](README.md)。

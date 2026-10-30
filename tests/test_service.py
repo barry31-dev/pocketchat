@@ -14,15 +14,15 @@ credential is real.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import subprocess
 import sys
 import tempfile
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+
+from tests import _helpers as hp
 
 from pocketchat.service import (SessionFileError, export_session,
                                 session_overview)
@@ -54,21 +54,15 @@ class StubHandler(BaseHTTPRequestHandler):
 
 class ServiceTestBase(unittest.TestCase):
     def setUp(self):
-        self.server = HTTPServer(("127.0.0.1", 0), StubHandler)
-        self.port = self.server.server_address[1]
-        self.thread = threading.Thread(
-            target=lambda s=self.server: s.serve_forever(poll_interval=0.05),
-            daemon=True)
-        self.thread.start()
+        self._stub = hp.StubHTTPServer(StubHandler)
+        self.port = self._stub.port
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(self._stop_server)
         self.base = Path(self.temp.name)
 
     def _stop_server(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=10)
+        self._stub.close()
 
     def _run(self, *args):
         environ = {"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
@@ -114,13 +108,36 @@ class SessionOverviewTests(ServiceTestBase):
         trace_path = self.base / record["trace"]["path"]
         self.assertTrue(trace_path.is_file())
         self.assertEqual(len(record["trace"]["lines"]),
-                         len([l for l in trace_path.read_text(
-                             encoding="utf-8").splitlines() if l.strip()]))
+                         len([line for line in trace_path.read_text(
+                             encoding="utf-8").splitlines() if line.strip()]))
         self.assertEqual(len(record["trace"]["lines"]), 8)
 
         shown = self._run("show", "notes").stdout
         self.assertIn("session %s" % part["header"]["session"], shown)
         self.assertIn("turn_000001", shown)
+
+    def test_show_surfaces_a_context_compaction_summary(self):
+        config = self.base / "pocketchat.json"
+        config.write_text(json.dumps({
+            "schema_version": "2", "name": "workbench",
+            "default_profile": "local",
+            "profiles": {"local": {
+                "base_url": "http://127.0.0.1:%d/v1" % self.port,
+                "model": "example-model",
+                "api_key_env": "POCKETCHAT_LOCAL_KEY",
+                "max_context_chars": 27,
+            }},
+        }), encoding="utf-8")
+        self._run("run", "one", "two", "three", "--quiet",
+                  "--session", "tight", "--config", str(config))
+        record = session_overview("tight", workspace=self.base)
+        compacted = [line for line in record["trace"]["lines"]
+                     if line["type"] == "context.compacted"]
+        self.assertGreaterEqual(len(compacted), 1)
+        self.assertIn("payload", compacted[0])
+        shown = self._run("show", "tight").stdout
+        self.assertIn("compacted", shown)
+        self.assertIn("dropped", shown)
 
     def test_a_trace_only_argument_answers_without_a_session(self):
         config, manifest = self._build()
@@ -220,8 +237,8 @@ class ExportSessionTests(ServiceTestBase):
         exported = Path(result["out"])
         self.assertEqual(exported.read_bytes(), trace.read_bytes())
         self.assertEqual(result["trace_events"],
-                         len([l for l in trace.read_text(
-                             encoding="utf-8").splitlines() if l.strip()]))
+                         len([line for line in trace.read_text(
+                             encoding="utf-8").splitlines() if line.strip()]))
 
     def test_an_existing_output_is_refused_without_writing(self):
         self._build()

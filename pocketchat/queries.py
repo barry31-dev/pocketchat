@@ -96,6 +96,19 @@ def _read_session(path: Path):
     return header, turns
 
 
+def _require_consistent_graph(graph) -> None:
+    """Refuse a partial answer when the workspace graph has hard problems."""
+    problems = []
+    for kind in ("unreadable", "conflicts", "unresolved"):
+        for record in getattr(graph, kind, []):
+            path = record.get("path") or record.get("id") or "<unknown>"
+            reason = record.get("reason") or kind
+            problems.append("%s: %s" % (path, reason))
+    if problems:
+        raise QueryError(
+            "workspace is inconsistent: %s" % "; ".join(problems[:3]))
+
+
 def _branch_record(workspace: Path, branch) -> Dict[str, Any]:
     """One branch of the reconstructed graph, with the words it holds.
 
@@ -181,6 +194,7 @@ def collect_history(workspace: Path = Path("."),
         graph = collect_workspace(workspace)
     except WorkspaceError as exc:
         raise QueryError(str(exc))
+    _require_consistent_graph(graph)
 
     selected = graph.conversations
     target_record = None
@@ -216,6 +230,10 @@ def search_messages(needle: str, workspace: Path = Path("."),
     workspace = Path(workspace).resolve()
     if not workspace.is_dir():
         raise QueryError("no such workspace: %s" % workspace)
+    try:
+        _require_consistent_graph(collect_workspace(workspace))
+    except WorkspaceError as exc:
+        raise QueryError(str(exc))
 
     if session is not None:
         files = [_session_path(session, workspace)]
@@ -292,6 +310,10 @@ def diff_sessions(left: str, right: str,
     workspace = Path(workspace).resolve()
     if not workspace.is_dir():
         raise QueryError("no such workspace: %s" % workspace)
+    try:
+        _require_consistent_graph(collect_workspace(workspace))
+    except WorkspaceError as exc:
+        raise QueryError(str(exc))
     left_path = _session_path(left, workspace)
     right_path = _session_path(right, workspace)
     left_header, left_turns = _read_session(left_path)

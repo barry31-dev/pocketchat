@@ -5,6 +5,106 @@
 [formats.zh-CN.md](formats.zh-CN.md)；凭据与证据的安全规则见
 [security.zh-CN.md](security.zh-CN.md)。README 保留概览与快速上手。
 
+## Automation JSON
+
+`init`、`run`、`chat`、`branch`、`checkpoint`、`rewind`、`show`、`context`、`export`
+都接受 `--json`。成功时
+stdout 只有一个 JSON 对象：执行命令报告 `ok`、`schema_version`、`status`、
+`run_id`、`turns`、`reply` 与工作区相对 `trace`；`branch` 报告关系 id、相对
+`source` / `session` / `trace` 与 `messages_written`，绝不输出消息正文。准备、
+执行或派生被拒绝时，stdout 只输出一个 `{"ok":false,...}` 对象，stderr 为空。
+准备/拒绝 exit 2；已经开始但失败的 provider run 保持既有 exit 1。不带 `--json`
+时，原有人类输出不变。
+
+## Agent
+
+`pocketchat agent` 是支持会话级切换的交互式聊天入口。每个普通输入是一个 run；
+`--session` 指定的会话文件负责把上下文带到下一个 run。每个 run 恰好有一个终止
+trace 事件。
+
+```bash
+pocketchat agent --session notes
+```
+
+斜杠命令：
+
+| 命令 | 作用 |
+|---|---|
+| `/model NAME` | 为下一条消息选择已配置的 profile |
+| `/session NAME` | 为下一条消息选择会话文件 |
+| `/reasoning LEVEL` | 设置 `minimal`、`low`、`medium` 或 `high` |
+| `/context N` | 设置下一条消息的字符预算 |
+| `/status` | 显示当前 profile、model、session、思考强度和预算 |
+| `/exit` / `/quit` / `/bye` | 退出 agent |
+
+每次 run 都会把思考强度记录到 `run.started`。只有所选 profile 含
+`reasoning_effort_supported: true` 时，才会把该字段放进请求 body；否则它只是本地
+证据，不能假设端点接受该扩展。
+
+## Doctor
+
+```bash
+pocketchat doctor
+pocketchat doctor --profile hosted --json
+```
+
+`doctor` 是只读的启动检查。它加载并校验与运行相同的配置，解析选中的 profile，
+并报告该 profile 的凭据环境变量是否已设置。它不打印凭据值，不打开 socket，不创建
+trace 或会话，也不写配置文件。
+
+报告就绪时 exit 0。配置缺失或无效、profile 不存在或凭据缺失时 exit 2，并给出下一
+步动作。`--json` 返回一个对象，包含 `ok`、`schema_version`、选中的 `profile`、
+`model`、`api_key_env`、稳定的 `checks` 列表、由检查名到状态派生出的
+`check_status` 映射，以及按检查顺序收集失败项 `fix` 的 `next_actions` 数组。
+报告就绪时 `next_actions` 为空数组。报告就绪不表示 provider 端点一定可达。
+
+## Profile
+
+```bash
+pocketchat profile list --json
+pocketchat profile set local \
+  --base-url http://127.0.0.1:8123/v1 \
+  --model example-model \
+  --api-key-env POCKETCHAT_API_KEY
+pocketchat profile use local
+pocketchat profile remove staging
+```
+
+`profile set NAME` 创建或整体替换一个 profile。`--base-url`、`--model` 与
+`--api-key-env` 必填；超时、上下文与摘要边界以及两个可选价格由对应选项提供。
+省略的可选字段在加载配置时解析为默认值，所以修改已有 profile 的一个字段时也要
+把完整 profile 再传一遍。命令只接受持有凭据的环境变量名，从不接受凭据值。
+
+`--max-turn-tokens` 与 `--max-session-tokens` 分别设置单 turn、单 run 的 token
+预算。它们是 token 数量，不是货币上限。请求前用本地估算检查，完成后用 provider
+实报 usage 复核；超预算的 turn 不进入 session，配置 session 预算但 usage 未知时
+fail-closed。
+
+`--tool-read` 向模型提供唯一的自动 `read_file` 工具，`--no-tool-read` 明确关闭它。
+每个路径必须用重复的
+`--tool-read-allow` 显式列出；`--tool-call-max-count` 限制每 turn 调用数
+（默认 2），`--tool-result-max-bytes` 限制单次结果（默认 16384）。工具调用与
+`tool read` 共用 workspace 和敏感路径守卫。禁用/未知工具、缺参数和 guard 拒绝
+会返回有界失败结果，让模型在调用预算内纠错；I/O 失败、结果超限和预算耗尽仍结束
+run。不会提供 shell、执行或网络工具。
+
+`--tool-write` 增加 create-only 的自动 `write_file` 工具。每个路径必须用重复的
+`--tool-write-allow` 显式列出；模型只能提供 `path` 与 `content`，没有 overwrite
+参数。已有文件、路径逃逸、敏感/二进制路径和超限内容一律拒绝。
+
+`--tool-memory-search` 提供只读自动 `memory_search` 工具。
+`--tool-memory-search-max-results` 限制返回记录数（默认 20），并继续受工具结果
+字节上限约束。模型不能新增、修改或删除记忆；`--no-tool-memory-search` 可关闭。
+
+`profile use NAME` 修改 `default_profile`。`profile remove NAME` 删除非默认
+profile，并拒绝删除当前默认项。三条命令都只写 schema `"2"` 配置；schema `"1"`
+文件继续只读，不会作为副作用迁移。候选会先整体校验，再原子替换并保留文件权限；
+被拒绝的修改让文件逐字节不变。
+
+写入成功 exit 0；配置、schema、名字或候选不可用时 exit 2。参数解析完成后，
+`--json` 成功时报告 `ok`、`action`、`profile` 与 `default_profile`；配置与写入
+失败时增加稳定的 `error`、`message` 与 `fix` 字段。
+
 ## 对比
 
 ```bash
@@ -41,7 +141,8 @@ pocketchat compare "what is 2+2?" --profiles hosted,local
 
 token 两列只放 provider 报告过的计数；程序不会估算它们。provider 没有返回
 `usage` 时，这两列保持为零。这个零表示「没有报告 usage」，不是「一定没有消耗
-token」的证明。成本只用现有的计数计算：`unknown` 表示缺少价格；数字则只是对表里
+token」的证明。trace 新增的 `usage_reported` 字段显式区分缺报与真实 0，既有 0 值
+计数器不变。成本只用现有的计数计算：`unknown` 表示缺少价格；数字则只是对表里
 这些计数做算术，不是 provider 的账单。
 
 `comparisons/<comparison-id>.json` 是这些运行的索引。它记下每一次运行的 trace 与请求
@@ -174,6 +275,127 @@ pocketchat branch notes --from turn_000002 --name fork
 发出的问题。只有 v0.3 会话文件可以分支；没有 conversation id 的文件会被拒绝而不是补一个，
 因为编造出来的链接读不回去。
 
+## Checkpoint 与 rewind
+
+`checkpoint` 把某个已完成 turn 记成恢复边界，并在
+`.pocketchat/recovery/checkpoints/` 写一份小型 manifest：包含 session/trace
+引用、turn id，以及精确消息前缀的 SHA-256。trace 证据缺失、turn 尚未回复或
+边界已变化时都会拒绝。
+
+```bash
+pocketchat checkpoint notes --at turn_000002 --id before-retry --json
+pocketchat rewind before-retry --name notes-rewound --json
+```
+
+`rewind` 创建只包含 checkpoint 消息的新 session 分支；源 session 与 trace
+永不回写。目标创建前先写 prepared 事务，目标通过边界摘要校验后才写 completed；
+进程崩溃后重试可以完成事务或替换半成品目标。它不会自动重放既有证据，也不会
+发送 provider 请求。
+
+## 有界任务执行
+
+`task` 暴露 v1.1 有界任务闭环，但不成为第二套执行内核：
+
+```bash
+pocketchat task run "compare the inputs"   --policy examples/task-policy.json --session task --json
+pocketchat task status <task-id> --json
+pocketchat task resume <task-id> --checkpoint <checkpoint-id>   --policy examples/task-policy.json --name resumed --json
+pocketchat task report <task-id> --policy examples/task-policy.json --json
+```
+
+`task run` 必须显式给 policy 与 session。它创建
+`.pocketchat/tasks/<task-id>.json`，模型/工具仍走既有 request snapshot、trace、
+session 与 tool 事件。完成 exit 0；failed/cancelled exit 1；准备失败或契约拒绝
+exit 2。
+
+`task status` 在不执行任何模型工作的前提下区分 active、interrupted、failed 与
+终态。`task resume` 在第一个新字节前拒绝 legacy、不完整或冲突的 task checkpoint，
+把有序 tool context 恢复进续跑分支，并报告追加的 recovery step；它不发送 provider
+请求。
+
+`task report` 列出已记录的 step 对象、工具调用、checkpoint 绑定、run id、trace
+文件与工具 artifacts，不推断缺失事实。没有匹配的 `--policy` 时，
+context/turn/session token 预算为 `unknown`；record 自带的 step/tool 预算仍会显示。
+JSON 路径相对工作区；错误时 stdout 只有一个 JSON 对象，stderr 为空。
+
+确定性的 stub demo 覆盖成功、checkpoint resume 与权限拒绝：
+
+```bash
+/usr/bin/python3 examples/task-demo/demo.py
+```
+
+## 上下文预览
+
+`context` 读取一个 session，按现有预算策略干跑压缩，不发送请求、不写文件：
+
+```bash
+pocketchat context notes
+pocketchat context notes --budget 24000 --json
+```
+
+报告包含消息索引、角色、字符数、压缩前后估算 token，以及现有
+drops-oldest-turns 策略会保留/丢弃哪些消息。`--keep-recent` 固定最近边界
+（默认 2）。未传 `--budget` 时读取 session trace 中的 `max_context_chars`；
+预算连 pinned prompt 都放不下时 exit 2。输出不复制消息正文。已持久化的
+`tool_context` 消息按续跑请求的实际顺序显示，字符数包含 tool call/result 元数据。
+
+## 本地只读工具
+
+`tool read` 是本地、显式 allowlist 的只读操作：
+
+```bash
+pocketchat tool read notes.txt --allow notes.txt --json
+```
+
+路径必须由 `--allow` 显式列出；必须解析到当前工作区内，不含敏感路径组件、
+不是二进制后缀且为有效 UTF-8。输出受 `--max-bytes` 限制（默认 65536），截断会
+报告。命令不写文件、不执行命令、不打开网络 socket。
+
+`tool write` 执行显式 allowlist 的 UTF-8 写入：
+
+```bash
+pocketchat tool write notes.txt "new text" --allow notes.txt --overwrite --json
+```
+
+已有文件必须显式传 `--overwrite` 才能替换；写入使用原子替换，上限 16 KiB。
+敏感、二进制和路径逃逸一律拒绝。工具不删除文件、不执行命令。
+
+## 本地记忆
+
+`memory` 管理 `.pocketchat/memory.jsonl` 中的显式记录：
+
+```bash
+pocketchat memory add "Prefer concise answers" --tag style --json
+pocketchat memory list --json
+pocketchat memory search concise --json
+pocketchat memory remove <memory-id> --json
+```
+
+记录包含 `memory_id`、时间、内容和标签。add 上限为 16 KiB / 16 个标签；
+search 为字面、只读匹配；损坏或 schema 不匹配的 store 一律拒绝。记忆不会自动
+注入模型请求。
+
+## 委派
+
+`delegate run` 执行一个有限、串行的子任务批次：
+
+```bash
+pocketchat delegate run "check A" "check B" --profile local --max-children 4 --json
+```
+
+每个子任务都是独立 run，有自己的 trace；批次有子任务数量和截止时间上限，并写
+`.pocketchat/delegations/<id>.json`。某个子任务失败不会中止其余子任务。这是
+有界委派，不是递归多 Agent 编排：子任务不能继续委派，也不共享父 session。
+
+## 恢复策略
+
+schema `"2"` profile 可声明 `retry_max_attempts`（1-5，默认 1）、
+`retry_backoff_ms`（0-60000，默认 0）、`fallback_max_attempts`（1-5，默认 1）
+和只能一跳的 `fallback_profile`。只有 `retryable` provider 失败消耗重试预算；
+每次重试写 `retry.attempt`，记录物理请求序号与 backoff。主 profile 预算耗尽后
+写 `fallback.activated`，标明源/目标 profile；fallback 有独立预算，不允许链式
+fallback。backoff 或请求中取消会结束 run，不伪造恢复成功。
+
 `workspace` 把整个目录读成一张关系图：哪些文件是同一段对话的两条路径、每个分支从哪个 turn
 岔出、每个文件记录的是哪一次 run、哪一次对比测量了哪些 run。它不写任何文件、不读任何凭据，
 所以这张图画的是事后的事实，不会因为画它的进程而改变：
@@ -199,6 +421,10 @@ pocketchat search "retry policy"      # 字面匹配，区分大小写
 pocketchat search "retry policy" --session notes --json
 pocketchat diff notes fork            # 先公共前缀，再各自新增的轮次
 ```
+
+如果工作区图中有不可读文件、冲突或未解析链接，这些命令拒绝给出部分答案，并点名受影响
+路径。合法追加会立即出现在下一次查询；已有 index 在重建前报告 `stale`。`index` 还会
+把自身行与全新重建对账，源摘要没变但行不一致时报告 `inconsistent`。
 
 `history` 把各轮按对话与分支分组：一段分了岔的对话读起来就是同一段对话的两条路径，
 每一轮用它所在位置推出的 id 命名；target 接受会话名、conversation id 或 branch id。
@@ -233,6 +459,11 @@ pocketchat show notes
 pocketchat show traces/<run-id>.jsonl
 ```
 
+`show --json` 输出一个机器可读对象，包含 `ok`、`schema_version`、会话 header
+与 turns、trace 行摘要和 `trace_problem`。工件路径相对当前工作区。会话或 trace
+缺失时，stdout 只输出一个稳定错误对象并以 2 退出，stderr 为空；不带 `--json`
+时，原有渲染与诊断不变。
+
 `export` 写出会话归档或独立的 event-only trace。源文件不变时，两次导出的字节相同：
 
 ```bash
@@ -242,9 +473,15 @@ pocketchat export notes --format trace     # sessions/notes.export.trace.jsonl
 trace-doctor validate sessions/notes.export.trace.jsonl
 ```
 
+`export --json` 输出一个成功对象，含 `format`、`source`、`session`、`out`、
+`messages` 与 `trace_events`。trace-only 导出把 trace 记为 `source`，`session` 与
+`messages` 为 null。拒绝时 stdout 只输出一个稳定错误对象并以 2 退出；已有输出
+永不覆盖。
+
 `jsonl` 是混合归档：依次写入会话头、消息、trace 事件，每条都有 `kind` 字段。
-`md` 是对话文本。两者都不是给 Trace Doctor 的 event-only trace；从混合归档删掉
-`kind`，不会把会话头和消息变成事件。
+`md` 是对话文本。两者都按续跑请求的顺序包含恢复出的 tool request/result 消息。
+它们都不是给 Trace Doctor 的 event-only trace；从混合归档删掉 `kind`，不会把
+会话头和消息变成事件。
 
 `--format trace` 原样复制 trace 字节，不含会话头、消息或新增的 `kind` 字段。
 事件 ID、时间戳、顺序和 payload 均不重造。它接受会话名或 trace 路径，也接受未使用
@@ -290,3 +527,9 @@ trace 上的 run 会续上该 trace 的编号，而不是从头开始，所以�
 
 响应正文默认记成摘要（字符数加一小段前缀）。`--verbose` 记全文。选哪个由你；
 trace 会说明用了哪一个。
+
+`model.request.started`、`model.response.completed` 与
+`model.response.failed` 带 `attempt_index`（当前 turn 内从 1 起算）和
+`attempt_scope: "turn"`，用来把一次物理请求与它的结果配对。下一 turn 重新从 1
+开始。它不是 retry ordinal：`v1.0.x` 每个请求仍只发送一次，所以将来若出现大于 1
+的值，只表示该 turn 内发生了多次物理请求，不表示本版本执行过自动重试。

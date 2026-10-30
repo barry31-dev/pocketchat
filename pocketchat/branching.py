@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .sessions import (TURN_KEY, SessionFile, create_branch,
+from .sessions import (TOOL_CONTEXT_KEY, TURN_KEY, SessionFile, create_branch,
                        new_workspace_id, resolve_session_path)
 from .session import new_run_id
 
@@ -96,7 +96,7 @@ def derive_branch(source: Path, turn_id: str, name: Optional[str] = None,
             "branched" % source
         )
 
-    turns: List[Dict[str, str]] = store.turns
+    turns: List[Dict[str, Any]] = store.turns
     for number, turn in enumerate(turns, 1):
         if turn.get(TURN_KEY) == turn_id:
             if number % 2 != 0:
@@ -110,8 +110,12 @@ def derive_branch(source: Path, turn_id: str, name: Optional[str] = None,
                 "parent_branch_id": store.branch_id,
                 "parent_turn_id": turn_id,
                 "turns": number,
-                "messages": [{"role": t["role"], "content": t["content"]}
-                             for t in turns[:number]],
+                "messages": [{
+                    "role": t["role"],
+                    "content": t["content"],
+                    **({TOOL_CONTEXT_KEY: t[TOOL_CONTEXT_KEY]}
+                       if t.get(TOOL_CONTEXT_KEY) else {}),
+                } for t in turns[:number]],
                 "session": str(child),
                 "source": str(source),
             }

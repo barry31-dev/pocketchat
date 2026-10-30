@@ -22,9 +22,8 @@ import json
 import subprocess
 import sys
 import tempfile
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from pocketchat.sessions import SessionFile
@@ -70,19 +69,15 @@ class StubHandler(BaseHTTPRequestHandler):
 class WorkspaceTestBase(unittest.TestCase):
     def setUp(self):
         STATE.requests.clear()
-        self.server = HTTPServer(("127.0.0.1", 0), StubHandler)
-        self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
-        self.thread.start()
+        self._stub = hp.StubHTTPServer(StubHandler)
+        self.port = self._stub.port
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(self._stop_server)
         self.base = Path(self.temp.name)
 
     def _stop_server(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=10)
+        self._stub.close()
 
     def _config(self):
         path = self.base / "pocketchat.json"
@@ -364,6 +359,33 @@ class HonestyTests(WorkspaceTestBase):
 
         graph = collect(self.base)
         self.assertEqual(len(graph.conversations), 2)
+
+    def test_malformed_comparison_and_selection_files_are_reported(self):
+        comparisons = self.base / "comparisons"
+        comparisons.mkdir(parents=True, exist_ok=True)
+        (comparisons / "bad.json").write_text("not json\n", encoding="utf-8")
+        (comparisons / "object.json").write_text(
+            json.dumps({"schema_version": "1"}), encoding="utf-8")
+
+        graph = collect(self.base)
+        reasons = [item["reason"] for item in graph.unreadable]
+        self.assertTrue(any("invalid JSON" in reason for reason in reasons))
+        self.assertTrue(any("no comparison id" in reason for reason in reasons))
+        self.assertEqual(graph.comparisons, [])
+
+    def test_a_malformed_selection_beside_a_valid_manifest_is_reported(self):
+        result = self._run("compare", "which one", "--profiles", "local,hosted",
+                           "--config", str(self._config()))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        manifest = next((self.base / "comparisons").glob("*.json"))
+        selection = manifest.with_name(manifest.stem + ".selection.json")
+        selection.write_text("not json\n", encoding="utf-8")
+
+        graph = collect(self.base)
+        self.assertTrue(any(
+            item["path"].endswith(".selection.json")
+            for item in graph.unreadable
+        ), graph.unreadable)
 
     def test_a_file_that_is_not_a_session_is_reported_not_skipped(self):
         junk = self.base / "sessions" / "notes.jsonl"

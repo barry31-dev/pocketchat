@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import os
 import copy
+import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -21,7 +23,11 @@ from .config import ConfigError
 from .config import load_api_key
 from .context import ContextBudgetExceeded, apply_budget, build_initial_messages
 from .context import context_chars as _context_chars
-from .provider import ProviderError, build_payload, complete
+from .provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
+from .provider import estimate_tokens, tool_offer_summary
+from .memory import search_memory
+from .tools import (ToolError, ToolPermissionError,
+                    execute_read_file, execute_write_file)
 from .request import (CredentialInRequestError, next_request_turn,
                      request_snapshot_path, write_request_snapshot)
 from .sessions import SessionFile, SessionFileError
@@ -31,12 +37,44 @@ import pocketchat
 
 RUN_ID_PATTERN_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789_-"
 
+REFUSED_TOOL_ERRORS = frozenset({
+    "not_allowlisted", "unsupported_tool", "denylisted_path", "binary_file",
+    "exists", "permission_denied", "path_escape",
+})
+
 
 def new_run_id() -> str:
     """Build a run id that is unique, readable and safe in a filename."""
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dt%H%M%S")
     token = os.urandom(4).hex()
     return "run_%s_%s" % (stamp, token)
+
+
+def _tool_result_state(result: str) -> str:
+    try:
+        payload = json.loads(result)
+    except ValueError:
+        return "failed"
+    if not isinstance(payload, dict):
+        return "failed"
+    if payload.get("status") == "failed":
+        error = payload.get("error") or {}
+        if error.get("type") in REFUSED_TOOL_ERRORS:
+            return "refused"
+        return "failed"
+    return "completed"
+
+
+def _tool_result_detail(call: Dict[str, Any], result: str) -> str:
+    try:
+        payload = json.loads(result)
+    except ValueError:
+        return str(call.get("name") or "tool")
+    if isinstance(payload, dict) and payload.get("status") == "failed":
+        error = payload.get("error") or {}
+        return str(error.get("type") or "tool_failed")
+    arguments = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+    return str(arguments.get("path") or arguments.get("query") or call.get("name") or "tool")
 
 
 def _elapsed_ms(started_iso: str) -> int:
@@ -47,6 +85,19 @@ def _elapsed_ms(started_iso: str) -> int:
         return 0
     delta = datetime.now(timezone.utc) - started
     return max(0, int(delta.total_seconds() * 1000))
+
+
+def _nonnegative_int(value: Any, default: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return default
+    return value
+
+
+def _attempt_budget(config: Dict[str, Any], key: str, default: int) -> int:
+    value = config.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return default
+    return min(value, 5)
 
 
 def _summarize(text: str, prefix_chars: int) -> str:
@@ -84,6 +135,26 @@ class SessionError(Exception):
         self.message = message
 
 
+class TokenBudgetExceeded(SessionError):
+    """The configured token budget would be exceeded."""
+
+
+def _bounded_count(config: Dict[str, Any], key: str, default: int) -> int:
+    value = config.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise SessionError("invalid_tool_limit", "%s must be a positive integer" % key)
+    return value
+
+
+def _token_budget(config: Dict[str, Any], key: str) -> Optional[int]:
+    value = config.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise SessionError("invalid_token_budget", "%s must be a positive integer" % key)
+    return value
+
+
 class Session:
     """One run: a config, a context, and the trace that records both.
 
@@ -101,10 +172,15 @@ class Session:
     def __init__(self, config: Dict[str, Any], trace_path: Path,
                  run_id: Optional[str] = None, session_path: Optional[Path] = None,
                  verbose: bool = False, api_key: Optional[str] = None,
-                 initial_messages: Optional[List[Dict[str, str]]] = None) -> None:
+                 initial_messages: Optional[List[Dict[str, Any]]] = None,
+                 on_delta=None, task_observer=None) -> None:
         self.config = config
         self.verbose = verbose
-        self.api_key = api_key if api_key is not None else load_api_key(config)
+        loaded_key = api_key if api_key is not None else load_api_key(config)
+        self.api_key = loaded_key or ""
+        self.provider_adapter = config.get("provider_adapter") or DEFAULT_PROVIDER_ADAPTER
+        self.on_delta = on_delta
+        self.task_observer = task_observer
 
         self.session_file: Optional[SessionFile] = None
         if session_path is not None:
@@ -124,7 +200,7 @@ class Session:
             self.run_id = _sanitize_run_id(self.session_file.run_id)
             self.trace_path = Path(self.session_file.trace_path)
             resumed = self.session_file.resumed
-            restored = list(self.session_file.messages)
+            restored = list(self.session_file.context_messages)
         else:
             self.run_id = _sanitize_run_id(run_id or new_run_id())
             self.trace_path = Path(trace_path)
@@ -132,7 +208,7 @@ class Session:
             restored = []
 
         self.recorder = TraceRecorder(self.trace_path, self.run_id)
-        self.messages: List[Dict[str, str]] = build_initial_messages(
+        self.messages: List[Dict[str, Any]] = build_initial_messages(
             self.config.get("system_prompt") or ""
         )
         # A caller may seed the context with messages of its own -- a
@@ -142,13 +218,17 @@ class Session:
         # the next one starts from.
         self.messages.extend(copy.deepcopy(list(initial_messages or [])))
         self.messages.extend(
-            m for m in restored if m.get("role") in ("user", "assistant")
+            m for m in restored if m.get("role") in ("user", "assistant", "tool")
         )
         self.resumed = resumed
         self.turn_count = 0
         # A resumed session continues the numbering the trace already used, so
         # its snapshots extend the run instead of colliding with it.
         self.request_count = max(0, next_request_turn(self.trace_path) - 1)
+        # A physical request ordinal is scoped to one turn: it starts at 1
+        # again for each prompt, and is paired with the result event for that
+        # request. request_count remains the trace-wide snapshot counter.
+        self.turn_attempt_count = 0
         self.request_snapshots: List[Path] = []
         self.request_digests: List[str] = []
         self.total_input_tokens = 0
@@ -156,6 +236,8 @@ class Session:
         self.compacted_count = 0
         self.finished = False
         self.last_output_summary = ""
+        self.last_error: Optional[Dict[str, str]] = None
+        self.last_reason = ""
 
     def config_summary(self) -> Dict[str, Any]:
         """The run configuration as the recorder sees it.
@@ -174,6 +256,18 @@ class Session:
             "timeout_seconds": self.config["timeout_seconds"],
             "max_context_chars": self.config["max_context_chars"],
             "api_key_env": self.config["api_key_env"],
+            "provider_adapter": self.provider_adapter.name,
+            "reasoning_effort": self.config.get("reasoning_effort") or "",
+            "retry_max_attempts": _attempt_budget(
+                self.config, "retry_max_attempts", 1),
+            "retry_backoff_ms": _nonnegative_int(
+                self.config.get("retry_backoff_ms"), 0),
+            "fallback_max_attempts": _attempt_budget(
+                self.config, "fallback_max_attempts", 1),
+            "fallback_profile": self.config.get("fallback_profile") or "",
+            "max_turn_tokens": self.config.get("max_turn_tokens"),
+            "max_session_tokens": self.config.get("max_session_tokens"),
+            "tools": tool_offer_summary(self.config),
             "verbose": self.verbose,
             "pocketchat_version": pocketchat.__version__,
         }
@@ -227,6 +321,8 @@ class Session:
                 "message": "%s: %s" % (type(exc).__name__, exc),
             }
         finally:
+            self.last_error = error
+            self.last_reason = reason
             self._close(status, error, reason, started["event_id"])
         return status
 
@@ -271,6 +367,10 @@ class Session:
             payload["session"] = str(self.session_file.path)
             payload["resumed"] = self.session_file.resumed
         payload["related_event_id"] = related_event_id
+        if self.task_observer is not None:
+            payload["task_id"] = self.task_observer.task_id
+            payload["task_state"] = self.task_observer.before_terminal(
+                status, error, reason)
         event_type = {
             "completed": "run.finished",
             "failed": "run.failed",
@@ -289,7 +389,8 @@ class Session:
         failed turn contributes nothing to what the model sees next round,
         because its failure is not information the model can act on.
         """
-        if not self.api_key:
+        self.turn_attempt_count = 0
+        if self.config.get("requires_api_key", True) is not False and not self.api_key:
             raise SessionError(
                 "missing_credential",
                 "%s is not set" % self.config["api_key_env"],
@@ -305,106 +406,417 @@ class Session:
             # is a configuration fact, not something to trim harder: the run
             # stops rather than sending a context the operator forbade.
             raise SessionError("context_too_large", str(exc))
-        # The snapshot is written before the socket opens, so a request that
-        # never went out leaves no file claiming one did, and a request that
-        # did go out is recorded even if it failed on the wire.
-        self.request_count += 1
-        snapshot_ref = ""
-        snapshot_digest = ""
-        try:
-            snapshot_ref = self._write_request_snapshot(context, self.request_count)
-            snapshot_digest = self.request_digests[-1]
-        except OSError as exc:
-            # A snapshot that cannot be written is not a reason to stop the
-            # run: the trace still records the request. What it must not do is
-            # point at a file that is not there, so the reference is left out
-            # and the failure is recorded as an event a reader can see.
-            self.recorder.append("error.recorded", {
-                "error": {"type": "snapshot_unwritable",
-                          "message": "request snapshot not written: %s" % exc},
-                "fatal": False,
-            })
-        except CredentialInRequestError as exc:
-            # The operator's own words carried the credential, so the body
-            # cannot be written down. The request itself still goes out --
-            # stopping the conversation would not un-send anything -- but the
-            # snapshot is refused, and the trace records why it is missing
-            # rather than leaving a gap a reader has to guess at.
-            self.recorder.append("error.recorded", {
-                "error": {"type": "credential_in_request",
-                          "message": str(exc)},
-                "fatal": False,
-            })
-        started_payload = {
-            "model": self.config["model"],
-            "messages": len(context),
-            "role": "main",
-            "prompt_chars": len(prompt),
-            "context_chars": _context_chars(context),
-            "budget_chars": int(self.config["max_context_chars"]),
-        }
-        if snapshot_ref:
-            started_payload["request_snapshot"] = snapshot_ref
-            started_payload["request_sha256"] = snapshot_digest
-        started = self.recorder.append("model.request.started", started_payload)
-        started_at = utc_now()
-        try:
-            response = complete(context, self.config, self.api_key)
-        except ProviderError as exc:
-            self.recorder.append(
-                "model.response.failed",
-                {
-                    "model": self.config["model"],
+        estimated_turn = estimate_tokens(context)
+        turn_budget = _token_budget(self.config, "max_turn_tokens")
+        session_budget = _token_budget(self.config, "max_session_tokens")
+        if turn_budget is not None and estimated_turn > turn_budget:
+            raise TokenBudgetExceeded(
+                "token_budget_exceeded",
+                "estimated turn tokens %d exceed max_turn_tokens %d"
+                % (estimated_turn, turn_budget))
+        used_tokens = self.total_input_tokens + self.total_output_tokens
+        if session_budget is not None and used_tokens + estimated_turn > session_budget:
+            raise TokenBudgetExceeded(
+                "token_budget_exceeded",
+                "reported usage %d plus estimated turn tokens %d exceed "
+                "max_session_tokens %d"
+                % (used_tokens, estimated_turn, session_budget))
+        phase_config = self.config
+        phase_api_key = self.api_key
+        phase_attempts = _attempt_budget(phase_config, "retry_max_attempts", 1)
+        is_primary = True
+        retry_index = 0
+        while True:
+            try:
+                self._complete_attempt(
+                    prompt, context, phase_config, phase_api_key,
+                    turn_budget=turn_budget, session_budget=session_budget,
+                    used_tokens=used_tokens)
+                return
+            except ProviderError as exc:
+                if not exc.retryable:
+                    raise SessionError(exc.error_type, exc.message)
+                if phase_attempts > 1:
+                    retry_index += 1
+                    from_attempt = self.turn_attempt_count
+                    to_attempt = from_attempt + 1
+                    backoff_ms = _nonnegative_int(
+                        phase_config.get("retry_backoff_ms"), 0)
+                    self.recorder.append("retry.attempt", {
+                        "profile": phase_config.get("profile") or "",
+                        "model": phase_config["model"],
+                        "retry_index": retry_index,
+                        "from_attempt_index": from_attempt,
+                        "to_attempt_index": to_attempt,
+                        "backoff_ms": backoff_ms,
+                        "error": exc.as_trace_error(),
+                        "retryable": True,
+                    })
+                    phase_attempts -= 1
+                    time.sleep(backoff_ms / 1000.0)
+                    continue
+                fallback = (phase_config.get("fallback_config")
+                            if is_primary else None)
+                if not isinstance(fallback, dict):
+                    raise SessionError(exc.error_type, exc.message)
+                from_attempt = self.turn_attempt_count
+                to_attempt = from_attempt + 1
+                self.recorder.append("fallback.activated", {
+                    "from_profile": phase_config.get("profile") or "",
+                    "to_profile": fallback.get("profile") or "",
+                    "from_model": phase_config["model"],
+                    "to_model": fallback.get("model") or "",
+                    "from_attempt_index": from_attempt,
+                    "to_attempt_index": to_attempt,
+                    "primary_attempts": _attempt_budget(
+                        self.config, "retry_max_attempts", 1),
+                    "fallback_attempts": _attempt_budget(
+                        fallback, "retry_max_attempts", 1),
                     "error": exc.as_trace_error(),
+                    "retryable": True,
+                    "reason": exc.error_type,
+                })
+                phase_config = fallback
+                phase_api_key = load_api_key(fallback) or ""
+                if (fallback.get("requires_api_key", True) is not False
+                        and not phase_api_key):
+                    raise SessionError(
+                        "fallback_missing_credential",
+                        "%s is not set" % fallback.get("api_key_env", ""),
+                    )
+                phase_attempts = _attempt_budget(
+                    self.config, "fallback_max_attempts", 1)
+                turn_budget = _token_budget(fallback, "max_turn_tokens")
+                session_budget = _token_budget(fallback, "max_session_tokens")
+                if (turn_budget is not None
+                        and estimated_turn > turn_budget):
+                    raise TokenBudgetExceeded(
+                        "token_budget_exceeded",
+                        "estimated fallback turn tokens %d exceed "
+                        "max_turn_tokens %d" % (estimated_turn, turn_budget))
+                is_primary = False
+                retry_index = 0
+
+    def _complete_attempt(self, prompt: str, context: List[Dict[str, Any]],
+                          config: Dict[str, Any], api_key: str,
+                          turn_budget: Optional[int], session_budget: Optional[int],
+                          used_tokens: int) -> str:
+        """Send one turn, following only enabled local tool calls in that turn."""
+        working_context = list(context)
+        turn_usage = 0
+        tool_calls_executed = 0
+        tool_call_limit = _bounded_count(config, "tool_call_max_count", 2)
+        tool_result_limit = _bounded_count(config, "tool_result_max_bytes", 16 * 1024)
+        while True:
+            self.request_count += 1
+            self.turn_attempt_count += 1
+            attempt_index = self.turn_attempt_count
+            snapshot_ref = ""
+            snapshot_digest = ""
+            try:
+                snapshot_ref = self._write_request_snapshot(
+                    working_context, self.request_count, config=config, api_key=api_key)
+                snapshot_digest = self.request_digests[-1]
+            except OSError as exc:
+                self.recorder.append("error.recorded", {
+                    "error": {"type": "snapshot_unwritable",
+                              "message": "request snapshot not written: %s" % exc},
+                    "fatal": False,
+                })
+            except CredentialInRequestError as exc:
+                self.recorder.append("error.recorded", {
+                    "error": {"type": "credential_in_request",
+                              "message": str(exc)},
+                    "fatal": False,
+                })
+            started_payload = {
+                "model": config["model"],
+                "messages": len(working_context),
+                "role": "main",
+                "prompt_chars": len(prompt),
+                "context_chars": _context_chars(working_context),
+                "budget_chars": int(config["max_context_chars"]),
+                "attempt_index": attempt_index,
+                "attempt_scope": "turn",
+            }
+            if snapshot_ref:
+                started_payload["request_snapshot"] = snapshot_ref
+                started_payload["request_sha256"] = snapshot_digest
+            self._task_before_step("model")
+            started = self.recorder.append("model.request.started", started_payload)
+            started_at = utc_now()
+            try:
+                if self.on_delta is None:
+                    response = self.provider_adapter.complete(
+                        working_context, config, api_key)
+                else:
+                    response = self.provider_adapter.complete(
+                        working_context, config, api_key, on_delta=self.on_delta)
+            except ProviderError as exc:
+                self.recorder.append("model.response.failed", {
+                    "model": config["model"],
+                    "error": exc.as_trace_error(),
+                    "retryable": exc.retryable,
                     "duration_ms": _elapsed_ms(started_at),
                     "role": "main",
-                },
-            )
-            raise SessionError(exc.error_type, exc.message)
-        except KeyboardInterrupt:
-            # The request was in flight when the user interrupted. run() writes
-            # the terminal event; what has to be recorded here is that the
-            # in-flight request never produced a response.
-            self.recorder.append(
-                "model.response.failed",
-                {
-                    "model": self.config["model"],
-                    "error": {
-                        "type": "interrupted",
-                        "message": "request interrupted before it completed",
-                    },
+                    "attempt_index": attempt_index,
+                    "attempt_scope": "turn",
+                })
+                self._task_after_step("model", "failed", detail=exc.error_type)
+                raise
+            except KeyboardInterrupt:
+                self.recorder.append("model.response.failed", {
+                    "model": config["model"],
+                    "error": {"type": "interrupted",
+                              "message": "request interrupted before it completed"},
+                    "retryable": False,
                     "role": "main",
-                },
-            )
-            raise
+                    "attempt_index": attempt_index,
+                    "attempt_scope": "turn",
+                })
+                self._task_after_step("model", "cancelled", detail="interrupted")
+                raise
 
-        usage = response["usage"]
-        self.total_input_tokens += usage["input_tokens"]
-        self.total_output_tokens += usage["output_tokens"]
-        self.turn_count += 1
+            usage = response["usage"]
+            actual_turn = usage["input_tokens"] + usage["output_tokens"]
+            payload: Dict[str, Any] = {
+                "model": config["model"],
+                "usage": usage,
+                "usage_reported": bool(response.get("usage_reported", False)),
+                "duration_ms": _elapsed_ms(started_at),
+                "finish_reason": response["finish_reason"] or "stop",
+                "role": "main",
+                "capture": "inline",
+                "output_summary": response["content"] if self.verbose else _summarize(
+                    response["content"], config["summary_prefix_chars"]
+                ),
+                "related_event_id": started["event_id"],
+                "attempt_index": attempt_index,
+                "attempt_scope": "turn",
+            }
+            ttft = response.get("time_to_first_token_ms")
+            if isinstance(ttft, int) and ttft >= 0:
+                payload["time_to_first_token_ms"] = ttft
+            for key in ("first_delta_kind", "time_to_first_reasoning_ms",
+                        "time_to_first_content_ms"):
+                if key in response:
+                    payload[key] = response[key]
+            self.recorder.append("model.response.completed", payload)
+            if turn_budget is not None and turn_usage + actual_turn > turn_budget:
+                raise TokenBudgetExceeded(
+                    "token_budget_exceeded",
+                    "reported turn tokens %d exceed max_turn_tokens %d"
+                    % (turn_usage + actual_turn, turn_budget))
+            if session_budget is not None and not bool(response.get("usage_reported", False)):
+                raise SessionError(
+                    "token_usage_unknown",
+                    "provider did not report usage required by max_session_tokens")
+            if (session_budget is not None
+                    and used_tokens + turn_usage + actual_turn > session_budget):
+                raise TokenBudgetExceeded(
+                    "token_budget_exceeded",
+                    "reported session tokens would reach %d, above max_session_tokens %d"
+                    % (used_tokens + turn_usage + actual_turn, session_budget))
+            self.total_input_tokens += usage["input_tokens"]
+            self.total_output_tokens += usage["output_tokens"]
+            turn_usage += actual_turn
+            self._task_after_step("model", "completed",
+                                  detail=config["model"])
+            tool_calls = response.get("tool_calls") or []
+            if not tool_calls:
+                self.turn_count += 1
+                tool_context = copy.deepcopy(working_context[len(context):])
+                self.messages.append({"role": "user", "content": prompt})
+                self.messages.extend(tool_context)
+                self.messages.append({"role": "assistant", "content": response["content"]})
+                self._record_turn(prompt, response["content"], tool_context)
+                self.last_output_summary = payload["output_summary"]
+                return response["content"]
+            if tool_calls_executed + len(tool_calls) > tool_call_limit:
+                raise SessionError(
+                    "tool_call_limit",
+                    "tool call budget %d exceeded" % tool_call_limit)
+            assistant_tool_message = {
+                "role": "assistant",
+                "content": response.get("content") or "",
+                "tool_calls": [{
+                    "id": call["id"],
+                    "type": "function",
+                    "function": {
+                        "name": call["name"],
+                        "arguments": json.dumps(
+                            call["arguments"], sort_keys=True),
+                    },
+                } for call in tool_calls],
+            }
+            working_context.append(assistant_tool_message)
+            for call in tool_calls:
+                self._task_before_step("tool", tool=str(call.get("name") or ""))
+                result = self._execute_model_tool_call(
+                    call, config, tool_result_limit)
+                self._task_after_step(
+                    "tool", _tool_result_state(result),
+                    tool=str(call.get("name") or ""),
+                    detail=_tool_result_detail(call, result))
+                working_context.append({
+                    "role": "tool",
+                    "tool_call_id": call["id"],
+                    "name": call["name"],
+                    "content": result,
+                })
+                tool_calls_executed += 1
 
-        self.messages.append({"role": "user", "content": prompt})
-        self.messages.append({"role": "assistant", "content": response["content"]})
-        self._record_turn(prompt, response["content"])
+    def _task_before_step(self, kind: str, tool: Optional[str] = None) -> None:
+        if self.task_observer is not None:
+            self.task_observer.before_step(kind, tool=tool)
 
-        payload: Dict[str, Any] = {
-            "model": self.config["model"],
-            "usage": usage,
-            "duration_ms": _elapsed_ms(started_at),
-            "finish_reason": response["finish_reason"] or "stop",
-            "role": "main",
-            "capture": "inline",
-            "output_summary": response["content"] if self.verbose else _summarize(
-                response["content"], self.config["summary_prefix_chars"]
-            ),
-            "related_event_id": started["event_id"],
-        }
-        self.recorder.append("model.response.completed", payload)
-        self.last_output_summary = payload["output_summary"]
-        return response["content"]
+    def _task_after_step(self, kind: str, state: str, *,
+                         tool: Optional[str] = None,
+                         detail: Optional[str] = None) -> None:
+        if self.task_observer is not None:
+            self.task_observer.after_step(
+                kind, state, tool=tool, detail=detail, run_id=self.run_id)
+
+    def _execute_model_tool_call(self, call: Dict[str, Any],
+                                 config: Dict[str, Any],
+                                 result_limit: int) -> str:
+        tool_name = call.get("name")
+        enabled = ((tool_name == "read_file"
+                    and config.get("tool_read_enabled") is True)
+                   or (tool_name == "write_file"
+                       and config.get("tool_write_enabled") is True)
+                   or (tool_name == "memory_search"
+                       and config.get("tool_memory_search_enabled") is True))
+        if not enabled:
+            self.recorder.append("tool.call.failed", {
+                "tool": str(tool_name or ""),
+                "tool_call_id": str(call.get("id") or ""),
+                "status": "failed",
+                "error": {"type": "unsupported_tool",
+                          "message": "tool is disabled for this profile"},
+                "duration_ms": 0,
+                "guardrail_refusal": True,
+            })
+            return self._tool_failure_result(
+                call, "unsupported_tool",
+                "tool is disabled for this profile", result_limit)
+        if tool_name not in ("read_file", "write_file", "memory_search"):
+            self.recorder.append("tool.call.failed", {
+                "tool": str(call.get("name") or ""),
+                "tool_call_id": str(call.get("id") or ""),
+                "status": "failed",
+                "error": {"type": "unsupported_tool",
+                          "message": "tool is not in the supported set"},
+                "duration_ms": 0,
+                "guardrail_refusal": True,
+            })
+            return self._tool_failure_result(
+                call, "unsupported_tool",
+                "tool is not in the supported set", result_limit)
+        arguments = call.get("arguments")
+        path = arguments.get("path") if isinstance(arguments, dict) else None
+        workspace = Path.cwd()
+        if config.get("task_workspace_root"):
+            workspace = Path(config["task_workspace_root"])
+        elif self.trace_path.parent.name == "traces":
+            workspace = self.trace_path.parent.parent
+        try:
+            if tool_name == "read_file":
+                if not isinstance(path, str) or not path.strip():
+                    return self._record_invalid_arguments(
+                        call, "read_file requires a path", result_limit)
+                result = execute_read_file(
+                    workspace, path,
+                    allowed_paths=config.get("tool_read_allow_paths") or [],
+                    max_bytes=result_limit,
+                    recorder=self.recorder,
+                    tool_call_id=str(call.get("id") or ""),
+                )
+            elif tool_name == "write_file":
+                if not isinstance(path, str) or not path.strip():
+                    return self._record_invalid_arguments(
+                        call, "write_file requires a path", result_limit)
+                content = arguments.get("content") if isinstance(arguments, dict) else None
+                if not isinstance(content, str):
+                    return self._record_invalid_arguments(
+                        call, "write_file requires content", result_limit)
+                result = execute_write_file(
+                    workspace, path, content,
+                    allowed_paths=config.get("tool_write_allow_paths") or [],
+                    overwrite=False,
+                    recorder=self.recorder,
+                    tool_call_id=str(call.get("id") or ""),
+                )
+            else:
+                query = arguments.get("query") if isinstance(arguments, dict) else None
+                if not isinstance(query, str) or not query:
+                    return self._record_invalid_arguments(
+                        call, "memory_search requires a query", result_limit)
+                self.recorder.append("permission.requested", {
+                    "action": "search", "resource": query,
+                    "tool": "memory_search",
+                })
+                self.recorder.append("permission.resolved", {
+                    "decision": "approved", "decided_by": "workspace_policy",
+                })
+                self.recorder.append("tool.call.started", {
+                    "tool": "memory_search",
+                    "tool_call_id": str(call.get("id") or ""),
+                    "args_summary": "search memory",
+                })
+                items = search_memory(workspace, query)[
+                    :_bounded_count(config, "tool_memory_search_max_results", 20)]
+                result = {"items": items}
+                encoded = json.dumps(result, ensure_ascii=False, sort_keys=True)
+                if len(encoded.encode("utf-8")) > result_limit:
+                    raise SessionError(
+                        "tool_result_too_large", "memory search result exceeds limit")
+                self.recorder.append("tool.call.completed", {
+                    "tool": "memory_search",
+                    "tool_call_id": str(call.get("id") or ""),
+                    "status": "completed",
+                    "duration_ms": 0,
+                    "result_bytes": len(encoded.encode("utf-8")),
+                    "result_truncated": False,
+                    "effect_disposition": "none",
+                })
+        except ToolPermissionError as exc:
+            return self._tool_failure_result(
+                call, exc.error_type, str(exc), result_limit)
+        except ToolError as exc:
+            if exc.error_type == "invalid_encoding":
+                return self._tool_failure_result(
+                    call, exc.error_type, str(exc), result_limit)
+            raise SessionError("tool_failed", str(exc))
+        return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+    def _record_invalid_arguments(self, call: Dict[str, Any], message: str,
+                                  result_limit: int) -> str:
+        self.recorder.append("tool.call.failed", {
+            "tool": str(call.get("name") or ""),
+            "tool_call_id": str(call.get("id") or ""),
+            "status": "failed",
+            "error": {"type": "invalid_arguments", "message": message},
+            "duration_ms": 0,
+        })
+        return self._tool_failure_result(
+            call, "invalid_arguments", message, result_limit)
+
+    def _tool_failure_result(self, call: Dict[str, Any], error_type: str,
+                             message: str, result_limit: int) -> str:
+        encoded = json.dumps({
+            "status": "failed",
+            "error": {"type": error_type, "message": message},
+        }, ensure_ascii=False, sort_keys=True)
+        if len(encoded.encode("utf-8")) > result_limit:
+            raise SessionError(
+                "tool_result_too_large",
+                "tool failure result exceeds the configured limit")
+        return encoded
 
     def _write_request_snapshot(self, context: List[Dict[str, str]],
-                                turn: int) -> str:
+                                turn: int, config: Optional[Dict[str, Any]] = None,
+                                api_key: Optional[str] = None) -> str:
         """Write the exact request body for this turn and return its path.
 
         The recorded path is relative to the trace itself, which is the file a
@@ -420,20 +832,22 @@ class Session:
         quotes one, which this run already holds in order to send the request.
         """
         path = request_snapshot_path(self.trace_path, turn)
-        payload = build_payload(context, self.config)
+        config = config or self.config
+        payload = self.provider_adapter.build_payload(context, config)
         digest = write_request_snapshot(
             path,
             run_id=self.run_id,
-            profile=self.config.get("profile"),
+            profile=config.get("profile"),
             created=utc_now(),
             payload=payload,
-            credential=self.api_key,
+            credential=self.api_key if api_key is None else api_key,
         )
         self.request_digests.append(digest)
         self.request_snapshots.append(path)
         return os.path.relpath(path, self.trace_path.parent)
 
-    def _record_turn(self, prompt: str, reply: str) -> None:
+    def _record_turn(self, prompt: str, reply: str,
+                     tool_context: Optional[List[Dict[str, Any]]] = None) -> None:
         """Write the exchange into the conversation file, one line per message.
 
         This runs after the response is in the trace and before the turn
@@ -446,7 +860,7 @@ class Session:
             return
         try:
             self.session_file.append("user", prompt)
-            self.session_file.append("assistant", reply)
+            self.session_file.append("assistant", reply, tool_context=tool_context)
         except SessionFileError:
             # A conversation that cannot be written is not the same as a
             # conversation that did not happen, and the trace already carries
@@ -466,7 +880,7 @@ class Session:
         """
         budget = int(self.config["max_context_chars"])
         context = list(self.messages) + [{"role": "user", "content": prompt}]
-        trimmed, report = apply_budget(context, budget, keep_recent=1)
+        trimmed, report = apply_budget(context, budget, keep_recent=2)
         if report:
             # The pending prompt is not kept in the persisted context: it is
             # appended for real once the turn completes, so keeping it here

@@ -185,7 +185,7 @@ def _request_duration_ms(events: List[Dict[str, Any]]) -> int:
         # nothing here to measure, and inventing a number is worse than zero.
         return 0
     response_types = ("model.response.completed", "model.response.failed")
-    total = 0
+    total_ms = 0.0
     started_at = None
     for event in events:
         if not isinstance(event, dict):
@@ -198,9 +198,9 @@ def _request_duration_ms(events: List[Dict[str, Any]]) -> int:
             # than accumulated, so the total cannot exceed the trace's span.
             started_at = stamp
         elif kind in response_types and started_at is not None and stamp is not None:
-            total += max(0, (stamp - started_at).total_seconds() * 1000)
+            total_ms += max(0.0, (stamp - started_at).total_seconds() * 1000.0)
             started_at = None
-    return max(0, int(total))
+    return max(0, int(total_ms))
 
 
 def run_comparison(prompt: str, profiles: Dict[str, Dict[str, Any]],

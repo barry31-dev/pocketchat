@@ -73,6 +73,25 @@ class ReplayKernelTests(unittest.TestCase):
         self.assertNotEqual(result["recomputed_sha256"], digest)
         self.assertFalse(result["sent"])
 
+    def test_each_malformed_snapshot_field_is_rejected_with_a_reason(self):
+        from pocketchat.replay import ReplayError, replay_dry_run
+
+        mutations = (
+            ("wrong schema", lambda r: r.update(schema_version="9"), "schema version"),
+            ("no run id", lambda r: r.pop("run_id"), "no run id"),
+            ("no request", lambda r: r.pop("request"), "no request object"),
+            ("bad digest", lambda r: r.update(request_sha256="not-a-digest"),
+             "no valid request digest"),
+        )
+        for label, mutate, reason in mutations:
+            with self.subTest(case=label):
+                path, _ = self._write("run_%s.turn-1.json" % label.replace(" ", "_"))
+                record = json.loads(path.read_text(encoding="utf-8"))
+                mutate(record)
+                path.write_bytes(canonical_bytes(record))
+                with self.assertRaisesRegex(ReplayError, reason):
+                    replay_dry_run(path)
+
     def test_a_snapshot_without_a_digest_is_rejected(self):
         from pocketchat.replay import ReplayError, replay_dry_run
 

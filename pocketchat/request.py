@@ -162,6 +162,7 @@ def write_request_snapshot(path: Path, run_id: str, profile: Optional[str],
     caller already holds the credential in order to send the request, so it is
     the caller's to hand over.
     """
+    digest: str = request_digest(payload)
     record = {
         "schema_version": REQUEST_SCHEMA_VERSION,
         "run_id": run_id,
@@ -170,7 +171,7 @@ def write_request_snapshot(path: Path, run_id: str, profile: Optional[str],
         "request": payload,
         # The digest is over the request body alone, so it stays comparable
         # across whatever metadata a snapshot carries around it.
-        "request_sha256": request_digest(payload),
+        "request_sha256": digest,
     }
     record_bytes = canonical_bytes(record)
     if contains_credential(record_bytes, credential):
@@ -188,7 +189,7 @@ def write_request_snapshot(path: Path, run_id: str, profile: Optional[str],
         stream.write(record_bytes)
         stream.flush()
         os.fsync(stream.fileno())
-    return record["request_sha256"]
+    return digest
 
 
 def verify_request_snapshot(path: Path) -> Optional[str]:

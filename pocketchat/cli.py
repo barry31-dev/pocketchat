@@ -17,27 +17,42 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from . import __version__
+from .agent import (AgentCommandError, AgentState, apply_command,
+                    run_task, DEFAULT_REASONING)
 from .branching import BranchError, create_branch_from
-from .config import (CONFIG_TEMPLATE, ConfigError, load_api_key, load_config,
-                     profile_config)
+from .config import (CONFIG_TEMPLATE, ConfigError, ConfigWriteError,
+                     load_api_key, load_config, profile_config, requires_api_key,
+                     remove_profile, set_default_profile, upsert_profile)
+from .doctor import diagnose, render_lines as render_doctor_lines
+from .delegate import DelegateError, run_delegation
 from .compare import (ComparisonManifestError, comparison_manifest_path,
                       run_comparison, write_comparison_manifest)
-from .indexing import (IndexingError, build_index, dump_rows, index_path,
-                       index_status)
+from .context import ContextBudgetExceeded
+from .indexing import IndexingError, build_index, index_status
+from .memory import (MemoryError, add_memory, list_memory, remove_memory,
+                     search_memory)
 from .queries import (QueryError, collect_history, diff_sessions,
                       render_diff_lines, render_history_lines,
                       render_search_lines, search_messages)
+from .recovery import (RecoveryError, create_checkpoint, rewind_to_checkpoint,
+                       resume_task)
 from .replay import ReplayError, replay_snapshots
 from .selection import SelectionError, record_selection
 from .repl import echo_reply, goodbye, read_lines
-from .service import export_session, session_overview
+from .tui import run_tui
+from .tools import (ToolError, ToolPermissionError, execute_read_file,
+                    execute_write_file)
+from .service import (context_preview, export_record, export_session,
+                      session_overview, show_record)
 from .sessions import (SessionFileError, read_header, read_messages,
                        resolve_session_argument, resolve_session_path,
                        NOT_RECORDED)
 from .session import Session, SessionError, new_run_id
+from .task_policy import TaskPolicyError, load_policy
+from .tasking import (TaskError, load_record, policy_digest, task_summary)
 from .workspace import (WorkspaceError, as_dict, collect_workspace,
                         render_lines)
 
@@ -51,6 +66,24 @@ DEFAULT_SESSIONS_DIR = "sessions"
 
 def _config_path(value: Optional[Path]) -> Path:
     return Path(value) if value else Path.cwd() / DEFAULT_CONFIG
+
+
+def _agent_config_path(value: Optional[Path]) -> Path:
+    """The agent config, with a user-level newnewrouter fallback.
+
+    Explicit paths and a local ``pocketchat.json`` keep their existing
+    meaning. Only the bare agent command may fall back to the generated user
+    config, so other commands never silently read a different workspace.
+    """
+    if value:
+        return Path(value)
+    local = Path.cwd() / DEFAULT_CONFIG
+    if local.is_file():
+        return local
+    user_config = Path.home() / ".pocketchat" / "newnewrouter.json"
+    if user_config.is_file():
+        return user_config
+    return local
 
 
 def _trace_path_for(args: argparse.Namespace, run_id: str) -> Path:
@@ -80,7 +113,25 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version",
                         version="pocketchat %s" % __version__)
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    # Bare `pocketchat` is the full-screen interactive agent; named
+    # subcommands retain their own argument parsers.
+    parser.add_argument("--config", type=Path, default=None,
+                        help="agent configuration file (default: ./pocketchat.json)")
+    parser.add_argument("--profile", default=None,
+                        help="agent initial profile")
+    parser.add_argument("--session", default="main",
+                        help="agent initial session (default: main)")
+    parser.add_argument("--reasoning", choices=("minimal", "low", "medium", "high"),
+                        default=DEFAULT_REASONING,
+                        help="agent reasoning effort (default: medium)")
+    parser.add_argument("--context-chars", type=int, default=None,
+                        dest="context_chars",
+                        help="agent context character budget")
+    parser.add_argument("--verbose", action="store_true",
+                        help="record full response bodies for agent runs")
+    parser.add_argument("--quiet", action="store_true",
+                        help="suppress agent replies and goodbye")
+    subparsers = parser.add_subparsers(dest="command")
 
     def add_common(sub: argparse.ArgumentParser,
                    hide: Iterable[str] = ()) -> None:
@@ -124,6 +175,17 @@ def _parser() -> argparse.ArgumentParser:
                       help="where to write the template (default: ./%s)" % DEFAULT_CONFIG)
     init.add_argument("--force", action="store_true",
                       help="overwrite an existing file")
+    init.add_argument("--json", action="store_true", dest="as_json",
+                      help="print one machine-readable JSON object")
+
+    doctor = subparsers.add_parser(
+        "doctor", help="check configuration and credential readiness without network access")
+    doctor.add_argument("--config", type=Path, default=None,
+                        help="configuration file (default: ./%s)" % DEFAULT_CONFIG)
+    doctor.add_argument("--profile", default=None,
+                        help="profile to check (default: the config's default_profile)")
+    doctor.add_argument("--json", action="store_true", dest="as_json",
+                        help="print one JSON object instead of human-readable lines")
 
     run = subparsers.add_parser("run", help="run one or more prompts non-interactively")
     add_common(run)
@@ -132,6 +194,25 @@ def _parser() -> argparse.ArgumentParser:
                      help="name or resume a session file; without it there is none")
     run.add_argument("--quiet", action="store_true",
                      help="print only the final status line")
+    run.add_argument("--json", action="store_true", dest="as_json",
+                     help="print one machine-readable JSON object")
+
+    agent = subparsers.add_parser(
+        "agent", help="interactive chat with model, session and context switches")
+    add_common(agent)
+    agent.add_argument("--session", default="main",
+                       help="session name to start in (default: main)")
+    agent.add_argument("--reasoning", choices=("minimal", "low", "medium", "high"),
+                       default=DEFAULT_REASONING, dest="reasoning",
+                       help="reasoning effort recorded for each run")
+    agent.add_argument("--context-chars", type=int, default=None,
+                       dest="context_chars",
+                       help="context character budget (default: profile setting)")
+    agent.add_argument("--quiet", action="store_true",
+                       help="suppress replies and the goodbye line")
+    agent.epilog = ("Slash commands: /model <profile>, /session <name>, "
+                    "/reasoning <minimal|low|medium|high>, "
+                    "/context <characters>, /status, /exit")
 
     chat = subparsers.add_parser("chat", help="hold a conversation interactively")
     add_common(chat)
@@ -139,11 +220,84 @@ def _parser() -> argparse.ArgumentParser:
                      help="name or resume a session file; without it there is none")
     chat.add_argument("--quiet", action="store_true",
                       help="print only the final status line")
+    chat.add_argument("--json", action="store_true", dest="as_json",
+                      help="print one machine-readable JSON object")
 
     show = subparsers.add_parser("show", help="print one session, then its trace")
     show.add_argument("session", type=Path,
                       help="a session file, or the trace it recorded; a bare "
                            "name is read from ./sessions")
+    show.add_argument("--json", action="store_true", dest="as_json",
+                      help="print one machine-readable JSON object")
+
+    context = subparsers.add_parser(
+        "context", help="preview one session's context and dry-run compaction")
+    context.add_argument("session", type=Path,
+                         help="a session file, or the trace it recorded")
+    context.add_argument("--budget", type=int, default=None,
+                         help="character budget (default: trace config)")
+    context.add_argument("--keep-recent", type=int, default=2,
+                         help="recent messages pinned at the end (default: 2)")
+    context.add_argument("--json", action="store_true", dest="as_json",
+                         help="print one JSON object instead of human lines")
+
+    tool = subparsers.add_parser(
+        "tool", help="run one explicitly permitted local tool")
+    tool_sub = tool.add_subparsers(dest="tool_command", required=True)
+    tool_read = tool_sub.add_parser("read", help="read one allowed UTF-8 file")
+    tool_read.add_argument("path", help="workspace-relative file path")
+    tool_read.add_argument("--allow", action="append", default=[],
+                           dest="allowed_paths",
+                           help="explicit workspace-relative allowlist entry")
+    tool_read.add_argument("--max-bytes", type=int, default=65536,
+                           dest="max_bytes",
+                           help="maximum bytes returned (default: 65536)")
+    tool_read.add_argument("--json", action="store_true", dest="as_json",
+                           help="print one JSON object instead of file text")
+    tool_write = tool_sub.add_parser("write", help="write one allowed UTF-8 file")
+    tool_write.add_argument("path", help="workspace-relative file path")
+    tool_write.add_argument("content", help="UTF-8 content to write")
+    tool_write.add_argument("--allow", action="append", default=[],
+                            dest="allowed_paths",
+                            help="explicit workspace-relative allowlist entry")
+    tool_write.add_argument("--overwrite", action="store_true",
+                            help="replace an existing file")
+    tool_write.add_argument("--json", action="store_true", dest="as_json",
+                            help="print one JSON object instead of a summary")
+
+    memory = subparsers.add_parser(
+        "memory", help="manage explicit local memory records")
+    memory_sub = memory.add_subparsers(dest="memory_command", required=True)
+    memory_add = memory_sub.add_parser("add", help="add one explicit memory")
+    memory_add.add_argument("content", help="memory text")
+    memory_add.add_argument("--tag", action="append", default=[],
+                            dest="tags", help="repeatable memory tag")
+    memory_add.add_argument("--json", action="store_true", dest="as_json")
+    memory_list = memory_sub.add_parser("list", help="list local memories")
+    memory_list.add_argument("--json", action="store_true", dest="as_json")
+    memory_search = memory_sub.add_parser("search", help="search memory text")
+    memory_search.add_argument("text", help="literal text to find")
+    memory_search.add_argument("--json", action="store_true", dest="as_json")
+    memory_remove = memory_sub.add_parser("remove", help="remove one memory")
+    memory_remove.add_argument("memory_id", help="memory id")
+    memory_remove.add_argument("--json", action="store_true", dest="as_json")
+
+    delegate = subparsers.add_parser(
+        "delegate", help="run a bounded, serial delegation batch")
+    delegate_sub = delegate.add_subparsers(dest="delegate_command", required=True)
+    delegate_run = delegate_sub.add_parser("run", help="run child prompts serially")
+    delegate_run.add_argument("prompts", nargs="+", help="child prompts")
+    delegate_run.add_argument("--config", type=Path, default=None,
+                              help="configuration file (default: ./pocketchat.json)")
+    delegate_run.add_argument("--profile", default=None,
+                              help="profile to use for every child")
+    delegate_run.add_argument("--max-children", type=int, default=4,
+                              dest="max_children",
+                              help="maximum child prompts (default: 4)")
+    delegate_run.add_argument("--timeout-seconds", type=int, default=120,
+                              dest="timeout_seconds",
+                              help="batch deadline in seconds (default: 120)")
+    delegate_run.add_argument("--json", action="store_true", dest="as_json")
 
     export = subparsers.add_parser(
         "export", help="write a session archive or an event-only trace")
@@ -156,6 +310,8 @@ def _parser() -> argparse.ArgumentParser:
     export.add_argument("--out", type=Path, default=None,
                         help="output file (default: <session>.export.<format>; "
                              "trace uses .export.trace.jsonl)")
+    export.add_argument("--json", action="store_true", dest="as_json",
+                        help="print one machine-readable JSON object")
 
     branch = subparsers.add_parser(
         "branch", help="derive a branch from one completed turn of a session")
@@ -171,15 +327,165 @@ def _parser() -> argparse.ArgumentParser:
     branch.add_argument("--json", action="store_true", dest="as_json",
                         help="print one JSON object instead of a human line")
 
+    checkpoint = subparsers.add_parser(
+        "checkpoint", help="record a completed session boundary for recovery")
+    checkpoint.add_argument("session", type=Path,
+                            help="session file, or the trace it recorded")
+    checkpoint.add_argument("--at", dest="at_turn", default=None,
+                            help="completed turn to checkpoint (default: latest)")
+    checkpoint.add_argument("--id", dest="checkpoint_id", default=None,
+                            help="checkpoint id (default: generated)")
+    checkpoint.add_argument("--json", action="store_true", dest="as_json",
+                            help="print one JSON object instead of a human line")
+
+    rewind = subparsers.add_parser(
+        "rewind", help="create a new session branch from a checkpoint")
+    rewind.add_argument("checkpoint", help="checkpoint id to rewind to")
+    rewind.add_argument("--name", required=True,
+                        help="name/path for the new session branch")
+    rewind.add_argument("--json", action="store_true", dest="as_json",
+                        help="print one JSON object instead of a human line")
+
+    task = subparsers.add_parser(
+        "task", help="run and inspect one bounded, evidence-backed task")
+    task_subparsers = task.add_subparsers(dest="task_command", required=True)
+
+    task_run = task_subparsers.add_parser(
+        "run", help="create and run one task under an explicit policy")
+    add_common(task_run)
+    task_run.add_argument("prompts", nargs="+", help="prompts to send, in order")
+    task_run.add_argument("--policy", type=Path, required=True,
+                          help="task policy JSON")
+    task_run.add_argument("--session", type=Path, required=True,
+                          help="session file to create or continue")
+    task_run.add_argument("--json", action="store_true", dest="as_json",
+                          help="print one machine-readable JSON object")
+
+    task_status = task_subparsers.add_parser(
+        "status", help="report one task record without running it")
+    task_status.add_argument("task_id")
+    task_status.add_argument("--json", action="store_true", dest="as_json",
+                             help="print one machine-readable JSON object")
+
+    task_resume = task_subparsers.add_parser(
+        "resume", help="resume one task from a task checkpoint")
+    task_resume.add_argument("task_id")
+    task_resume.add_argument("--checkpoint", required=True,
+                             help="task checkpoint id")
+    task_resume.add_argument("--policy", type=Path, required=True,
+                             help="the same task policy JSON")
+    task_resume.add_argument("--name", required=True,
+                             help="name/path for the resumed session branch")
+    task_resume.add_argument("--json", action="store_true", dest="as_json",
+                             help="print one machine-readable JSON object")
+
+    task_report = task_subparsers.add_parser(
+        "report", help="aggregate existing task evidence without inference")
+    task_report.add_argument("task_id")
+    task_report.add_argument("--policy", type=Path, default=None,
+                             help="optional policy JSON used to report token budgets")
+    task_report.add_argument("--json", action="store_true", dest="as_json",
+                             help="print one machine-readable JSON object")
+
     profile = subparsers.add_parser(
-        "profile", help="show the profiles a configuration offers")
+        "profile", help="show or manage the profiles a configuration offers")
     profile_subparsers = profile.add_subparsers(dest="profile_command", required=True)
+
+    def add_profile_config(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument("--config", type=Path, default=None,
+                         help="configuration file (default: ./%s)" % DEFAULT_CONFIG)
+        sub.add_argument("--json", action="store_true", dest="as_json",
+                         help="print one JSON object instead of a human line")
+
     profile_list = profile_subparsers.add_parser(
         "list", help="list the profiles, and whether each credential is set")
-    profile_list.add_argument("--config", type=Path, default=None,
-                              help="configuration file (default: ./%s)" % DEFAULT_CONFIG)
-    profile_list.add_argument("--json", action="store_true", dest="as_json",
-                              help="print one JSON object instead of one line per profile")
+    add_profile_config(profile_list)
+
+    profile_set = profile_subparsers.add_parser(
+        "set", help="create or replace one profile")
+    profile_set.add_argument("name", help="profile name")
+    profile_set.add_argument("--base-url", required=True, dest="base_url",
+                             help="OpenAI-compatible endpoint")
+    profile_set.add_argument("--model", required=True,
+                             help="model name sent to the endpoint")
+    profile_set.add_argument("--api-key-env", required=True,
+                             dest="api_key_env",
+                             help="environment variable holding the credential")
+    profile_set.add_argument("--timeout-seconds", type=int,
+                             dest="timeout_seconds", default=None,
+                             help="request timeout (default: 60)")
+    profile_set.add_argument("--max-context-chars", type=int,
+                             dest="max_context_chars", default=None,
+                             help="context character limit (default: 24000)")
+    profile_set.add_argument("--summary-prefix-chars", type=int,
+                             dest="summary_prefix_chars", default=None,
+                             help="summary prefix limit (default: 160)")
+    profile_set.add_argument("--max-turn-tokens", type=int,
+                             dest="max_turn_tokens", default=None,
+                             help="maximum locally estimated/reported tokens "
+                                  "for one turn (default: unbounded)")
+    profile_set.add_argument("--max-session-tokens", type=int,
+                             dest="max_session_tokens", default=None,
+                             help="maximum reported tokens for one run "
+                                  "(default: unbounded)")
+    tool_read_group = profile_set.add_mutually_exclusive_group()
+    tool_read_group.add_argument("--tool-read", action="store_true",
+                                 dest="tool_read_enabled", default=None,
+                                 help="offer the read_file tool to the model")
+    tool_read_group.add_argument("--no-tool-read", action="store_false",
+                                 dest="tool_read_enabled",
+                                 help="withhold the read_file tool from the model")
+    tool_write_group = profile_set.add_mutually_exclusive_group()
+    tool_write_group.add_argument("--tool-write", action="store_true",
+                                  dest="tool_write_enabled", default=None,
+                                  help="offer create-only write_file to the model")
+    tool_write_group.add_argument("--no-tool-write", action="store_false",
+                                  dest="tool_write_enabled",
+                                  help="withhold write_file from the model")
+    tool_memory_group = profile_set.add_mutually_exclusive_group()
+    tool_memory_group.add_argument("--tool-memory-search", action="store_true",
+                                   dest="tool_memory_search_enabled",
+                                   default=None,
+                                   help="offer memory_search to the model")
+    tool_memory_group.add_argument("--no-tool-memory-search", action="store_false",
+                                   dest="tool_memory_search_enabled",
+                                   help="withhold memory_search from the model")
+    profile_set.add_argument("--tool-read-allow", action="append", default=None,
+                             dest="tool_read_allow_paths",
+                             help="workspace-relative path allowed for read_file")
+    profile_set.add_argument("--tool-write-allow", action="append", default=None,
+                             dest="tool_write_allow_paths",
+                             help="workspace-relative path allowed for write_file")
+    profile_set.add_argument("--tool-call-max-count", type=int, default=None,
+                             dest="tool_call_max_count",
+                             help="maximum read_file calls per turn (default: 2)")
+    profile_set.add_argument("--tool-result-max-bytes", type=int, default=None,
+                             dest="tool_result_max_bytes",
+                             help="maximum tool result bytes (default: 16384)")
+    profile_set.add_argument("--tool-memory-search-max-results", type=int,
+                             default=None,
+                             dest="tool_memory_search_max_results",
+                             help="maximum memory search results (default: 20)")
+    profile_set.add_argument("--input-price-per-million", type=float,
+                             dest="input_price_per_million", default=None,
+                             help="USD per million input tokens (default: unknown)")
+    profile_set.add_argument("--output-price-per-million", type=float,
+                             dest="output_price_per_million", default=None,
+                             help="USD per million output tokens (default: unknown)")
+    profile_set.add_argument("--reasoning-effort-supported", action="store_true",
+                             dest="reasoning_effort_supported",
+                             help="send reasoning_effort to this OpenAI-compatible endpoint")
+    add_profile_config(profile_set)
+
+    profile_use = profile_subparsers.add_parser(
+        "use", help="select the default profile")
+    profile_use.add_argument("name", help="existing profile name")
+    add_profile_config(profile_use)
+
+    profile_remove = profile_subparsers.add_parser(
+        "remove", help="remove a non-default profile")
+    profile_remove.add_argument("name", help="existing profile name")
+    add_profile_config(profile_remove)
 
     compare = subparsers.add_parser(
         "compare", help="run one prompt against several profiles and compare")
@@ -273,19 +579,39 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = _parser().parse_args(argv)
-
+    if args.command is None:
+        args.command = "agent"
+        args.as_json = False
     if args.command == "init":
         return _cmd_init(args)
+    if args.command == "doctor":
+        return _cmd_doctor(args)
     if args.command == "run":
         return _cmd_run(args)
     if args.command == "chat":
         return _cmd_chat(args)
+    if args.command == "agent":
+        return _cmd_agent(args)
     if args.command == "show":
         return _cmd_show(args)
+    if args.command == "context":
+        return _cmd_context(args)
+    if args.command == "tool":
+        return _cmd_tool(args)
+    if args.command == "memory":
+        return _cmd_memory(args)
+    if args.command == "delegate":
+        return _cmd_delegate(args)
     if args.command == "export":
         return _cmd_export(args)
     if args.command == "branch":
         return _cmd_branch(args)
+    if args.command == "checkpoint":
+        return _cmd_checkpoint(args)
+    if args.command == "rewind":
+        return _cmd_rewind(args)
+    if args.command == "task":
+        return _cmd_task(args)
     if args.command == "profile":
         return _cmd_profile(args)
     if args.command == "compare":
@@ -308,14 +634,88 @@ def main(argv: Optional[List[str]] = None) -> int:
     return EXIT_USAGE
 
 
+def _json_path(value: Path) -> str:
+    return os.path.relpath(str(Path(value)), str(Path.cwd()))
+
+
+def _print_json_error(code: str, message: str) -> None:
+    print(json.dumps({
+        "ok": False, "schema_version": "1",
+        "error": code, "message": message,
+    }, sort_keys=True))
+
+
+def _prepare_error(message: str, args: argparse.Namespace,
+                   code: str) -> int:
+    if getattr(args, "as_json", False):
+        _print_json_error(code, message)
+    else:
+        print("pocketchat: %s" % message, file=sys.stderr)
+    return EXIT_USAGE
+
+
+def _execution_record(status: str, session: Session,
+                      trace_path: Path) -> Dict[str, Any]:
+    reply = (session.last_reply()
+             if status == "completed" and session.turn_count else None)
+    payload = {
+        "ok": status == "completed",
+        "schema_version": "1",
+        "status": status,
+        "run_id": session.run_id,
+        "turns": session.turn_count,
+        "trace": _json_path(trace_path),
+        "reply": reply,
+    }
+    if status != "completed":
+        payload["error"] = "run_%s" % status
+    return payload
+
+
+def _branch_record(result: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "schema_version": "1",
+        "conversation_id": result["conversation_id"],
+        "branch_id": result["branch_id"],
+        "parent_branch_id": result["parent_branch_id"],
+        "parent_turn_id": result["parent_turn_id"],
+        "turns": result["turns"],
+        "session": _json_path(Path(result["session"])),
+        "source": _json_path(Path(result["source"])),
+        "run_id": result["run_id"],
+        "trace": _json_path(Path(result["trace"])),
+        "messages_written": result["messages_written"],
+    }
+
+
 def _cmd_init(args: argparse.Namespace) -> int:
     target = args.path or Path.cwd() / DEFAULT_CONFIG
     if target.exists() and not args.force:
+        if args.as_json:
+            _print_json_error(
+                "config",
+                "%s already exists (use --force to overwrite)"
+                % _json_path(target))
+            return EXIT_USAGE
         print("pocketchat: %s already exists (use --force to overwrite)" % target,
               file=sys.stderr)
         return EXIT_USAGE
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(CONFIG_TEMPLATE, encoding="utf-8")
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(CONFIG_TEMPLATE, encoding="utf-8")
+    except OSError as exc:
+        if args.as_json:
+            _print_json_error("config", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps({
+            "ok": True, "schema_version": "1",
+            "path": _json_path(target), "created": not args.force,
+        }, sort_keys=True))
+        return EXIT_OK
     print("wrote %s" % target)
     print("set %s before running a real provider" % "POCKETCHAT_API_KEY")
     return EXIT_OK
@@ -342,18 +742,24 @@ def _cmd_branch(args: argparse.Namespace) -> int:
     try:
         source = resolve_session_argument(args.session, DEFAULT_SESSIONS_DIR)
     except SessionFileError as exc:
-        print("pocketchat: %s" % exc, file=sys.stderr)
+        if args.as_json:
+            _print_json_error("branch", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
         return EXIT_USAGE
 
     try:
         result = create_branch_from(source, args.from_turn, args.name,
                                     DEFAULT_SESSIONS_DIR)
     except BranchError as exc:
-        print("pocketchat: %s" % exc, file=sys.stderr)
+        if args.as_json:
+            _print_json_error("branch", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
         return EXIT_USAGE
 
     if args.as_json:
-        print(json.dumps(result, sort_keys=True))
+        print(json.dumps(_branch_record(result), sort_keys=True))
         return EXIT_OK
 
     print("branch %s  from %s  at %s  (turns 1-%d)"
@@ -364,7 +770,292 @@ def _cmd_branch(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_checkpoint(args: argparse.Namespace) -> int:
+    try:
+        record = create_checkpoint(Path.cwd(), args.session, args.at_turn,
+                                   args.checkpoint_id)
+    except RecoveryError as exc:
+        if args.as_json:
+            _print_json_error("recovery", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps({**record, "ok": True}, sort_keys=True))
+        return EXIT_OK
+    print("checkpoint %s  at %s  (%d messages)"
+          % (record["checkpoint_id"], record["turn_id"], record["messages"]))
+    print("manifest %s" % record["manifest"])
+    return EXIT_OK
+
+
+def _cmd_rewind(args: argparse.Namespace) -> int:
+    try:
+        record = rewind_to_checkpoint(Path.cwd(), args.checkpoint, args.name)
+    except (RecoveryError, OSError) as exc:
+        if args.as_json:
+            _print_json_error("recovery", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps(record, sort_keys=True))
+        return EXIT_OK
+    print("rewind %s  to %s  at %s  (%d messages)"
+          % (record["rewind_id"], record["checkpoint_id"],
+             record["parent_turn_id"], record["messages_written"]))
+    print("session %s" % record["target_session"])
+    return EXIT_OK
+
+
+def _task_report_payload(root: Path, record, policy=None) -> Dict[str, Any]:
+    """Aggregate only evidence already present in the workspace."""
+    summary = task_summary(record)
+    steps = list(record.steps)
+    tools = [{
+        "name": step.get("tool"),
+        "state": step.get("state"),
+        "detail": step.get("detail"),
+        "run_id": step.get("run_id"),
+    } for step in steps if step.get("kind") == "tool"]
+    checkpoints = [{
+        "checkpoint_id": step.get("checkpoint_id"),
+        "step_id": step.get("index"),
+        "state": step.get("state"),
+    } for step in steps if step.get("kind") == "checkpoint"]
+    budget = {
+        "max_steps": record.max_steps,
+        "max_tool_calls": record.max_tool_calls,
+        "max_context_chars": "unknown",
+        "max_turn_tokens": "unknown",
+        "max_session_tokens": "unknown",
+    }
+    if policy is not None:
+        budget.update({
+            "max_context_chars": policy.max_context_chars,
+            "max_turn_tokens": policy.max_turn_tokens,
+            "max_session_tokens": policy.max_session_tokens,
+        })
+    trace_paths = []
+    traces = root / "traces"
+    for path in sorted(traces.glob("*.jsonl")) if traces.is_dir() else []:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if any('"run_id": "%s"' % run_id in text
+               for run_id in summary["runs"]):
+            trace_paths.append(_json_path(path))
+    artifacts = [{
+        "tool": step.get("name"),
+        "path": step.get("detail"),
+        "run_id": step.get("run_id"),
+    } for step in tools if step.get("detail")]
+    return {
+        "ok": True,
+        "schema_version": "1",
+        "task_id": record.task_id,
+        "state": record.state,
+        "report": summary,
+        "step_count": len(steps),
+        "steps": steps,
+        "tools": tools,
+        "budget": budget,
+        "checkpoints": checkpoints,
+        "runs": summary["runs"],
+        "trace": trace_paths,
+        "artifacts": artifacts,
+    }
+
+
+def _cmd_task(args: argparse.Namespace) -> int:
+    if args.task_command == "run":
+        try:
+            policy = load_policy(args.policy)
+            config = load_config(_config_path(args.config))
+            selected = profile_config(config, args.profile)
+            result = run_task(
+                policy=policy, workspace=Path.cwd(), config=selected,
+                trace_path=Path(args.trace) if args.trace else Path("traces") /
+                ("%s.jsonl" % args.session.stem),
+                session_path=resolve_session_path(
+                    args.session, DEFAULT_SESSIONS_DIR),
+                prompts=args.prompts)
+        except (ConfigError, TaskPolicyError, RecoveryError,
+                SessionError, OSError) as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE if not isinstance(exc, SessionError) else EXIT_RUN_FAILED
+        payload = {
+            "ok": result.status == "completed",
+            "schema_version": "1",
+            "task_id": result.task_id,
+            "status": result.status,
+            "run_id": result.run_id,
+            "report": result.report,
+            "record": _json_path(Path.cwd() / ".pocketchat" / "tasks" /
+                                 (result.task_id + ".json")),
+            "session": _json_path(result.session_path),
+            "trace": _json_path(result.trace_path),
+        }
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("task %s  %s" % (result.task_id, result.status))
+            print("record %s" % payload["record"])
+        return EXIT_OK if result.status == "completed" else EXIT_RUN_FAILED
+
+    if args.task_command == "status":
+        try:
+            record = load_record(Path.cwd(), args.task_id)
+        except (TaskError, OSError) as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        summary = task_summary(record)
+        payload = {"ok": True, "schema_version": "1",
+                   "task_id": record.task_id, "state": record.state,
+                   "report": summary}
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("task %s  %s" % (record.task_id, record.state))
+        return EXIT_OK
+
+    if args.task_command == "resume":
+        try:
+            policy = load_policy(args.policy)
+            result = resume_task(Path.cwd(), args.checkpoint, policy,
+                                 name=args.name)
+        except (TaskError, TaskPolicyError, RecoveryError, SessionFileError,
+                OSError) as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        payload = {
+            "ok": True, "schema_version": "1",
+            "task_id": result["task_id"], "checkpoint_id": args.checkpoint,
+            "step_id": result["step_id"], "session": result["session"],
+            "report": result["report"],
+            "recovery_step": result["report"]["steps"],
+            "context_messages": len(result["context"]),
+        }
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("task %s resumed from %s" % (result["task_id"],
+                                               args.checkpoint))
+            print("session %s" % result["session"])
+        return EXIT_OK
+
+    try:
+        record = load_record(Path.cwd(), args.task_id)
+        policy = load_policy(args.policy) if args.policy else None
+        if (policy is not None
+                and policy_digest(getattr(policy, "source", None) or policy)
+                != record.policy_sha256):
+            raise TaskError("report policy does not match task policy_sha256")
+        payload = _task_report_payload(Path.cwd(), record, policy)
+    except (TaskError, TaskPolicyError) as exc:
+        if args.as_json:
+            _print_json_error("task", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps(payload, sort_keys=True))
+    else:
+        print("task %s  %s" % (record.task_id, record.state))
+        print("steps %d  tools %d  checkpoints %d"
+              % (len(record.steps), len(payload["tools"]),
+                 len(payload["checkpoints"])))
+    return EXIT_OK
+
+
 def _cmd_profile(args: argparse.Namespace) -> int:
+    """List or manage the profiles a config offers.
+
+    Write commands never take a credential value. They name only the
+    environment variable that will hold it, validate the complete candidate,
+    preserve the configuration file's mode and replace it atomically.
+    """
+    if args.profile_command != "list":
+        return _cmd_profile_write(args)
+    return _cmd_profile_list(args)
+
+
+def _profile_write_error(action: str, name: str, exc: ConfigWriteError,
+                         as_json: bool) -> int:
+    payload = {
+        "ok": False,
+        "action": action,
+        "profile": name,
+        "error": exc.code,
+        "message": exc.message,
+    }
+    if exc.fix:
+        payload["fix"] = exc.fix
+    if as_json:
+        print(json.dumps(payload, sort_keys=True))
+    else:
+        print("pocketchat: %s" % exc.message, file=sys.stderr)
+        if exc.fix:
+            print("next: %s" % exc.fix, file=sys.stderr)
+    return EXIT_USAGE
+
+
+def _cmd_profile_write(args: argparse.Namespace) -> int:
+    path = _config_path(args.config)
+    action = args.profile_command
+    name = args.name
+    try:
+        if action == "set":
+            fields = {
+                "base_url": args.base_url,
+                "model": args.model,
+                "api_key_env": args.api_key_env,
+            }
+            for key in (
+                "timeout_seconds", "max_context_chars",
+                "summary_prefix_chars", "input_price_per_million",
+                "output_price_per_million", "reasoning_effort_supported",
+                "max_turn_tokens", "max_session_tokens",
+                "tool_read_enabled", "tool_read_allow_paths",
+                "tool_write_enabled", "tool_write_allow_paths",
+                "tool_memory_search_enabled", "tool_memory_search_max_results",
+                "tool_call_max_count", "tool_result_max_bytes",
+            ):
+                value = getattr(args, key)
+                if value is not None:
+                    fields[key] = value
+            config = upsert_profile(path, name, fields)
+        elif action == "use":
+            config = set_default_profile(path, name)
+        else:
+            config = remove_profile(path, name)
+    except ConfigWriteError as exc:
+        return _profile_write_error(action, name, exc, args.as_json)
+
+    payload = {
+        "ok": True,
+        "action": action,
+        "profile": name,
+        "default_profile": config["default_profile"],
+    }
+    if args.as_json:
+        print(json.dumps(payload, sort_keys=True))
+    else:
+        print("profile %s %s" % (action, name))
+    return EXIT_OK
+
+
+def _cmd_profile_list(args: argparse.Namespace) -> int:
     """List the profiles a config offers, and whether each key is set.
 
     The credential's *value* never appears here. What an operator needs to
@@ -395,6 +1086,20 @@ def _cmd_profile(args: argparse.Namespace) -> int:
             # variable counts as unset: `load_api_key` treats it that way, so
             # reporting "set" here would promise a run that then refuses.
             "key_set": bool(os.environ.get(env_name, "").strip()),
+            "reasoning_effort_supported": bool(
+                record.get("reasoning_effort_supported", False)),
+            "max_turn_tokens": record.get("max_turn_tokens"),
+            "max_session_tokens": record.get("max_session_tokens"),
+            "tool_read_enabled": bool(record.get("tool_read_enabled", False)),
+            "tool_read_allow_paths": record.get("tool_read_allow_paths", []),
+            "tool_write_enabled": bool(record.get("tool_write_enabled", False)),
+            "tool_write_allow_paths": record.get("tool_write_allow_paths", []),
+            "tool_memory_search_enabled": bool(
+                record.get("tool_memory_search_enabled", False)),
+            "tool_memory_search_max_results":
+                record.get("tool_memory_search_max_results"),
+            "tool_call_max_count": record.get("tool_call_max_count"),
+            "tool_result_max_bytes": record.get("tool_result_max_bytes"),
         })
 
     if args.as_json:
@@ -405,12 +1110,22 @@ def _cmd_profile(args: argparse.Namespace) -> int:
     model_width = max(len(entry["model"]) for entry in entries)
     url_width = max(len(entry["base_url"]) for entry in entries)
     for entry in entries:
+        suffix = ""
+        if entry["reasoning_effort_supported"]:
+            suffix += "  reasoning"
+        if entry["max_turn_tokens"] is not None:
+            suffix += "  turn<=%s" % entry["max_turn_tokens"]
+        if entry["max_session_tokens"] is not None:
+            suffix += "  session<=%s" % entry["max_session_tokens"]
+        if entry["default"]:
+            suffix += "  (default)"
         print("%-*s  %-*s  %-*s  %-8s %s%s" % (
             width, entry["name"],
             model_width, entry["model"],
             url_width, entry["base_url"],
             "set" if entry["key_set"] else "not set",
-            entry["api_key_env"], "  (default)" if entry["default"] else ""))
+            entry["api_key_env"],
+            suffix))
     return EXIT_OK
 
 
@@ -490,7 +1205,7 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     # rather than in the middle, where its failure would look like a wire
     # error instead of a configuration one.
     for name, record in profiles.items():
-        if load_api_key(record) is None:
+        if requires_api_key(record) and load_api_key(record) is None:
             print("pocketchat: %s is not set" % record["api_key_env"],
                   file=sys.stderr)
             return EXIT_USAGE
@@ -778,8 +1493,9 @@ def _cmd_index(args: argparse.Namespace) -> int:
             "sources": report["sources"],
             "counts": report["counts"],
             "stale_files": report["mismatched"],
+            "mismatched_rows": report.get("mismatched_rows", []),
         }, sort_keys=True))
-        return EXIT_OK if report["status"] != "stale" else EXIT_RUN_FAILED
+        return EXIT_OK if report["status"] in ("fresh", "missing") else EXIT_RUN_FAILED
 
     index = report["path"]
     status = report["status"]
@@ -794,13 +1510,34 @@ def _cmd_index(args: argparse.Namespace) -> int:
                                counts.get("problems", 0)))
     print("index %s  %s  (%d sources; %s)" % (index, status,
                                               report["sources"], detail))
-    if status == "stale":
+    if status in ("stale", "inconsistent"):
         for name in report["mismatched"]:
             print("  changed: %s" % name)
+        for name in report.get("mismatched_rows", []):
+            print("  inconsistent rows: %s" % name)
         print("pocketchat: the index disagrees with the workspace; "
               "rebuild it with --rebuild")
         return EXIT_RUN_FAILED
     return EXIT_OK
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    report = diagnose(_config_path(args.config), args.profile)
+    if args.as_json:
+        payload = dict(report)
+        payload["schema_version"] = "1"
+        payload["check_status"] = {
+            check["name"]: check["status"] for check in report["checks"]
+        }
+        payload["next_actions"] = [
+            check["fix"] for check in report["checks"]
+            if check["status"] == "failed" and check.get("fix")
+        ]
+        print(json.dumps(payload, sort_keys=True))
+    else:
+        for line in render_doctor_lines(report):
+            print(line)
+    return EXIT_OK if report["ok"] else EXIT_USAGE
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -811,8 +1548,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
     try:
         status = session.run(args.prompts)
     except SessionError as exc:
+        if args.as_json:
+            _print_json_error("run", str(exc))
+            return EXIT_RUN_FAILED
         print("pocketchat: %s" % exc, file=sys.stderr)
         return EXIT_RUN_FAILED
+    if args.as_json:
+        payload = _execution_record(status, session, trace_path)
+        print(json.dumps(payload, sort_keys=True))
+        return EXIT_OK if status == "completed" else EXIT_RUN_FAILED
     if not args.quiet and status == "completed":
         # The reply goes to stdout, so a script can pipe it. The trace stays a
         # separate artifact: stdout is the answer, the file is the evidence.
@@ -833,8 +1577,7 @@ def _prepare(args: argparse.Namespace):
     try:
         config = load_config(_config_path(args.config))
     except ConfigError as exc:
-        print("pocketchat: %s" % exc, file=sys.stderr)
-        return EXIT_USAGE
+        return _prepare_error(str(exc), args, "config")
 
     # The profile is resolved here, before anything is written, so a
     # misspelled name is a usage error rather than a run that goes out on a
@@ -843,12 +1586,11 @@ def _prepare(args: argparse.Namespace):
     try:
         config = profile_config(config, getattr(args, "profile", None))
     except ConfigError as exc:
-        print("pocketchat: %s" % exc, file=sys.stderr)
-        return EXIT_USAGE
+        return _prepare_error(str(exc), args, "config")
 
-    if load_api_key(config) is None:
-        print("pocketchat: %s is not set" % config["api_key_env"], file=sys.stderr)
-        return EXIT_USAGE
+    if requires_api_key(config) and load_api_key(config) is None:
+        return _prepare_error(
+            "%s is not set" % config["api_key_env"], args, "credential")
 
     # A resumable run does not mint an id here: the session file names the run,
     # and Session adopts that name. Minting one first would put a fresh run id
@@ -862,24 +1604,20 @@ def _prepare(args: argparse.Namespace):
         try:
             recorded = read_header(session_path).get("trace")
         except SessionFileError as exc:
-            print("pocketchat: %s" % exc, file=sys.stderr)
-            return EXIT_USAGE
+            return _prepare_error(str(exc), args, "session_file")
         if isinstance(recorded, str) and recorded.strip():
             recorded_trace = (session_path.parent / recorded).resolve()
             if Path(args.trace).resolve() != recorded_trace:
-                print(
-                    "pocketchat: session %s records trace %s; --trace must "
-                    "match it or be omitted" % (session_path, recorded_trace),
-                    file=sys.stderr,
-                )
-                return EXIT_USAGE
+                return _prepare_error(
+                    "session %s records trace %s; --trace must match it or be "
+                    "omitted" % (session_path, recorded_trace), args,
+                    "session_file")
 
     try:
         session = Session(config=config, trace_path=trace_path, run_id=run_id,
                           session_path=session_path, verbose=args.verbose)
     except ConfigError as exc:
-        print("pocketchat: %s" % exc, file=sys.stderr)
-        return EXIT_USAGE
+        return _prepare_error(str(exc), args, "config")
     return session, session.trace_path
 
 
@@ -894,6 +1632,10 @@ def _cmd_chat(args: argparse.Namespace) -> int:
     # what writes the terminal event -- so an interrupted conversation still
     # ends with run.cancelled rather than a trace that stops mid-line.
     status = session.run(read_lines())
+    if args.as_json:
+        print(json.dumps(_execution_record(status, session, trace_path),
+                         sort_keys=True))
+        return EXIT_OK if status == "completed" else EXIT_RUN_FAILED
     if not args.quiet and status == "completed" and session.turn_count:
         # The last reply is the one the human is looking at.
         echo_reply(session.last_reply())
@@ -905,6 +1647,93 @@ def _cmd_chat(args: argparse.Namespace) -> int:
     return EXIT_OK if status == "completed" else EXIT_RUN_FAILED
 
 
+def _cmd_agent(args: argparse.Namespace) -> int:
+    """Interactive chat with switches that affect the next message only."""
+    config_path = _agent_config_path(args.config)
+    try:
+        root_config = load_config(config_path)
+    except ConfigError as exc:
+        print("agent: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+
+    profiles = root_config.get("profiles") or {}
+    models = {
+        name: record.get("model", "")
+        for name, record in profiles.items()
+        if isinstance(record, dict)
+    }
+    initial_profile = args.profile or root_config.get("default_profile")
+    if initial_profile not in profiles:
+        print("agent: unknown profile: %s" % initial_profile, file=sys.stderr)
+        return EXIT_USAGE
+    state = AgentState(
+        profile=initial_profile,
+        model=models[initial_profile],
+        session=args.session,
+        reasoning=args.reasoning,
+        context_chars=(args.context_chars
+                       if args.context_chars is not None
+                       else profiles[initial_profile].get("max_context_chars", 24000)),
+        reasoning_supported=bool(
+            profiles[initial_profile].get("reasoning_effort_supported", False)),
+    )
+
+    interactive = bool(getattr(sys.stdin, "isatty", lambda: False)())
+    if interactive:
+        return run_tui(
+            state,
+            profiles,
+            models,
+            config=root_config,
+            workspace=Path.cwd(),
+            verbose=args.verbose,
+        )
+
+    print("PocketChat agent. Commands: /model /session /reasoning /context /status /exit")
+    print(state.status_line())
+    for raw in read_lines(prompt="agent> "):
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            response = apply_command(state, line, profiles, models)
+        except AgentCommandError as exc:
+            print("agent: %s" % exc)
+            continue
+        if response == "exit":
+            break
+        if response is not None:
+            print(response)
+            continue
+
+        try:
+            selected = profile_config(root_config, state.profile)
+        except ConfigError as exc:
+            print("agent: %s" % exc)
+            continue
+        selected["max_context_chars"] = state.context_chars
+        selected["reasoning_effort"] = state.reasoning
+        session_path = resolve_session_path(Path(state.session), DEFAULT_SESSIONS_DIR)
+        run_id = new_run_id()
+        trace_path = Path.cwd() / "traces" / ("%s.jsonl" % run_id)
+        session = Session(
+            config=selected,
+            trace_path=trace_path,
+            run_id=run_id,
+            session_path=session_path,
+            verbose=args.verbose,
+        )
+        status = session.run([line])
+        if not args.quiet and status == "completed" and session.turn_count:
+            echo_reply(session.last_reply())
+        if status != "completed":
+            print("agent: run %s" % status, file=sys.stderr)
+            return EXIT_RUN_FAILED
+    if not args.quiet:
+        goodbye()
+    return EXIT_OK
+
+
 def _cmd_show(args: argparse.Namespace) -> int:
     """Print one session: the conversation, then the events that recorded it.
 
@@ -914,6 +1743,25 @@ def _cmd_show(args: argparse.Namespace) -> int:
     printing -- the conversation first, then the trace, then the reason no
     trace follows when there is none.
     """
+    if args.as_json:
+        try:
+            record = show_record(args.session, DEFAULT_SESSIONS_DIR)
+        except SessionFileError as exc:
+            print(json.dumps({
+                "ok": False, "schema_version": "1",
+                "error": "session_file", "message": str(exc),
+            }, sort_keys=True))
+            return EXIT_USAGE
+        if record["trace_problem"] is not None:
+            problem = record["trace_problem"]
+            print(json.dumps({
+                "ok": False, "schema_version": "1",
+                "error": problem["code"], "message": problem["message"],
+            }, sort_keys=True))
+            return EXIT_USAGE
+        print(json.dumps(record, sort_keys=True))
+        return EXIT_OK
+
     try:
         record = session_overview(args.session, DEFAULT_SESSIONS_DIR)
     except SessionFileError as exc:
@@ -953,7 +1801,145 @@ def _cmd_show(args: argparse.Namespace) -> int:
             continue
         print("%4d  %-12s %s"
               % (entry["number"], entry["event_id"], entry["type"]))
+        payload = entry.get("payload")
+        if entry["type"] == "context.compacted" and isinstance(payload, dict):
+            print("      compacted: strategy=%s dropped=%s kept=%s "
+                  "chars=%s budget=%s"
+                  % (payload.get("strategy", "-"),
+                     payload.get("dropped_messages", "-"),
+                     payload.get("kept_messages", "-"),
+                     payload.get("kept_chars", "-"),
+                     payload.get("budget_chars", "-")))
     return EXIT_OK
+
+
+def _cmd_context(args: argparse.Namespace) -> int:
+    try:
+        record = context_preview(
+            args.session, budget_chars=args.budget,
+            keep_recent=args.keep_recent)
+    except (SessionFileError, ContextBudgetExceeded, ValueError) as exc:
+        if args.as_json:
+            _print_json_error("context", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps(record, sort_keys=True))
+        return EXIT_OK
+    print("context %s  messages=%d  chars=%d/%d" % (
+        record["session"], record["message_count"], record["total_chars"],
+        record["budget_chars"]))
+    print("tokens estimated %d -> %d  compacted=%s" % (
+        record["estimated_tokens_before"], record["estimated_tokens_after"],
+        "yes" if record["compacted"] else "no"))
+    print("kept %s  dropped %s" % (
+        ",".join(str(index) for index in record["kept_indices"]) or "-",
+        ",".join(str(index) for index in record["dropped_indices"]) or "-"))
+    return EXIT_OK
+
+
+def _cmd_tool(args: argparse.Namespace) -> int:
+    try:
+        if args.tool_command == "read":
+            result = execute_read_file(
+                Path.cwd(), args.path, allowed_paths=args.allowed_paths,
+                max_bytes=args.max_bytes)
+        elif args.tool_command == "write":
+            result = execute_write_file(
+                Path.cwd(), args.path, args.content,
+                allowed_paths=args.allowed_paths, overwrite=args.overwrite)
+        else:
+            print("pocketchat: unknown tool command", file=sys.stderr)
+            return EXIT_USAGE
+    except (ToolPermissionError, ToolError) as exc:
+        if args.as_json:
+            _print_json_error("tool", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps({"ok": True, "schema_version": "1", **result},
+                         sort_keys=True))
+    else:
+        if args.tool_command == "read":
+            print(result["content"], end="")
+        else:
+            print("wrote %s (%d bytes)" % (result["path"], result["bytes"]))
+    return EXIT_OK
+
+
+def _cmd_memory(args: argparse.Namespace) -> int:
+    root = Path.cwd()
+    try:
+        if args.memory_command == "add":
+            record = add_memory(root, args.content, args.tags)
+            result = {"ok": True, "schema_version": "1",
+                      "memory_id": record["memory_id"], "item": record}
+        elif args.memory_command == "list":
+            result = {"ok": True, "schema_version": "1",
+                      "items": list_memory(root)}
+        elif args.memory_command == "search":
+            result = {"ok": True, "schema_version": "1",
+                      "items": search_memory(root, args.text)}
+        elif args.memory_command == "remove":
+            remove_memory(root, args.memory_id)
+            result = {"ok": True, "schema_version": "1",
+                      "removed": args.memory_id}
+        else:
+            raise MemoryError("unknown memory command")
+    except MemoryError as exc:
+        if args.as_json:
+            _print_json_error("memory", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps(result, sort_keys=True))
+        return EXIT_OK
+    items = result.get("items")
+    if items is not None:
+        for item in items:
+            print("%s  %s" % (item["memory_id"], item["content"]))
+    elif "item" in result:
+        print(result["item"]["memory_id"])
+    else:
+        print("removed %s" % result["removed"])
+    return EXIT_OK
+
+
+def _cmd_delegate(args: argparse.Namespace) -> int:
+    if args.delegate_command != "run":
+        print("pocketchat: unknown delegate command", file=sys.stderr)
+        return EXIT_USAGE
+    try:
+        config = load_config(_config_path(args.config))
+        selected = profile_config(config, args.profile)
+        if requires_api_key(selected):
+            key = load_api_key(selected)
+            if key is None:
+                raise DelegateError("%s is not set" % selected["api_key_env"])
+        else:
+            key = ""
+        result = run_delegation(
+            Path.cwd(), args.prompts, selected,
+            max_children=args.max_children,
+            timeout_seconds=args.timeout_seconds, api_key=key)
+    except (ConfigError, DelegateError) as exc:
+        if args.as_json:
+            _print_json_error("delegate", str(exc))
+        else:
+            print("pocketchat: %s" % exc, file=sys.stderr)
+        return EXIT_USAGE
+    if args.as_json:
+        print(json.dumps(result, sort_keys=True))
+    else:
+        print("delegation %s  manifest %s"
+              % (result["delegation_id"], result["manifest"]))
+        for child in result["children"]:
+            print("%d  %s  %s" % (child["index"], child["status"],
+                                  child.get("reply") or child.get("error") or ""))
+    return EXIT_OK if result["ok"] else EXIT_RUN_FAILED
 
 
 def _cmd_export(args: argparse.Namespace) -> int:
@@ -964,6 +1950,19 @@ def _cmd_export(args: argparse.Namespace) -> int:
     layer and is shared with whatever surface comes next; this command is
     the argument parse and the one-line result.
     """
+    if args.as_json:
+        try:
+            result = export_record(args.session, args.format, args.out,
+                                   DEFAULT_SESSIONS_DIR)
+        except (SessionFileError, OSError) as exc:
+            print(json.dumps({
+                "ok": False, "schema_version": "1",
+                "error": "export", "message": str(exc),
+            }, sort_keys=True))
+            return EXIT_USAGE
+        print(json.dumps(result, sort_keys=True))
+        return EXIT_OK
+
     try:
         result = export_session(args.session, args.format, args.out,
                                 DEFAULT_SESSIONS_DIR)
@@ -972,6 +1971,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
         return EXIT_USAGE
     print(json.dumps(result, sort_keys=True))
     return EXIT_OK
+
 
 
 if __name__ == "__main__":

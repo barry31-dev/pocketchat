@@ -16,9 +16,37 @@ import contextlib
 import io
 import os
 import sys
+import threading
 from dataclasses import dataclass
+from http.server import HTTPServer
 
 from pocketchat.cli import main as _cli_main
+
+
+class StubHTTPServer:
+    """A local stub provider with a bounded, deterministic shutdown.
+
+    The suite starts many local servers. Keeping the lifecycle in one place
+    makes it harder for a test to leave a serving thread behind, and lets the
+    poll interval be short without every test spelling out the same cleanup.
+    """
+
+    def __init__(self, handler):
+        self.server = HTTPServer(("127.0.0.1", 0), handler)
+        self.thread = threading.Thread(
+            target=lambda: self.server.serve_forever(poll_interval=0.01),
+            daemon=True,
+        )
+        self.thread.start()
+
+    @property
+    def port(self) -> int:
+        return int(self.server.server_address[1])
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
 
 
 @dataclass
@@ -30,7 +58,8 @@ class Result:
     stderr: str
 
 
-def run_cli(argv, cwd, env=None, stdin=""):
+def run_cli(argv, cwd, env=None, stdin="", stdin_isatty=False,
+            run_tui=None):
     """Run one CLI command in this process and return its result.
 
     ``env`` maps names to values; a value of ``None`` removes the variable,
@@ -52,7 +81,14 @@ def run_cli(argv, cwd, env=None, stdin=""):
                 os.environ[key] = str(value)
         # There is no contextlib.redirect_stdin; the REPL reads ``sys.stdin``
         # at call time, so assigning it here reaches ``chat`` the same way.
-        sys.stdin = io.StringIO(stdin)
+        stream = io.StringIO(stdin)
+        stream.isatty = lambda: stdin_isatty  # type: ignore[attr-defined]
+        sys.stdin = stream
+        patched_tui = None
+        if run_tui is not None:
+            from pocketchat import cli as _cli_module
+            patched_tui = _cli_module.run_tui
+            _cli_module.run_tui = run_tui
         with contextlib.redirect_stdout(out), \
                 contextlib.redirect_stderr(err):
             try:
@@ -62,6 +98,9 @@ def run_cli(argv, cwd, env=None, stdin=""):
                     0 if exc.code is None else 2)
         return Result(code, out.getvalue(), err.getvalue())
     finally:
+        if 'patched_tui' in locals() and patched_tui is not None:
+            from pocketchat import cli as _cli_module
+            _cli_module.run_tui = patched_tui
         os.chdir(previous_cwd)
         sys.stdin = previous_stdin
         os.environ.clear()

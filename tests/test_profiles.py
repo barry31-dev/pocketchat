@@ -13,7 +13,10 @@ credential is real.
 import json
 import errno
 import os
-import pty
+try:
+    import pty
+except ImportError:  # Windows has no pty module.
+    pty = None
 import signal
 import subprocess
 import sys
@@ -21,7 +24,7 @@ import tempfile
 import time
 import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from pocketchat.config import ConfigError, load_config, profile_config
@@ -96,6 +99,61 @@ class ProfileConfigTests(unittest.TestCase):
         self.assertEqual(config["schema_version"], "2")
         self.assertEqual(config["default_profile"], "local")
         self.assertEqual(config["profiles"]["local"]["model"], "stub")
+
+    def test_malformed_config_values_are_refused_before_a_run(self):
+        base = {
+            "schema_version": "2",
+            "default_profile": "local",
+            "profiles": {"local": {
+                "base_url": "http://127.0.0.1:8123/v1",
+                "model": "stub",
+                "api_key_env": "POCKETCHAT_API_KEY",
+            }},
+        }
+        cases = (
+            ("empty base", ("base_url", ""), "non-empty string"),
+            ("ftp base", ("base_url", "ftp://example.invalid/v1"), "http:// or https://"),
+            ("empty model", ("model", ""), "non-empty string"),
+            ("bad env", ("api_key_env", "not-an-env"), "environment variable name"),
+            ("timeout bool", ("timeout_seconds", True), "must be an integer"),
+            ("timeout low", ("timeout_seconds", 0), "between 1 and 600"),
+            ("context low", ("max_context_chars", 0), "between 1 and"),
+            ("prefix high", ("summary_prefix_chars", 4097), "between 0 and 4096"),
+            ("price negative", ("input_price_per_million", -1), "must not be negative"),
+            ("price bool", ("output_price_per_million", False), "must be a number"),
+            ("turn budget zero", ("max_turn_tokens", 0), "between 1 and"),
+            ("session budget bool", ("max_session_tokens", True), "must be an integer"),
+            ("tool call budget zero", ("tool_call_max_count", 0), "between 1 and"),
+            ("tool result budget bool", ("tool_result_max_bytes", False), "must be an integer"),
+            ("tool paths not list", ("tool_read_allow_paths", "notes.txt"), "must be a list"),
+        )
+        for label, (key, value), reason in cases:
+            with self.subTest(case=label):
+                record = json.loads(json.dumps(base))
+                record["profiles"]["local"][key] = value
+                path = self.write(record)
+                with self.assertRaisesRegex(ConfigError, reason):
+                    load_config(path)
+
+    def test_a_local_profile_can_explicitly_disable_the_credential(self):
+        base = json.loads(json.dumps(_v2_config()))
+        base["profiles"]["local"]["api_key_env"] = ""
+        base["profiles"]["local"]["requires_api_key"] = False
+        config = load_config(self.write(base))
+        self.assertEqual(config["profiles"]["local"]["api_key_env"], "")
+        self.assertFalse(config["profiles"]["local"]["requires_api_key"])
+        base["profiles"]["local"]["requires_api_key"] = "no"
+        with self.assertRaisesRegex(ConfigError, "must be a boolean"):
+            load_config(self.write(base))
+
+    def test_reasoning_support_is_an_optional_boolean_profile_field(self):
+        base = json.loads(json.dumps(_v2_config()))
+        base["profiles"]["local"]["reasoning_effort_supported"] = True
+        config = load_config(self.write(base))
+        self.assertTrue(config["profiles"]["local"]["reasoning_effort_supported"])
+        base["profiles"]["local"]["reasoning_effort_supported"] = "yes"
+        with self.assertRaisesRegex(ConfigError, "must be a boolean"):
+            load_config(self.write(base))
 
     def test_v2_config_rejects_unknown_profile_field(self):
         path = self.write({
@@ -256,6 +314,14 @@ class ProfileConfigTests(unittest.TestCase):
                 "base_url", "model", "api_key_env", "timeout_seconds",
                 "max_context_chars", "summary_prefix_chars",
                 "input_price_per_million", "output_price_per_million",
+                "reasoning_effort_supported", "requires_api_key",
+                "retry_max_attempts", "retry_backoff_ms",
+                "fallback_max_attempts", "fallback_profile",
+                "max_turn_tokens", "max_session_tokens",
+                "tool_read_enabled", "tool_read_allow_paths",
+                "tool_write_enabled", "tool_write_allow_paths",
+                "tool_memory_search_enabled", "tool_memory_search_max_results",
+                "tool_call_max_count", "tool_result_max_bytes",
                 "profile", "system_prompt",
             })
 
@@ -420,10 +486,8 @@ class ProfileRunTests(unittest.TestCase):
             def log_message(self, *args):
                 pass
 
-        self.server = HTTPServer(("127.0.0.1", 0), Stub)
-        self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
-        self.thread.start()
+        self._stub = hp.StubHTTPServer(Stub)
+        self.port = self._stub.port
         self.addCleanup(self._stop_server)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -450,9 +514,7 @@ class ProfileRunTests(unittest.TestCase):
         }), encoding="utf-8")
 
     def _stop_server(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=10)
+        self._stub.close()
 
     def _run(self, *extra, env=None):
         environ = {"POCKETCHAT_LOCAL_KEY": "local-fake",
@@ -531,6 +593,7 @@ class ProfileRunTests(unittest.TestCase):
         events = self._trace()
         self.assertEqual(events[0]["payload"]["config_summary"]["profile"], "hosted")
 
+    @unittest.skipIf(pty is None, "requires a POSIX pty")
     def test_an_interrupted_chat_on_a_profile_ends_the_run(self):
         # The single-exit contract is a property of the run, not of the
         # profile: a run cancelled mid-turn still gets its terminal event.

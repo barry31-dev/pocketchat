@@ -8,6 +8,125 @@ rules about credentials and the written evidence are in
 [security.md](security.md). The README carries the overview and the
 quickstart.
 
+## Automation JSON
+
+`init`, `run`, `chat`, `branch`, `checkpoint`, `rewind`, `show`, `context` and `export`
+accept `--json`. Success
+is one JSON object on stdout: execution commands report `ok`, `schema_version`,
+`status`, `run_id`, `turns`, `reply` and a workspace-relative `trace`; `branch`
+reports relationship ids and relative `source` / `session` / `trace` plus
+`messages_written`, never message bodies. Preparation, execution and branch
+refusals print one `{"ok":false,...}` object on stdout with stderr empty.
+Preparation/refusal exits 2; a provider run that started and failed keeps its
+existing exit 1. Without `--json`, existing human output is unchanged.
+
+## Agent
+
+`pocketchat agent` is the interactive chat shell with session-local switches.
+A plain line is one run; the configured `--session` carries context into the
+next run. Each run ends with exactly one terminal trace event.
+
+```bash
+pocketchat agent --session notes
+```
+
+Slash commands:
+
+| Command | Effect |
+|---|---|
+| `/model NAME` | select a configured profile for the next run |
+| `/session NAME` | select the session file for the next run |
+| `/reasoning LEVEL` | set `minimal`, `low`, `medium` or `high` |
+| `/context N` | set the character budget for the next run |
+| `/status` | show the current profile, model, session, reasoning and budget |
+| `/exit` / `/quit` / `/bye` | leave the agent |
+
+The reasoning level is recorded in `run.started` for every run. It is placed
+in the request body only when the selected profile has
+`reasoning_effort_supported: true`; otherwise the setting is local evidence and
+is not assumed to be accepted by the endpoint.
+
+## Doctor
+
+```bash
+pocketchat doctor
+pocketchat doctor --profile hosted --json
+```
+
+`doctor` is a read-only startup check. It loads and validates the same
+configuration a run uses, resolves the selected profile and reports whether
+that profile's credential environment variable is set. It never prints the
+credential value, opens a socket, creates a trace or session, or writes the
+configuration. The run trace records the provider adapter name in
+`run.started.payload.config_summary.provider_adapter`; the default is
+`openai-compatible`.
+
+A ready report exits 0. A missing or invalid configuration, an unknown profile
+or a missing credential exits 2 and names the next action. `--json` returns one
+object with `ok`, `schema_version`, the selected `profile`, `model`,
+`api_key_env`, a stable `checks` list, a derived `check_status` mapping from
+check name to status, and `next_actions` — the ordered `fix` strings of failed
+checks. A ready report has an empty `next_actions` array. A ready report does
+not claim that the provider endpoint is reachable.
+
+## Profiles
+
+```bash
+pocketchat profile list --json
+pocketchat profile set local \
+  --base-url http://127.0.0.1:8123/v1 \
+  --model example-model \
+  --api-key-env POCKETCHAT_API_KEY
+pocketchat profile use local
+pocketchat profile remove staging
+```
+
+`profile set NAME` creates or replaces one complete profile. `--base-url`,
+`--model` and `--api-key-env` are required; the timeout, context and summary
+limits and the two optional prices may be supplied with their named options.
+An omitted optional field resolves to its configuration default when the
+file is loaded, so changing one field of an existing profile means passing
+the complete profile again. The command accepts the name of the
+credential's environment variable, never the credential value.
+
+`--max-turn-tokens` and `--max-session-tokens` set token budgets for one
+turn and one run. They are token counts, not currency limits. Requests are
+checked by local estimate before sending and by provider-reported usage after
+completion; over-budget turns do not enter the session, and missing usage
+under a session budget fails closed.
+
+`--tool-read` offers one automatic `read_file` tool to the model and
+`--no-tool-read` withholds it. Every path
+must be listed with repeated `--tool-read-allow`; `--tool-call-max-count`
+limits tool calls per turn (default 2) and `--tool-result-max-bytes` bounds
+each result (default 16384). Tool calls use the same workspace and sensitive
+path guards as `tool read`. Disabled/unknown tools, invalid arguments and
+guard refusals return bounded failure results so the model can correct within
+the call budget. I/O failures, oversized results and exhausted budgets end the
+run; no shell, execute or network tool is offered.
+
+`--tool-write` adds a create-only automatic `write_file` tool. Each path must
+be listed with repeated `--tool-write-allow`; the model supplies `path` and
+`content` but no overwrite flag. Existing files, path escapes, sensitive or
+binary paths and oversized content are refused.
+
+`--tool-memory-search` offers a read-only automatic `memory_search` tool.
+`--tool-memory-search-max-results` bounds returned records (default 20), and
+the existing tool-result byte limit applies. The model cannot add, edit or
+delete memory; `--no-tool-memory-search` withholds the tool.
+
+`profile use NAME` changes `default_profile`. `profile remove NAME` removes a
+non-default profile and refuses to remove the current default. All three
+commands write only schema `"2"` configurations; a schema `"1"` file remains
+read-only and is not migrated as a side effect. A candidate is validated as a
+whole before an atomic replacement that preserves the file mode. A rejected
+change leaves the file byte-for-byte unchanged.
+
+The commands exit 0 after a write and exit 2 for an unusable configuration,
+schema, name or candidate. After arguments parse, `--json` reports `ok`,
+`action`, `profile` and `default_profile` on success; configuration and write
+failures add stable `error`, `message` and `fix` fields.
+
 ## Compare
 
 ```bash
@@ -52,7 +171,8 @@ number in the table is one the trace can support.
 The token columns contain only counters the provider reported; the program
 does not estimate them. A provider that omits `usage` leaves those counters at
 zero. That zero means "no usage numbers were reported", not proof that no tokens
-were spent. Cost is calculated only from the counters present, so `unknown`
+were spent. The additive `usage_reported` field in the trace makes that
+distinction explicit without changing the zero-valued counters. Cost is calculated only from the counters present, so `unknown`
 means a price is missing, while a numeric cost is arithmetic over the counters
 shown and is not a provider invoice.
 
@@ -223,6 +343,145 @@ question the model already replied to, not one the parent asked and never sent.
 Only v0.3 session files can be branched; a file with no conversation id is
 refused rather than given one, because an invented link cannot be read back.
 
+## Checkpoint and rewind
+
+`checkpoint` records a completed turn as a recovery boundary. It writes a
+small manifest under `.pocketchat/recovery/checkpoints/` containing the
+session/trace references, turn id and SHA-256 digest of the exact message
+prefix. Missing trace evidence, an unanswered turn or a changed boundary is
+refused.
+
+```bash
+pocketchat checkpoint notes --at turn_000002 --id before-retry --json
+pocketchat rewind before-retry --name notes-rewound --json
+```
+
+`rewind` creates a new session branch containing only the checkpointed
+messages. The source session and trace are never rewritten. A prepared
+transaction is recorded before the target is created and completed only after
+the target verifies against the boundary digest; retrying after a process
+crash finishes or replaces a partial generated target. Existing evidence is
+never replayed automatically and no provider request is sent.
+
+## Bounded task run
+
+`task` exposes the v1.1 bounded task loop without becoming a second execution
+kernel:
+
+```bash
+pocketchat task run "compare the inputs"   --policy examples/task-policy.json --session task --json
+pocketchat task status <task-id> --json
+pocketchat task resume <task-id> --checkpoint <checkpoint-id>   --policy examples/task-policy.json --name resumed --json
+pocketchat task report <task-id> --policy examples/task-policy.json --json
+```
+
+`task run` requires an explicit policy and session. It creates
+`.pocketchat/tasks/<task-id>.json`, then routes model/tool work through the
+existing request snapshot, trace, session and tool events. A completed run
+exits 0; failed or cancelled runs exit 1. Preparation/refusal errors exit 2.
+
+`task status` distinguishes active, interrupted, failed and terminal states
+without running anything. `task resume` refuses legacy, partial or conflicting
+task checkpoints before writing, restores the ordered tool context into the
+resumed branch and reports the appended recovery step. It does not send a
+provider request.
+
+`task report` lists recorded step objects, tool calls, checkpoint bindings,
+run ids, trace files and tool artifacts. It never infers missing facts. Without
+a matching `--policy`, context/turn/session token budgets are `unknown`; the
+record's own step/tool budgets remain available. JSON paths are workspace
+relative and error output is one JSON object on stdout with stderr empty.
+
+The deterministic stub demo covers success, checkpoint resume and permission
+refusal:
+
+```bash
+/usr/bin/python3 examples/task-demo/demo.py
+```
+
+## Context preview
+
+`context` reads one session and dry-runs the existing context budget without
+sending a request or writing any file:
+
+```bash
+pocketchat context notes
+pocketchat context notes --budget 24000 --json
+```
+
+The report contains message indices, roles and character counts, estimated
+tokens before/after, and the messages the current drop-oldest-turns policy
+would keep or drop. `--keep-recent` pins the recent boundary (default 2).
+The session's recorded `max_context_chars` is used when `--budget` is absent;
+a budget too small for the pinned prompt exits 2. Message bodies are not
+duplicated into the output. Persisted `tool_context` messages appear in the
+same order a resumed request would use, and their character count includes
+tool call/result metadata.
+
+## Local read tool
+
+`tool read` is a local, explicit-allowlist read-only operation:
+
+```bash
+pocketchat tool read notes.txt --allow notes.txt --json
+```
+
+The path must be listed with `--allow`; it must resolve inside the current
+workspace, contain no sensitive path component, not be a binary suffix and be
+valid UTF-8. Output is capped by `--max-bytes` (default 65536); truncation is
+reported. The command never writes, executes a command or opens a network
+socket.
+
+`tool write` performs an explicit-allowlist UTF-8 write:
+
+```bash
+pocketchat tool write notes.txt "new text" --allow notes.txt --overwrite --json
+```
+
+Existing files are refused unless `--overwrite` is passed. Writes use atomic
+replacement and have a 16 KiB limit. Sensitive/binary/escaping paths are
+refused. The tool never deletes files or runs a command.
+
+## Local memory
+
+`memory` manages explicit records in `.pocketchat/memory.jsonl`:
+
+```bash
+pocketchat memory add "Prefer concise answers" --tag style --json
+pocketchat memory list --json
+pocketchat memory search concise --json
+pocketchat memory remove <memory-id> --json
+```
+
+Records have a `memory_id`, timestamp, content and tags. Add is bounded to
+16 KiB and 16 tags; search is literal and read-only; corrupt/wrong-schema
+stores are refused. Memory is never injected into model requests automatically.
+
+## Delegation
+
+`delegate run` executes a finite, serial batch of child prompts:
+
+```bash
+pocketchat delegate run "check A" "check B" --profile local --max-children 4 --json
+```
+
+Each child is an ordinary independent run with its own trace; the batch has a
+child-count cap and deadline, and writes `.pocketchat/delegations/<id>.json`.
+A child failure is recorded without aborting the remaining children. This is
+bounded delegation, not recursive agent orchestration: children cannot
+delegate and no parent session is shared.
+
+## Recovery policy
+
+Schema `"2"` profiles may declare `retry_max_attempts` (1-5, default 1),
+`retry_backoff_ms` (0-60000, default 0), `fallback_max_attempts` (1-5,
+default 1) and a one-hop `fallback_profile`. Only `retryable` provider
+failures consume retry attempts. Each retry writes `retry.attempt` with its
+physical request ordinals and backoff; when the primary budget is exhausted,
+`fallback.activated` names the source and target profiles. Fallback has its
+own budget and is not a chain. Cancellation during backoff or a request ends
+the run without inventing a recovery success.
+
 `workspace` reads the whole directory back as a graph: which files are two
 paths through one conversation, which turn each branch forked from, which run
 each file records, and which comparison measured which runs. Nothing is
@@ -253,6 +512,13 @@ pocketchat search "retry policy"      # literal, case-sensitive text
 pocketchat search "retry policy" --session notes --json
 pocketchat diff notes fork            # common prefix, then each side's turns
 ```
+
+If the workspace graph contains an unreadable file, a conflict or an
+unresolved link, these commands refuse a partial answer and name the affected
+path. A valid append is visible to the next query immediately; an existing
+index reports `stale` until rebuilt. `index` additionally compares its rows
+with a fresh reconstruction and reports `inconsistent` if its source digests
+still match but its rows do not.
 
 `history` groups the turns by conversation and branch, so a forked dialogue
 reads as two paths through one conversation, each turn named by the id its
@@ -291,6 +557,13 @@ pocketchat show notes
 pocketchat show traces/<run-id>.jsonl
 ```
 
+`show --json` prints one machine-readable object containing `ok`,
+`schema_version`, the session header and turns, the trace's line summaries and
+`trace_problem`. Artifact paths are relative to the current workspace. A
+missing session or trace prints one stable error object on stdout and exits 2
+with stderr empty; without `--json`, the existing rendering and diagnostics
+remain unchanged.
+
 `export` writes a session archive or an event-only trace. Exporting unchanged
 source files twice produces identical bytes:
 
@@ -301,10 +574,17 @@ pocketchat export notes --format trace     # sessions/notes.export.trace.jsonl
 trace-doctor validate sessions/notes.export.trace.jsonl
 ```
 
+`export --json` prints one success object with `format`, `source`, `session`,
+`out`, `messages` and `trace_events`. A trace-only export reports the trace as
+`source` and leaves `session` / `messages` null. Refusals print one stable
+error object on stdout and exit 2; existing output is never overwritten.
+
 The `jsonl` export is a mixed archive: the session header, messages, then trace
 events, each with a `kind` field. The `md` export is the conversation as prose.
-Neither format is an event-only trace for Trace Doctor; removing `kind` from
-the mixed archive does not turn its header and messages into events.
+Both include restored tool request/result messages in the order a resumed
+request would use. Neither format is an event-only trace for Trace Doctor;
+removing `kind` from the mixed archive does not turn its header and messages
+into events.
 
 `--format trace` copies the original trace bytes, with no session header,
 messages or added `kind` fields. Event ids, timestamps, order and payloads stay
@@ -361,3 +641,11 @@ anything.
 Response bodies are recorded as a summary (character count plus a short prefix)
 by default. `--verbose` records the full body. The choice is yours; the trace
 says which one was used.
+
+`model.request.started`, `model.response.completed` and
+`model.response.failed` carry `attempt_index` (one-based within the current
+turn) and `attempt_scope: "turn"`. They pair one physical request with its
+result. The number restarts at 1 on the next turn. It is not a retry ordinal:
+`v1.0.x` still sends each request once, so a value greater than 1 means a
+future implementation made more than one request in that turn, not that this
+version retried automatically.

@@ -1,0 +1,16 @@
+{
+  "schema_version": "pocketchat-task-policy.v1",
+  "objective": "Compare two allowlisted documents and write report.md",
+  "workspace_root": ".",
+  "max_steps": 8,
+  "max_tool_calls": 12,
+  "max_context_chars": 48000,
+  "max_turn_tokens": 8000,
+  "max_session_tokens": 24000,
+  "tools": {
+    "read_file": { "allow_paths": ["input/a.md", "input/b.md"] },
+    "write_file": { "allow_paths": ["report.md"], "create_only": true },
+    "memory_search": { "max_results": 5 }
+  },
+  "delegate": { "enabled": false }
+}

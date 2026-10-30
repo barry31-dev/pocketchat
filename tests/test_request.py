@@ -21,11 +21,9 @@ import json
 import subprocess
 import sys
 import tempfile
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from unittest import mock
 
 from pocketchat.provider import build_payload
 from pocketchat.request import (
@@ -98,23 +96,14 @@ class BuildPayloadTests(unittest.TestCase):
             def log_message(self, *args):
                 pass
 
-        server = HTTPServer(("127.0.0.1", 0), Stub)
-        # Cleanups run last-registered-first: shutdown must run before join,
-        # or join waits out its full timeout against a still-serving thread.
-        # The thread does not exist yet, so join is deferred through a holder.
-        running = []
-        self.addCleanup(lambda: running[0].join(10))
-        self.addCleanup(server.shutdown)
-        self.addCleanup(server.server_close)
-        thread = threading.Thread(target=lambda s=server: s.serve_forever(poll_interval=0.05), daemon=True)
-        thread.start()
-        running.append(thread)
+        stub = hp.StubHTTPServer(Stub)
+        self.addCleanup(stub.close)
 
         from pocketchat.provider import complete
         messages = [{"role": "user", "content": "hello"}]
         config = _config(
             model="stub",
-            base_url="http://127.0.0.1:%d/v1" % server.server_address[1])
+            base_url="http://127.0.0.1:%d/v1" % stub.port)
         complete(messages, config, "fake-key")
 
         self.assertEqual(len(self.sent), 1)
@@ -402,17 +391,13 @@ class SnapshotRunTests(unittest.TestCase):
             def log_message(self, *args):
                 pass
 
-        self.server = HTTPServer(("127.0.0.1", 0), Stub)
-        self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
-        self.thread.start()
+        self._stub = hp.StubHTTPServer(Stub)
+        self.port = self._stub.port
         self.addCleanup(self._stop)
         return self.port
 
     def _stop(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=10)
+        self._stub.close()
 
     def _run(self, *args):
         return hp.run_cli(

@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
+import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 CONFIG_SCHEMA_VERSION = "2"
 LEGACY_SCHEMA_VERSION = "1"
@@ -20,6 +22,15 @@ MIN_TIMEOUT_SECONDS = 1
 MAX_TIMEOUT_SECONDS = 600
 DEFAULT_MAX_CONTEXT_CHARS = 24000
 DEFAULT_SUMMARY_PREFIX_CHARS = 160
+DEFAULT_RETRY_MAX_ATTEMPTS = 1
+DEFAULT_RETRY_BACKOFF_MS = 0
+DEFAULT_FALLBACK_MAX_ATTEMPTS = 1
+DEFAULT_MAX_TURN_TOKENS: Optional[int] = None
+DEFAULT_MAX_SESSION_TOKENS: Optional[int] = None
+DEFAULT_TOOL_CALL_MAX_COUNT = 2
+DEFAULT_TOOL_RESULT_MAX_BYTES = 16 * 1024
+MAX_ATTEMPTS = 5
+MAX_RETRY_BACKOFF_MS = 60000
 
 _ENV_VAR_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _URL_PATTERN = re.compile(r"^https?://\S+$")
@@ -27,6 +38,16 @@ _URL_PATTERN = re.compile(r"^https?://\S+$")
 
 class ConfigError(Exception):
     """Configuration is unusable. Raised before any network call is made."""
+
+
+class ConfigWriteError(Exception):
+    """A requested configuration write was refused before the file changed."""
+
+    def __init__(self, code: str, message: str, fix: Optional[str] = None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.fix = fix
 
 
 def _require_string(record: Dict[str, Any], key: str, where: str) -> str:
@@ -48,6 +69,16 @@ def _optional_int(record: Dict[str, Any], key: str, where: str,
     return value
 
 
+def _optional_bool(record: Dict[str, Any], key: str, where: str,
+                  default: bool) -> bool:
+    value = record.get(key)
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise ConfigError("%s: %r must be a boolean" % (where, key))
+    return value
+
+
 def _optional_price(record: Dict[str, Any], key: str, where: str) -> Optional[float]:
     value = record.get(key)
     if value is None:
@@ -58,6 +89,33 @@ def _optional_price(record: Dict[str, Any], key: str, where: str) -> Optional[fl
     if price < 0:
         raise ConfigError("%s: %r must not be negative" % (where, key))
     return price
+
+
+def _optional_string_list(record: Dict[str, Any], key: str,
+                          where: str) -> List[str]:
+    value = record.get(key)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ConfigError("%s: %r must be a list" % (where, key))
+    result = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError("%s: %r must contain non-empty strings" % (where, key))
+        result.append(item.strip())
+    return result
+
+
+def _optional_name(record: Dict[str, Any], key: str, where: str) -> Optional[str]:
+    value = record.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError("%s: %r must be a non-empty string" % (where, key))
+    value = value.strip()
+    if not PROFILE_NAME_PATTERN.match(value):
+        raise ConfigError("%s: %r is not a profile name" % (where, key))
+    return value
 
 
 def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
@@ -73,6 +131,14 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
         "base_url", "model", "api_key_env", "timeout_seconds",
         "max_context_chars", "summary_prefix_chars",
         "input_price_per_million", "output_price_per_million",
+        "reasoning_effort_supported", "requires_api_key",
+        "retry_max_attempts", "retry_backoff_ms", "fallback_max_attempts",
+        "fallback_profile",
+        "max_turn_tokens", "max_session_tokens",
+        "tool_read_enabled", "tool_read_allow_paths",
+        "tool_write_enabled", "tool_write_allow_paths",
+        "tool_memory_search_enabled", "tool_memory_search_max_results",
+        "tool_call_max_count", "tool_result_max_bytes",
     }
     unknown = sorted(set(provider) - allowed)
     if unknown:
@@ -80,9 +146,15 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
     base_url = _require_string(provider, "base_url", where)
     if not _URL_PATTERN.match(base_url):
         raise ConfigError("%s: base_url must start with http:// or https://" % where)
-    api_key_env = _require_string(provider, "api_key_env", where)
-    if not _ENV_VAR_PATTERN.match(api_key_env):
-        raise ConfigError("%s: api_key_env must be an environment variable name" % where)
+    requires_api_key = _optional_bool(provider, "requires_api_key", where, True)
+    if requires_api_key:
+        api_key_env = _require_string(provider, "api_key_env", where)
+        if not _ENV_VAR_PATTERN.match(api_key_env):
+            raise ConfigError("%s: api_key_env must be an environment variable name" % where)
+    else:
+        api_key_env = str(provider.get("api_key_env") or "").strip()
+        if api_key_env and not _ENV_VAR_PATTERN.match(api_key_env):
+            raise ConfigError("%s: api_key_env must be an environment variable name" % where)
     return {
         "base_url": base_url.rstrip("/"),
         "model": _require_string(provider, "model", where),
@@ -100,7 +172,229 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
             provider, "input_price_per_million", where),
         "output_price_per_million": _optional_price(
             provider, "output_price_per_million", where),
+        "reasoning_effort_supported": _optional_bool(
+            provider, "reasoning_effort_supported", where, False),
+        "requires_api_key": requires_api_key,
+        "retry_max_attempts": _optional_int(
+            provider, "retry_max_attempts", where,
+            1, MAX_ATTEMPTS, DEFAULT_RETRY_MAX_ATTEMPTS),
+        "retry_backoff_ms": _optional_int(
+            provider, "retry_backoff_ms", where,
+            0, MAX_RETRY_BACKOFF_MS, DEFAULT_RETRY_BACKOFF_MS),
+        "fallback_max_attempts": _optional_int(
+            provider, "fallback_max_attempts", where,
+            1, MAX_ATTEMPTS, DEFAULT_FALLBACK_MAX_ATTEMPTS),
+        "fallback_profile": _optional_name(
+            provider, "fallback_profile", where),
+        "max_turn_tokens": _optional_int(
+            provider, "max_turn_tokens", where,
+            1, 10 ** 9, DEFAULT_MAX_TURN_TOKENS)
+        if provider.get("max_turn_tokens") is not None
+        else None,
+        "max_session_tokens": _optional_int(
+            provider, "max_session_tokens", where,
+            1, 10 ** 9, DEFAULT_MAX_SESSION_TOKENS)
+        if provider.get("max_session_tokens") is not None
+        else None,
+        "tool_read_enabled": _optional_bool(
+            provider, "tool_read_enabled", where, False),
+        "tool_read_allow_paths": _optional_string_list(
+            provider, "tool_read_allow_paths", where),
+        "tool_write_enabled": _optional_bool(
+            provider, "tool_write_enabled", where, False),
+        "tool_write_allow_paths": _optional_string_list(
+            provider, "tool_write_allow_paths", where),
+        "tool_memory_search_enabled": _optional_bool(
+            provider, "tool_memory_search_enabled", where, False),
+        "tool_memory_search_max_results": _optional_int(
+            provider, "tool_memory_search_max_results", where,
+            1, 100, 20),
+        "tool_call_max_count": _optional_int(
+            provider, "tool_call_max_count", where,
+            1, 8, DEFAULT_TOOL_CALL_MAX_COUNT),
+        "tool_result_max_bytes": _optional_int(
+            provider, "tool_result_max_bytes", where,
+            1, 1024 * 1024, DEFAULT_TOOL_RESULT_MAX_BYTES),
     }
+
+
+PROFILE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$")
+_PROFILE_FIELDS = {
+    "base_url", "model", "api_key_env", "timeout_seconds",
+    "max_context_chars", "summary_prefix_chars",
+    "input_price_per_million", "output_price_per_million",
+    "reasoning_effort_supported", "requires_api_key",
+    "retry_max_attempts", "retry_backoff_ms", "fallback_max_attempts",
+    "fallback_profile",
+    "max_turn_tokens", "max_session_tokens",
+    "tool_read_enabled", "tool_read_allow_paths",
+    "tool_write_enabled", "tool_write_allow_paths",
+    "tool_memory_search_enabled", "tool_memory_search_max_results",
+    "tool_call_max_count", "tool_result_max_bytes",
+}
+
+
+def _validate_fallbacks(profiles: Dict[str, Any]) -> None:
+    for name, profile in profiles.items():
+        if not isinstance(profile, dict):
+            continue
+        fallback = profile.get("fallback_profile")
+        if fallback is None:
+            continue
+        if not isinstance(fallback, str) or not fallback.strip():
+            raise ConfigError(
+                "profile %r has invalid fallback_profile %r" % (name, fallback))
+        if fallback not in profiles:
+            raise ConfigError(
+                "profile %r names unknown fallback_profile %r" % (name, fallback))
+        if fallback == name:
+            raise ConfigError(
+                "profile %r cannot fall back to itself" % name)
+        target = profiles[fallback]
+        if isinstance(target, dict) and target.get("fallback_profile"):
+            raise ConfigError(
+                "fallback_profile chains are not supported: %s -> %s -> %s"
+                % (name, fallback, target.get("fallback_profile")))
+
+
+def _config_error_detail(exc: ConfigError) -> str:
+    """Keep validation detail but omit the candidate's filesystem path."""
+    return str(exc).split(": ", 1)[-1]
+
+
+def read_config_document(path: Path) -> Dict[str, Any]:
+    """Read the raw schema-2 document used by profile writes.
+
+    Reads stay fail-closed and writes require the schema they know how to edit.
+    A v1 file keeps its read-only compatibility, but it is never migrated as a
+    side effect of managing a profile.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise ConfigWriteError(
+            "config unavailable", "config file not found",
+            "run pocketchat init to create one")
+    except OSError:
+        raise ConfigWriteError(
+            "config unavailable", "config cannot be read",
+            "repair the path or its permissions")
+    except UnicodeError:
+        raise ConfigWriteError(
+            "config unavailable", "config is not UTF-8",
+            "repair or recreate the configuration file")
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError:
+        raise ConfigWriteError(
+            "config unavailable", "config is invalid JSON",
+            "repair or recreate the configuration file")
+    if not isinstance(raw, dict):
+        raise ConfigWriteError(
+            "config unavailable", "config must be an object",
+            "repair or recreate the configuration file")
+    if raw.get("schema_version") != CONFIG_SCHEMA_VERSION:
+        raise ConfigWriteError(
+            "schema 2 required",
+            "profile writes require configuration schema 2",
+            "create a schema 2 configuration before writing profiles")
+    try:
+        load_config(path)
+    except ConfigError as exc:
+        raise ConfigWriteError(
+            "invalid config", _config_error_detail(exc),
+            "repair the configuration before writing profiles")
+    return raw
+
+
+def write_config_document(path: Path, payload: Dict[str, Any]) -> None:
+    """Validate the whole candidate, then atomically replace the file."""
+    mode = stat.S_IMODE(path.stat().st_mode)
+    body = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    fd, temp_name = tempfile.mkstemp(
+        prefix=".%s." % path.name, dir=str(path.parent), text=True)
+    candidate = Path(temp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_name, mode)
+        try:
+            load_config(candidate)
+        except ConfigError as exc:
+            raise ConfigWriteError(
+                "invalid profile", _config_error_detail(exc),
+                "correct the profile fields and try again")
+        os.replace(temp_name, str(path))
+    finally:
+        if candidate.exists():
+            candidate.unlink()
+
+
+def _profile_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    unknown = sorted(set(payload) - _PROFILE_FIELDS)
+    if unknown:
+        raise ConfigWriteError(
+            "invalid profile", "unknown profile field(s): %s" % unknown,
+            "pass only non-secret profile fields")
+    return {key: payload[key] for key in payload}
+
+
+def _validated_profile_name(name: str) -> str:
+    value = name.strip()
+    if not PROFILE_NAME_PATTERN.match(value):
+        raise ConfigWriteError(
+            "invalid profile name",
+            "profile name must start with an alphanumeric character and use "
+            "at most 64 letters, numbers, dots, colons, underscores or hyphens",
+            "choose a simpler profile name")
+    return value
+
+
+def upsert_profile(path: Path, name: str,
+                   payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Create or replace one profile without changing the default."""
+    name = _validated_profile_name(name)
+    raw = read_config_document(path)
+    raw["profiles"][name] = _profile_payload(payload)
+    write_config_document(path, raw)
+    return load_config(path)
+
+
+def set_default_profile(path: Path, name: str) -> Dict[str, Any]:
+    """Select an existing profile as the configuration default."""
+    name = _validated_profile_name(name)
+    raw = read_config_document(path)
+    if name not in raw["profiles"]:
+        available = ", ".join(sorted(raw["profiles"]))
+        raise ConfigWriteError(
+            "unknown profile",
+            "unknown profile: %s (available: %s)" % (name, available),
+            "run pocketchat profile list to see available profiles")
+    raw["default_profile"] = name
+    write_config_document(path, raw)
+    return load_config(path)
+
+
+def remove_profile(path: Path, name: str) -> Dict[str, Any]:
+    """Remove one non-default profile."""
+    name = _validated_profile_name(name)
+    raw = read_config_document(path)
+    if name not in raw["profiles"]:
+        available = ", ".join(sorted(raw["profiles"]))
+        raise ConfigWriteError(
+            "unknown profile",
+            "unknown profile: %s (available: %s)" % (name, available),
+            "run pocketchat profile list to see available profiles")
+    if raw.get("default_profile") == name:
+        raise ConfigWriteError(
+            "default profile",
+            "cannot remove the default profile: %s" % name,
+            "select another profile with pocketchat profile use first")
+    del raw["profiles"][name]
+    write_config_document(path, raw)
+    return load_config(path)
 
 
 def load_config(path: Path) -> Dict[str, Any]:
@@ -171,6 +465,8 @@ def load_config(path: Path) -> Dict[str, Any]:
             raise ConfigError("%s: profile %r must be an object" % (where, name))
         records[name] = _profile_record(profile, "%s: profile %r" % (where, name))
 
+    _validate_fallbacks(records)
+
     default_profile = raw.get("default_profile")
     if version == CONFIG_SCHEMA_VERSION:
         if not isinstance(default_profile, str) or not default_profile.strip():
@@ -193,8 +489,25 @@ def load_config(path: Path) -> Dict[str, Any]:
         "timeout_seconds": selected["timeout_seconds"],
         "max_context_chars": selected["max_context_chars"],
         "summary_prefix_chars": selected["summary_prefix_chars"],
+        "retry_max_attempts": selected["retry_max_attempts"],
+        "retry_backoff_ms": selected["retry_backoff_ms"],
+        "fallback_max_attempts": selected["fallback_max_attempts"],
+        "fallback_profile": selected["fallback_profile"],
+        "max_turn_tokens": selected["max_turn_tokens"],
+        "max_session_tokens": selected["max_session_tokens"],
+        "tool_read_enabled": selected["tool_read_enabled"],
+        "tool_read_allow_paths": selected["tool_read_allow_paths"],
+        "tool_write_enabled": selected["tool_write_enabled"],
+        "tool_write_allow_paths": selected["tool_write_allow_paths"],
+        "tool_call_max_count": selected["tool_call_max_count"],
+        "tool_result_max_bytes": selected["tool_result_max_bytes"],
         "system_prompt": system_prompt or "",
     }
+
+
+def requires_api_key(config: Dict[str, Any]) -> bool:
+    """Whether a profile must resolve a credential before a run."""
+    return config.get("requires_api_key", True) is not False
 
 
 def load_api_key(config: Dict[str, Any]) -> Optional[str]:
@@ -244,8 +557,16 @@ def profile_config(config: Dict[str, Any],
     # that assembled one -- instead of trusting keys nobody checked. It is
     # idempotent on an already-valid record, so a loaded config is unchanged.
     merged = _profile_record(record, "profile %r" % selected)
+    _validate_fallbacks(profiles)
     merged["profile"] = selected
     merged["system_prompt"] = config.get("system_prompt") or ""
+    fallback_name = merged.get("fallback_profile")
+    if fallback_name:
+        fallback = _profile_record(
+            profiles[fallback_name], "profile %r fallback" % selected)
+        fallback["profile"] = fallback_name
+        fallback["system_prompt"] = config.get("system_prompt") or ""
+        merged["fallback_config"] = fallback
     return merged
 
 
@@ -265,6 +586,9 @@ CONFIG_TEMPLATE = json.dumps(
                 "summary_prefix_chars": DEFAULT_SUMMARY_PREFIX_CHARS,
                 "input_price_per_million": None,
                 "output_price_per_million": None,
+                "retry_max_attempts": DEFAULT_RETRY_MAX_ATTEMPTS,
+                "retry_backoff_ms": DEFAULT_RETRY_BACKOFF_MS,
+                "fallback_max_attempts": DEFAULT_FALLBACK_MAX_ATTEMPTS,
             },
             "hosted": {
                 "base_url": "https://example.invalid/v1",
@@ -275,6 +599,9 @@ CONFIG_TEMPLATE = json.dumps(
                 "summary_prefix_chars": DEFAULT_SUMMARY_PREFIX_CHARS,
                 "input_price_per_million": None,
                 "output_price_per_million": None,
+                "retry_max_attempts": DEFAULT_RETRY_MAX_ATTEMPTS,
+                "retry_backoff_ms": DEFAULT_RETRY_BACKOFF_MS,
+                "fallback_max_attempts": DEFAULT_FALLBACK_MAX_ATTEMPTS,
             },
         },
     },

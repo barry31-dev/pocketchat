@@ -27,7 +27,7 @@ import hashlib
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .workspace import (COMPARISONS_DIRNAME, GRAPH_SCHEMA_VERSION,
                         SESSIONS_DIRNAME, TRACES_DIRNAME, WorkspaceError,
@@ -253,12 +253,23 @@ def index_status(workspace: Path) -> Dict[str, Any]:
     mismatched = sorted(
         key for key in set(recorded) | set(current)
         if recorded.get(key) != current.get(key))
+    try:
+        graph = collect_workspace(workspace)
+        expected_rows = _graph_rows(graph)
+        actual_rows = dump_rows(path)
+    except (WorkspaceError, sqlite3.Error) as exc:
+        raise IndexingError("cannot verify %s: %s" % (path, exc)) from exc
+    mismatched_rows = sorted(
+        name for name in _TABLES
+        if sorted(actual_rows.get(name, [])) != sorted(expected_rows.get(name, [])))
     return {
-        "status": "fresh" if not mismatched else "stale",
+        "status": ("stale" if mismatched else
+                   "inconsistent" if mismatched_rows else "fresh"),
         "path": path,
         "counts": counts,
         "sources": len(current),
         "mismatched": mismatched,
+        "mismatched_rows": mismatched_rows,
     }
 
 

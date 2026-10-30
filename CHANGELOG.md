@@ -6,6 +6,206 @@ All notable changes to `pocketchat` are recorded here. The format follows
 The versions below describe the public source tree. They do not describe a
 package-index publication.
 
+## [1.0.0] - unreleased release candidate
+
+### Added
+
+- Stable CLI compatibility policy for commands, exit-code classes, JSON envelopes,
+  artifact paths, file-format versions and deprecation. See
+  `docs/compatibility.md`.
+- Provider adapter boundary: `ProviderAdapter`, default
+  `OpenAICompatibleAdapter`, and the adapter name in the run's config summary.
+  See `docs/provider-adapters.md`.
+- Local CPython 3.9/3.13 test coverage; the cross-platform CI candidate is removed
+  by the 2026-10-28 local-only decision.
+- Regression coverage for `init --force --json`, provider-failure exit 1 JSON,
+  the CLI command inventory and versioned artifacts.
+- Local release checklist in `docs/release-1.0.md`; CI matrix and public
+  release remain separate gates.
+
+## [Unreleased]
+
+### Added
+
+- The v1.1.0 local release candidate record is documented in
+  `docs/release-1.1.md` and `release-1.1.zh-CN.md`: CPython 3.9/3.13 full
+  suites, wheel/clean-install evidence, three validated demo traces and replay
+  hash verification. Tag, GitHub Release and package-index publication were authorized for
+  v1.1.0 on 2026-10-30; execution and readback are recorded separately.
+- `task run`, `task status`, `task resume` and `task report` expose bounded
+  task execution, closed-state inspection, checkpoint resume and evidence-only
+  reporting with stable JSON envelopes and workspace-relative paths. The
+  deterministic `examples/task-demo/demo.py` smoke demo covers success,
+  checkpoint resume and permission refusal without a network or credential.
+- Task checkpoints bind the existing recovery manifest to `task_id`, `step_id`
+  and `policy_sha256`. Task resume validates the policy digest, complete task
+  record, checkpoint boundary and ordered tool context before writing, restores
+  prepared rewind transactions, and records a recovery step only after the
+  resumed branch verifies. Legacy checkpoints without task fields retain their
+  existing checkpoint/rewind behavior and cannot be used for task resume.
+- `agent.run_task` executes one policy-bounded task through the existing
+  session provider and tool path. Task records persist model/tool step
+  boundaries, enforce step and tool-call budgets, retain terminal reasons and
+  link the session/trace evidence needed by resume. This is the v1.1 Task Run
+  execution core; the `task` CLI, checkpoint resume and release packaging remain
+  separate work.
+
+### Changed
+
+- Completed automatic tool interactions are retained as additive session
+  `tool_context`, including assistant `tool_calls` and matching tool results.
+  Same-session continuation, process resume and branch derivation restore them
+  before the final assistant reply; tool metadata also counts toward context
+  budgets. Existing session schema remains version 1 and old files are not
+  rewritten.
+- Recoverable automatic-tool refusals now return bounded `status: failed` tool
+  results so the model can correct within the existing call budget. Disabled
+  or unknown tools, invalid arguments, workspace guard refusals and invalid
+  text encodings no longer end the whole run. Underlying I/O/store errors,
+  oversized results, exhausted budgets, provider failures and interrupts still
+  fail closed. Tool trace events now carry `tool_call_id`.
+
+### Added
+
+- Profiles can optionally offer one automatic `read_file` tool to the model.
+  Calls remain workspace-confined and allowlisted, have per-turn and result
+  limits, and are recorded with tool/permission events and schema hashes.
+- Profiles can optionally offer create-only automatic `write_file` calls.
+  Writes are allowlisted, bounded, and cannot overwrite or delete files.
+- Profiles can optionally offer read-only automatic `memory_search` calls
+  with bounded results. The model cannot modify or delete memory.
+- `tool write` adds explicit-allowlist, workspace-confined UTF-8 writes with
+  atomic replacement and opt-in `--overwrite`. It provides no delete, shell,
+  execute or network operation.
+- `delegate run` executes a bounded, serial batch of independent child runs
+  with a delegation manifest. It is not recursive agent orchestration and
+  does not share a parent session.
+- `memory add/list/search/remove` manages explicit local memory records in
+  `.pocketchat/memory.jsonl`; memories are never injected into prompts
+  automatically, and corrupt stores fail closed.
+- `tool read` provides an explicit-allowlist, workspace-confined read-only
+  file tool with sensitive/binary path refusal, UTF-8-safe bounded output and
+  permission/tool trace events.
+- `checkpoint` records a completed session/trace boundary with a message
+  digest, and `rewind` creates a new session branch from it without rewriting
+  source evidence. Prepared/completed recovery transactions make interrupted
+  rewinds retryable and auditable.
+- The interactive TUI status rule now reads trace facts after each turn:
+  reported token totals, configured-price cost estimate (`cost~`), latest TTFT,
+  physical request count (`req`) and context-compaction facts (`cmp`). Missing
+  usage, prices or TTFT remain `?`; the display does not invent retry counts or
+  provider billing facts.
+- `model.response.completed` now carries an additive `usage_reported` boolean:
+  true when the provider returned a usage object, false when the zero counters
+  are placeholders for missing usage. The existing `usage` keys and their zero
+  semantics are unchanged.
+- Streamed model responses now record `time_to_first_token_ms`: the time from
+  opening the request to the first non-empty text or reasoning delta. The
+  field is absent for non-streamed responses and when no delta arrived.
+
+### Added
+
+- `delegate run` executes a bounded, serial batch of independent child runs
+  with a delegation manifest. It is not recursive agent orchestration and
+  does not share a parent session.
+- `memory add/list/search/remove` manages explicit local memory records in
+  `.pocketchat/memory.jsonl`; memories are never injected into prompts
+  automatically, and corrupt stores fail closed.
+- `tool read` provides an explicit-allowlist, workspace-confined read-only
+  file tool with sensitive/binary path refusal, UTF-8-safe bounded output and
+  permission/tool trace events. No write, shell or automatic tool calling is
+  included.
+- `context` previews a session's message budget and dry-runs drop-oldest-turns
+  compaction without sending a request or writing files. The report includes
+  safe message metadata and estimated token counts.
+- Schema-2 profiles can configure bounded retry/backoff and one-hop fallback.
+  Defaults remain no retry and no fallback; `retry.attempt` and
+  `fallback.activated` record actions without claiming recovery succeeded.
+- Schema-2 profiles can set `max_turn_tokens` and `max_session_tokens`.
+  Requests are checked by local estimate before sending and by reported usage
+  after completion; over-budget turns fail without entering context, and
+  missing usage under a session budget fails closed.
+- `model.request.started`, `model.response.completed` and
+  `model.response.failed` now carry additive `attempt_index` and
+  `attempt_scope: "turn"` fields. They identify the physical request within
+  one turn and pair it with its result; they do not imply automatic retry.
+
+### Fixed
+
+- `compare` now honors `requires_api_key: false` in its up-front credential
+  check, so local router profiles without a client key can participate in a
+  comparison just as they can in a single `run`.
+- `show` now prints a one-line context-compaction summary and `show --json`
+  carries the same `context.compacted` payload, so a reader can see how many
+  messages were dropped and what the character budget was without opening
+  the trace file.
+- `model.response.failed` now records `retryable` so a trace reader can tell a
+  transient provider failure (408/425/429/5xx) from a permanent one without
+  parsing the error message. The CLI still does not retry.
+- `context.compacted` trace schema now declares the fields the recorder
+  actually writes (`dropped_messages`, `dropped_roles`, `kept_messages`,
+  `kept_chars`, `budget_chars`, `estimated_tokens_before`,
+  `estimated_tokens_after`). The schema previously named
+  `before_messages`/`after_messages`/`before_tokens`/`after_tokens`, which
+  were never written. The compaction strategy and event shape are unchanged.
+
+### Added
+
+- `scripts/sync_newnewrouter_models.py`: generate a schema-2 PocketChat config
+  from the live newnewrouter `/v1/models` catalog. Generated profiles declare
+  `requires_api_key: false`, keeping upstream credentials inside the router.
+  The generated default is `pgt` when present, then the first catalog entry.
+- Bare `pocketchat` now enters the interactive agent, using
+  `./pocketchat.json` or `~/.pocketchat/newnewrouter.json` as its config
+  fallback. On a TTY it opens a standard-library full-screen interface with a
+  compact intro, compact message gutters and turn separators, a
+  persistent status rule, transcript, input history, slash-command completion with active-row selection,
+  Up/Down navigation, Tab application and two-step Enter completion, plus a
+  profile picker. The TTY surface streams reasoning and assistant deltas,
+  shows a live thinking/elapsed status while waiting, keeps reasoning
+  collapsed behind Ctrl+T, supports transcript paging, and uses a compact
+  status bar; piped input keeps the line REPL. Named
+  subcommands remain unchanged.
+- `pocketchat agent`: a full-screen interactive chat shell with `/model`,
+  `/session`, `/reasoning`, `/context` and `/status`. Every plain message is a
+  separate run sharing one session; slash commands create neither messages nor
+  trace events. Reasoning is recorded on every run and forwarded only for
+  profiles that opt in with `reasoning_effort_supported`.
+
+> **2026-10-28 v1.0.0 CLI-only candidate:** the former `serve`, local API and
+> loopback Web UI code is removed from the product tree. The stable CLI surface,
+> compatibility policy, file-format versions and provider-adapter contract are
+> documented in `docs/compatibility.md` and `docs/provider-adapters.md`.
+> This tree is an unreleased release candidate; no v1.0.0 tag or Release has
+> been created.
+
+### CLI additions
+
+- `init --json`, `run --json`, `chat --json` and the stabilized
+  `branch --json` complete machine-readable output across creation, execution,
+  conversation and branching commands. Execution objects carry reply and
+  workspace-relative trace paths; branch objects omit message bodies. Stable
+  error objects go to stdout with stderr empty, while default human output and
+  run exit semantics remain unchanged.
+- `show --json` and `export --json` provide stable machine-readable output for
+  CLI automation. Success objects use workspace-relative artifact paths;
+  failures are one JSON object on stdout with exit 2 and an empty stderr.
+  Trace-only export reports its actual source and leaves `session` / `messages`
+  null. Default human output and all artifact formats remain unchanged.
+- `pocketchat profile set NAME --base-url URL --model MODEL --api-key-env ENV`
+  creates or replaces a complete profile, `pocketchat profile use NAME` changes
+  the default and `pocketchat profile remove NAME` removes a non-default one.
+  Writes require configuration schema 2, never accept a credential value,
+  validate the complete candidate, preserve the file mode and replace the file
+  atomically. After arguments parse, `--json` reports stable success and
+  configuration/write-error objects, and a rejected change leaves the
+  configuration byte-for-byte unchanged.
+- `pocketchat doctor [--config FILE] [--profile NAME] [--json]` checks the
+  configuration, selected profile and credential environment variable without
+  contacting a provider, opening a socket or writing a file. A ready report
+  exits 0; configuration, profile and credential problems exit 2 with a stable
+  JSON report or a human-readable next action. Credential values never appear.
+
 ## [0.3.0] - 2026-10-24
 
 The v0.3 workspace model: an identity layer on the session file, branching,
@@ -14,7 +214,7 @@ format documentation. Trace events are untouched, so no previously released
 artifact changes shape.
 
 On 2026-10-24 the whole loop ran once against a real provider -- the local
-cc-switch free aggregate route (`auto` and `qd-Qwen3.8-Flash`): a real
+cc-switch free aggregate route (two configured profiles): a real
 two-turn conversation, a verbose two-profile comparison seeded from it, a
 selection written into a session, a real continuation of that session, a
 branch derived from it and continued, exports, all five traces validated, a

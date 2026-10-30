@@ -19,11 +19,13 @@ evidence into guesswork:
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import socket
+import time
 import urllib.error
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from .request import canonical_bytes
 
@@ -40,6 +42,44 @@ CHARS_PER_TOKEN_ESTIMATE = 4
 _BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._\-]+")
 _KEY_PATTERN = re.compile(
     r'(?i)("?(?:api[-_]?key|authorization)"?\s*[:=]\s*")[^"]*(")')
+
+
+class ProviderAdapter:
+    """One provider boundary: request shape in, normalized response out.
+
+    The adapter owns both halves that must agree: the payload recorded in a
+    request snapshot and the payload actually sent. A session receives one
+    adapter and never reaches around it to a provider-specific function.
+    Implementations must return the normalized response documented by
+    :func:`complete` and raise :class:`ProviderError` on failure.
+    """
+
+    name = "provider"
+
+    def build_payload(self, messages: List[Dict[str, str]],
+                      config: Dict[str, Any]) -> Dict[str, Any]:
+        raise NotImplementedError
+
+    def complete(self, messages: List[Dict[str, str]], config: Dict[str, Any],
+                 api_key: str, on_delta=None) -> Dict[str, Any]:
+        raise NotImplementedError
+
+
+class OpenAICompatibleAdapter(ProviderAdapter):
+    """The stable first-party adapter: OpenAI-compatible chat completions."""
+
+    name = "openai-compatible"
+
+    def build_payload(self, messages: List[Dict[str, str]],
+                      config: Dict[str, Any]) -> Dict[str, Any]:
+        return build_payload(messages, config)
+
+    def complete(self, messages: List[Dict[str, str]], config: Dict[str, Any],
+                 api_key: str, on_delta=None) -> Dict[str, Any]:
+        return complete(messages, config, api_key, on_delta=on_delta)
+
+
+DEFAULT_PROVIDER_ADAPTER = OpenAICompatibleAdapter()
 
 
 class ProviderError(Exception):
@@ -62,7 +102,7 @@ class ProviderError(Exception):
         return {"type": self.error_type, "message": self.message}
 
 
-def estimate_tokens(messages: List[Dict[str, str]]) -> int:
+def estimate_tokens(messages: List[Dict[str, Any]]) -> int:
     """A local token estimate for the context budget.
 
     The provider's real usage is recorded when it is reported; this number is
@@ -72,7 +112,18 @@ def estimate_tokens(messages: List[Dict[str, str]]) -> int:
     total = 0
     for message in messages:
         content = message.get("content") or ""
-        total += len(content) // CHARS_PER_TOKEN_ESTIMATE + 4
+        metadata = 0
+        for key in ("tool_calls", "name", "tool_call_id"):
+            value = message.get(key)
+            if value is None:
+                continue
+            if isinstance(value, str):
+                metadata += len(value)
+            else:
+                metadata += len(json.dumps(value, sort_keys=True,
+                                           ensure_ascii=False,
+                                           separators=(",", ":")))
+        total += (len(content) + metadata) // CHARS_PER_TOKEN_ESTIMATE + 4
     return total
 
 
@@ -90,11 +141,130 @@ def build_payload(messages: List[Dict[str, str]],
     claiming it was requested would be a lie about what the provider was asked
     for.
     """
-    return {
+    payload = {
         "model": config["model"],
         "messages": messages,
         "stream": False,
     }
+    # OpenAI-compatible endpoints do not agree on this extension. Send it only
+    # when the operator's profile explicitly opts in; the agent records the
+    # setting regardless, so an unsupported endpoint still leaves evidence.
+    if (config.get("reasoning_effort_supported") is True
+            and config.get("reasoning_effort")):
+        payload["reasoning_effort"] = config["reasoning_effort"]
+    tools = tool_offer(config)
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+    return payload
+
+
+def tool_offer(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    tools = []
+    if config.get("tool_read_enabled") is True:
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read one explicitly allowed UTF-8 workspace file.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Workspace-relative allowed path",
+                        },
+                    },
+                    "required": ["path"],
+                    "additionalProperties": False,
+                },
+            },
+        })
+    if config.get("tool_write_enabled") is True:
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": "write_file",
+                "description": "Create one new UTF-8 workspace file; never overwrite.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string",
+                                 "description": "Workspace-relative new path"},
+                        "content": {"type": "string",
+                                    "description": "UTF-8 file content"},
+                    },
+                    "required": ["path", "content"],
+                    "additionalProperties": False,
+                },
+            },
+        })
+    if config.get("tool_memory_search_enabled") is True:
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": "memory_search",
+                "description": "Search explicitly saved local memory records.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                    "additionalProperties": False,
+                },
+            },
+        })
+    return tools
+
+
+def tool_offer_summary(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    tools = tool_offer(config)
+    encoded = json.dumps(tools, ensure_ascii=False, sort_keys=True,
+                         separators=(",", ":")).encode("utf-8")
+    summary = [{"name": "read_file", "available": False},
+               {"name": "write_file", "available": False},
+               {"name": "memory_search", "available": False}]
+    enabled = {tool["function"]["name"] for tool in tools}
+    for item in summary:
+        if item["name"] in enabled:
+            item["available"] = True
+            item["schema_hash"] = hashlib.sha256(encoded).hexdigest()
+    return summary
+
+
+def _parse_tool_calls(value: Any) -> List[Dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ProviderError(
+            "malformed_response", "tool_calls was not an array")
+    calls = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ProviderError(
+                "malformed_response", "tool call was not an object")
+        call_id = item.get("id")
+        function = item.get("function")
+        if (not isinstance(call_id, str) or not call_id.strip()
+                or not isinstance(function, dict)):
+            raise ProviderError(
+                "malformed_response", "tool call lacked id or function")
+        name = function.get("name")
+        arguments = function.get("arguments")
+        if not isinstance(name, str) or not name.strip():
+            raise ProviderError(
+                "malformed_response", "tool call lacked a function name")
+        if isinstance(arguments, str):
+            try:
+                arguments = json.loads(arguments)
+            except ValueError as exc:
+                raise ProviderError(
+                    "malformed_response",
+                    "tool call arguments were not valid JSON: %s" % exc)
+        if not isinstance(arguments, dict):
+            raise ProviderError(
+                "malformed_response", "tool call arguments were not an object")
+        calls.append({"id": call_id, "name": name, "arguments": arguments})
+    return calls
 
 
 def _completions_url(base_url: str) -> str:
@@ -149,7 +319,8 @@ def _sanitize_body(text: str, credential: Optional[str] = None) -> str:
 
 
 def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
-             api_key: str, timeout_seconds: Optional[int] = None) -> Dict[str, Any]:
+             api_key: str, timeout_seconds: Optional[int] = None,
+             on_delta=None) -> Dict[str, Any]:
     """POST one chat completion and return a normalized response.
 
     The returned dict always carries ``content`` (a string, empty when the
@@ -167,7 +338,10 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
     timeout = timeout_seconds or int(config.get("timeout_seconds") or 60)
     # The body comes from the one builder, so a snapshot of this payload is a
     # snapshot of this request.
-    body = canonical_bytes(build_payload(messages, config))
+    payload = build_payload(messages, config)
+    if on_delta is not None:
+        payload["stream"] = True
+    body = canonical_bytes(payload)
 
     request = urllib.request.Request(
         _completions_url(config["base_url"]),
@@ -176,14 +350,18 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
         headers={
             "Content-Type": "application/json",
             "Authorization": "Bearer %s" % api_key,
-            "Accept": "application/json",
+            "Accept": "text/event-stream" if on_delta is not None else "application/json",
         },
     )
 
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            raw = response.read()
             status_code = int(getattr(response, "status", 0) or 0)
+            if on_delta is not None and "text/event-stream" in (
+                    response.headers.get("Content-Type") or ""):
+                return _stream_response(response, config["model"], status_code,
+                                        on_delta=on_delta)
+            raw = response.read()
     except urllib.error.HTTPError as exc:
         raise _http_error(exc, api_key)
     except socket.timeout:
@@ -229,7 +407,123 @@ def _http_error(exc: urllib.error.HTTPError,
         422: "unprocessable",
         429: "rate_limited",
     }.get(status, "http_error")
-    return ProviderError(error_type, message, status_code=status, retryable=status >= 500)
+    retryable = status >= 500 or status in (408, 425, 429)
+    return ProviderError(error_type, message, status_code=status, retryable=retryable)
+
+
+def _usage_count(usage: Dict[str, Any], key: str) -> int:
+    value = usage.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return 0
+    return value
+
+
+def _stream_response(response, model: str, status_code: int,
+                    on_delta=None) -> Dict[str, Any]:
+    """Read one OpenAI-compatible SSE response into the normal response shape.
+
+    A streamed response is still one request and one normalized result. The
+    callback is only a display hook; it does not alter what the trace records.
+    Malformed events fail closed rather than being treated as empty content.
+    """
+    content: List[str] = []
+    reasoning: List[str] = []
+    finish_reason = ""
+    usage_payload = {}
+    saw_event = False
+    started = time.monotonic()
+    first_token_ms = None
+    first_delta_kind = None
+    first_reasoning_ms = None
+    first_content_ms = None
+    for raw_line in response:
+        line = raw_line.decode("utf-8", "replace").strip()
+        if not line or line.startswith(":") or not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if data == "[DONE]":
+            break
+        try:
+            payload = json.loads(data)
+        except ValueError:
+            raise ProviderError(
+                "malformed_response",
+                "HTTP %d stream contained a non-JSON event" % status_code,
+            )
+        if not isinstance(payload, dict):
+            raise ProviderError(
+                "malformed_response",
+                "HTTP %d stream event was not a JSON object" % status_code,
+            )
+        if payload.get("error") is not None:
+            detail = payload["error"]
+            if isinstance(detail, dict):
+                detail = detail.get("message") or json.dumps(detail, sort_keys=True)
+            raise ProviderError("provider_error", str(detail))
+        choices = payload.get("choices")
+        if not isinstance(choices, list) or not choices:
+            continue
+        choice = choices[0]
+        if not isinstance(choice, dict):
+            continue
+        delta = choice.get("delta") or {}
+        if isinstance(delta, dict):
+            thought = delta.get("reasoning_content")
+            if isinstance(thought, str) and thought:
+                reasoning.append(thought)
+                saw_event = True
+                if first_token_ms is None:
+                    first_token_ms = int((time.monotonic() - started) * 1000)
+                    first_delta_kind = "reasoning"
+                if first_reasoning_ms is None:
+                    first_reasoning_ms = int((time.monotonic() - started) * 1000)
+                if on_delta is not None:
+                    on_delta("reasoning", thought)
+            text = delta.get("content")
+            if isinstance(text, str) and text:
+                content.append(text)
+                saw_event = True
+                if first_token_ms is None:
+                    first_token_ms = int((time.monotonic() - started) * 1000)
+                    first_delta_kind = "content"
+                if first_content_ms is None:
+                    first_content_ms = int((time.monotonic() - started) * 1000)
+                if on_delta is not None:
+                    on_delta("content", text)
+        if isinstance(choice.get("finish_reason"), str) and choice["finish_reason"]:
+            finish_reason = choice["finish_reason"]
+        if isinstance(payload.get("usage"), dict):
+            usage_payload = payload["usage"]
+    if not saw_event:
+        raise ProviderError(
+            "malformed_response",
+            "HTTP %d stream contained no text deltas" % status_code,
+        )
+    result = {
+        "content": "".join(content),
+        "reasoning": "".join(reasoning),
+        "finish_reason": finish_reason or "stop",
+        "model": model,
+        "status_code": status_code,
+        "time_to_first_token_ms": first_token_ms,
+        "usage_reported": bool(usage_payload),
+        "usage": {
+            "input_tokens": _usage_count(usage_payload, "prompt_tokens"),
+            "output_tokens": _usage_count(usage_payload, "completion_tokens"),
+            "cache_read_tokens": _usage_count(
+                usage_payload, "prompt_cache_hit_tokens"),
+            "cache_write_tokens": _usage_count(
+                usage_payload, "prompt_cache_miss_tokens"),
+            "reasoning_tokens": _usage_count(usage_payload, "reasoning_tokens"),
+        },
+    }
+    if first_delta_kind is not None:
+        result["first_delta_kind"] = first_delta_kind
+    if first_reasoning_ms is not None:
+        result["time_to_first_reasoning_ms"] = first_reasoning_ms
+    if first_content_ms is not None:
+        result["time_to_first_content_ms"] = first_content_ms
+    return result
 
 
 def _parse_response(raw: bytes, status_code: int, config: Dict[str, Any],
@@ -288,9 +582,9 @@ def _parse_response(raw: bytes, status_code: int, config: Dict[str, Any],
             status_code=status_code,
         )
 
-    usage = payload.get("usage")
-    if not isinstance(usage, dict):
-        usage = {}
+    raw_usage = payload.get("usage")
+    usage_reported = isinstance(raw_usage, dict)
+    usage: Dict[str, Any] = cast(Dict[str, Any], raw_usage) if usage_reported else {}
 
     def _count(key: str) -> int:
         value = usage.get(key)
@@ -298,11 +592,12 @@ def _parse_response(raw: bytes, status_code: int, config: Dict[str, Any],
             return 0
         return value
 
-    return {
+    result = {
         "content": content,
         "finish_reason": first.get("finish_reason"),
         "model": payload.get("model") or config["model"],
         "status_code": status_code,
+        "usage_reported": usage_reported,
         "usage": {
             "input_tokens": _count("prompt_tokens"),
             "output_tokens": _count("completion_tokens"),
@@ -311,3 +606,7 @@ def _parse_response(raw: bytes, status_code: int, config: Dict[str, Any],
             "reasoning_tokens": _count("reasoning_tokens"),
         },
     }
+    tool_calls = _parse_tool_calls(message.get("tool_calls"))
+    if tool_calls:
+        result["tool_calls"] = tool_calls
+    return result

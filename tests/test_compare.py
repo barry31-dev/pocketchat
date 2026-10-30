@@ -22,9 +22,8 @@ import os
 import subprocess
 import sys
 import tempfile
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from pocketchat.config import profile_config
@@ -108,15 +107,11 @@ class _StubServer:
             def log_message(self, *args):
                 pass
 
-        self.server = HTTPServer(("127.0.0.1", 0), Stub)
-        self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=lambda s=self.server: s.serve_forever(poll_interval=0.05), daemon=True)
-        self.thread.start()
+        self._stub = hp.StubHTTPServer(Stub)
+        self.port = self._stub.port
 
     def stop(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join(timeout=10)
+        self._stub.close()
 
 
 class ComparisonKernelTests(unittest.TestCase):
@@ -345,14 +340,15 @@ class ComparisonKernelTests(unittest.TestCase):
         # the operator asked to stop, and running the remainder anyway would
         # spend their time against their wish. The current run is closed with
         # a terminal event rather than left open.
-        import pocketchat.session as session_module
+        from pocketchat.provider import DEFAULT_PROVIDER_ADAPTER
 
         def interrupt(context, config, api_key):
             raise KeyboardInterrupt
 
-        original = session_module.complete
-        session_module.complete = interrupt
-        self.addCleanup(setattr, session_module, "complete", original)
+        original = DEFAULT_PROVIDER_ADAPTER.complete
+        DEFAULT_PROVIDER_ADAPTER.complete = interrupt
+        self.addCleanup(
+            setattr, DEFAULT_PROVIDER_ADAPTER, "complete", original)
 
         result = self._compare()
         self.assertEqual(len(result.runs), 1)

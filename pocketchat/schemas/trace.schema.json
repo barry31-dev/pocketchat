@@ -30,6 +30,8 @@
         "model.request.started",
         "model.response.completed",
         "model.response.failed",
+        "retry.attempt",
+        "fallback.activated",
         "tool.call.started",
         "tool.call.completed",
         "tool.call.failed",
@@ -207,6 +209,16 @@
             "properties": {
               "model": { "type": "string", "minLength": 1 },
               "messages": { "type": "integer", "minimum": 0 },
+              "attempt_index": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "One-based ordinal of the physical model request within its turn. This is not a retry ordinal and does not imply that a retry occurred."
+              },
+              "attempt_scope": {
+                "const": "turn",
+                "description": "The counter named by attempt_index restarts at 1 for each turn. Absence means an older recorder did not emit it."
+              },
+
               "role": { "$ref": "#/$defs/model_role" },
               "slot_label": {
                 "type": "string",
@@ -237,7 +249,40 @@
             "properties": {
               "model": { "type": "string", "minLength": 1 },
               "usage": { "$ref": "#/$defs/token_usage" },
+              "attempt_index": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "One-based ordinal of the physical model request within its turn. This is not a retry ordinal and does not imply that a retry occurred."
+              },
+              "attempt_scope": {
+                "const": "turn",
+                "description": "The counter named by attempt_index restarts at 1 for each turn. Absence means an older recorder did not emit it."
+              },
+
+              "usage_reported": {
+                "type": "boolean",
+                "description": "True when the provider returned a usage object. False means the zero counters are placeholders for missing usage, not measured zeros."
+              },
               "duration_ms": { "type": "integer", "minimum": 0 },
+              "time_to_first_token_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Milliseconds from opening the request to the first streamed text or reasoning delta. Absent for non-streamed responses and when no delta arrived."
+              },
+              "first_delta_kind": {
+                "enum": ["content", "reasoning"],
+                "description": "Which non-empty delta kind produced time_to_first_token_ms. Absent when no streamed delta arrived."
+              },
+              "time_to_first_reasoning_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Milliseconds from opening the request to the first non-empty reasoning delta. Absent when no reasoning delta arrived."
+              },
+              "time_to_first_content_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Milliseconds from opening the request to the first non-empty content delta. Absent when no content delta arrived."
+              },
               "finish_reason": { "type": "string" },
               "role": { "$ref": "#/$defs/model_role" },
               "slot_label": { "type": "string" },
@@ -266,7 +311,68 @@
             "properties": {
               "model": { "type": "string", "minLength": 1 },
               "error": { "$ref": "#/$defs/error" },
+              "attempt_index": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "One-based ordinal of the physical model request within its turn. This is not a retry ordinal and does not imply that a retry occurred."
+              },
+              "attempt_scope": {
+                "const": "turn",
+                "description": "The counter named by attempt_index restarts at 1 for each turn. Absence means an older recorder did not emit it."
+              },
+
+              "retryable": {
+                "type": "boolean",
+                "description": "True when the provider classified this failure as transient and a caller could retry it. False for permanent failures. Absent means the recorder did not classify it."
+              },
               "duration_ms": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "retry.attempt" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["profile", "model", "retry_index", "from_attempt_index", "to_attempt_index", "backoff_ms", "error", "retryable"],
+            "properties": {
+              "profile": { "type": "string" },
+              "model": { "type": "string", "minLength": 1 },
+              "retry_index": { "type": "integer", "minimum": 1 },
+              "from_attempt_index": { "type": "integer", "minimum": 1 },
+              "to_attempt_index": { "type": "integer", "minimum": 2 },
+              "backoff_ms": { "type": "integer", "minimum": 0 },
+              "error": { "$ref": "#/$defs/error" },
+              "retryable": { "const": true }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["type"], "properties": { "type": { "const": "fallback.activated" } } },
+      "then": {
+        "required": ["payload"],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "required": ["from_profile", "to_profile", "from_model", "to_model", "from_attempt_index", "to_attempt_index", "primary_attempts", "fallback_attempts", "error", "retryable", "reason"],
+            "properties": {
+              "from_profile": { "type": "string" },
+              "to_profile": { "type": "string", "minLength": 1 },
+              "from_model": { "type": "string", "minLength": 1 },
+              "to_model": { "type": "string", "minLength": 1 },
+              "from_attempt_index": { "type": "integer", "minimum": 1 },
+              "to_attempt_index": { "type": "integer", "minimum": 2 },
+              "primary_attempts": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "fallback_attempts": { "type": "integer", "minimum": 1, "maximum": 5 },
+              "error": { "$ref": "#/$defs/error" },
+              "retryable": { "const": true },
+              "reason": { "type": "string", "minLength": 1 }
             }
           }
         }
@@ -386,10 +492,16 @@
             "required": ["strategy"],
             "properties": {
               "strategy": { "type": "string", "minLength": 1 },
-              "before_messages": { "type": "integer", "minimum": 0 },
-              "after_messages": { "type": "integer", "minimum": 0 },
-              "before_tokens": { "type": "integer", "minimum": 0 },
-              "after_tokens": { "type": "integer", "minimum": 0 }
+              "dropped_messages": { "type": "integer", "minimum": 0 },
+              "dropped_roles": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "kept_messages": { "type": "integer", "minimum": 0 },
+              "kept_chars": { "type": "integer", "minimum": 0 },
+              "budget_chars": { "type": "integer", "minimum": 0 },
+              "estimated_tokens_before": { "type": "integer", "minimum": 0 },
+              "estimated_tokens_after": { "type": "integer", "minimum": 0 }
             }
           }
         }
