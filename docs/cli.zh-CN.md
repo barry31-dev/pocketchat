@@ -305,24 +305,47 @@ pocketchat task report <task-id> --policy examples/task-policy.json --json
 
 `task run` 必须显式给 policy 与 session。它创建
 `.pocketchat/tasks/<task-id>.json`，模型/工具仍走既有 request snapshot、trace、
-session 与 tool 事件。完成 exit 0；failed/cancelled exit 1；准备失败或契约拒绝
+session 与 tool 事件。不传 `--acceptance` 时完成 exit 0；failed/cancelled exit 1；准备失败或契约拒绝
 exit 2。
 
 `task status` 在不执行任何模型工作的前提下区分 active、interrupted、failed 与
 终态。`task resume` 在第一个新字节前拒绝 legacy、不完整或冲突的 task checkpoint，
-把有序 tool context 恢复进续跑分支，并报告追加的 recovery step；它不发送 provider
-请求。
+包括不属于命令行所给 task id 的 checkpoint；随后把有序 tool context 恢复进续跑
+分支，并报告追加的 recovery step。它不发送 provider 请求。
 
 `task report` 列出已记录的 step 对象、工具调用、checkpoint 绑定、run id、trace
-文件与工具 artifacts，不推断缺失事实。没有匹配的 `--policy` 时，
-context/turn/session token 预算为 `unknown`；record 自带的 step/tool 预算仍会显示。
-JSON 路径相对工作区；错误时 stdout 只有一个 JSON 对象，stderr 为空。
+文件与已完成的 `read_file` / `write_file` artifacts。它只按解析后事件自身的
+`run_id` 建立关联，不搜索原始 JSON 文本。损坏、不可读或缺失的 trace 会以
+`refused` / `unknown` 状态进入 additive `evidence_issues`，不会从报告里静默消失。
+没有匹配的 `--policy` 时，context/turn/session token 预算为 `unknown`；record 自带
+的 step/tool 预算仍会显示。若 `TaskPlan` 经过 `execute_plan()`，同一份报告还列出
+`.pocketchat/task-reports/` 中的 `execution_steps`、经核验的 `commands` 与文件
+`changes`；这条路径只读既有证据，不重跑命令、不重新生成 provider 请求。缺失、
+损坏、不属于该 task 或被篡改的命令 archive 进入 `evidence_issues`；命令成功仍
+绝不等于验收通过。JSON 路径相对工作区；错误时 stdout 只有一个 JSON 对象，
+stderr 为空。
 
 确定性的 stub demo 覆盖成功、checkpoint resume 与权限拒绝：
 
 ```bash
 /usr/bin/python3 examples/task-demo/demo.py
 ```
+
+### 未发布：确定性验收
+
+```bash
+pocketchat task run "Write the report" --policy policy.json --session audit --acceptance acceptance.json --json
+pocketchat task verify TASK_ID --acceptance acceptance.json --json
+pocketchat task report TASK_ID --json
+```
+
+`--acceptance` 可选。执行 `status: completed` 与验收 `acceptance.state: passed`
+分开；传入时 `ok`/exit 0 必须两者同时成立。产物缺失/不符、权限拒绝或未知观察
+返回 1；非法输入在模型调用前以 2 拒绝。不传时旧 `task run` 输出与退出码不变。
+`task verify` 不调模型，只追加验收；`task report` 只读历史，不重验当前产物，
+exit 0 仍表示报告已读取。plan/check 类型、0/1/2 JSON、证据验证、上限与平台边界见
+[task-acceptance.zh-CN.md](task-acceptance.zh-CN.md)。
+
 
 ## 上下文预览
 
@@ -359,6 +382,7 @@ pocketchat tool write notes.txt "new text" --allow notes.txt --overwrite --json
 
 已有文件必须显式传 `--overwrite` 才能替换；写入使用原子替换，上限 16 KiB。
 敏感、二进制和路径逃逸一律拒绝。工具不删除文件、不执行命令。
+
 
 ## 本地记忆
 

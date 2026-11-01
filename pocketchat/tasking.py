@@ -345,6 +345,41 @@ def _record_int(payload: Mapping[str, Any], name: str, path: Path) -> int:
     return value
 
 
+def _validate_step(payload: Mapping[str, Any], index: int,
+                   path: Path) -> None:
+    required = ("index", "kind", "state", "recorded")
+    allowed = set(required) | {"tool", "detail", "run_id", "checkpoint_id"}
+    if set(payload) - allowed:
+        raise TaskError("task record %s step %d has unknown field(s): %s"
+                        % (path, index,
+                           ", ".join(sorted(set(payload) - allowed))))
+    for key in required:
+        if key not in payload:
+            raise TaskError("task record %s step %d is missing required field %s"
+                            % (path, index, key))
+    if (isinstance(payload["index"], bool)
+            or payload["index"] != index):
+        raise TaskError("task record %s step index must be %d, got %r"
+                        % (path, index, payload["index"]))
+    if not isinstance(payload["kind"], str) or payload["kind"] not in STEP_KINDS:
+        raise TaskError("task record %s step %d names unknown kind %r"
+                        % (path, index, payload["kind"]))
+    for key in ("state", "recorded"):
+        if not isinstance(payload[key], str) or not payload[key].strip():
+            raise TaskError("task record %s step %d field %s must be a "
+                            "non-empty string" % (path, index, key))
+    if "tool" in payload:
+        if payload["kind"] != "tool" or not isinstance(payload["tool"], str) \
+                or not payload["tool"].strip():
+            raise TaskError("task record %s step %d has an invalid tool"
+                            % (path, index))
+    for key in ("detail", "run_id", "checkpoint_id"):
+        if key in payload and (not isinstance(payload[key], str)
+                               or not payload[key].strip()):
+            raise TaskError("task record %s step %d field %s must be a "
+                            "non-empty string" % (path, index, key))
+
+
 def load_record(root: Path, task_id: str) -> TaskRecord:
     """Read one record. Missing or malformed facts are named refusals."""
     path = _record_path(root, task_id)
@@ -354,35 +389,96 @@ def load_record(root: Path, task_id: str) -> TaskRecord:
         raise TaskError("no such task %r (%s)" % (task_id, exc))
     except ValueError as exc:
         raise TaskError("task record %s is not valid JSON: %s" % (path, exc))
+    return parse_record(payload, task_id=task_id, path=path)
+
+
+def parse_record(payload: Any, *, task_id: str,
+                 path: Optional[Path] = None) -> TaskRecord:
+    """Validate a captured record without reopening its source file.
+
+    ``load_record`` and bounded evidence readers share this single validator.
+    The optional path is a diagnostic label, never an additional read.
+    """
+    path = path if path is not None else _record_path(Path("."), task_id)
     if not isinstance(payload, dict):
         raise TaskError("task record %s is not an object" % path)
+    allowed = {
+        "schema_version", "task_id", "created", "objective",
+        "policy_sha256", "state", "max_steps", "max_tool_calls",
+        "workspace_root", "terminal_reason", "steps",
+    }
+    if set(payload) - allowed:
+        raise TaskError("task record %s has unknown field(s): %s"
+                        % (path, ", ".join(sorted(set(payload) - allowed))))
     version = _required_record_field(payload, "schema_version", path)
     if version != TASK_RECORD_SCHEMA:
         raise TaskError("task record %s has an unsupported schema version %r; "
                         "this pocketchat reads %r"
                         % (path, version, TASK_RECORD_SCHEMA))
+    record_task_id = _required_record_field(payload, "task_id", path)
+    if not isinstance(record_task_id, str) or record_task_id != task_id:
+        raise TaskError("task record %s task_id does not match its filename"
+                        % path)
+    created = _required_record_field(payload, "created", path)
+    if not isinstance(created, str) or not created.strip():
+        raise TaskError("task record %s field created must be a non-empty "
+                        "string" % path)
+    objective = _required_record_field(payload, "objective", path)
+    if not isinstance(objective, str) or not objective.strip():
+        raise TaskError("task record %s field objective must be a non-empty "
+                        "string" % path)
+    policy_sha256 = _required_record_field(payload, "policy_sha256", path)
+    if (not isinstance(policy_sha256, str)
+            or len(policy_sha256) != 64
+            or any(char not in "0123456789abcdef"
+                   for char in policy_sha256)):
+        raise TaskError("task record %s field policy_sha256 must be a "
+                        "64-character lowercase hex digest" % path)
+    workspace_root = payload.get("workspace_root", ".")
+    if not isinstance(workspace_root, str) or not workspace_root.strip():
+        raise TaskError("task record %s field workspace_root must be a "
+                        "non-empty string" % path)
     state = _required_record_field(payload, "state", path)
-    if state not in ACTIVE_STATES | TERMINAL_STATES:
+    if not isinstance(state, str) or state not in ACTIVE_STATES | TERMINAL_STATES:
         raise TaskError("task record %s names an unknown state %r"
                         % (path, state))
+    terminal_reason = payload.get("terminal_reason")
+    if state in TERMINAL_STATES:
+        if not isinstance(terminal_reason, str) or not terminal_reason.strip():
+            raise TaskError("task record %s terminal state %r needs a "
+                            "non-empty terminal_reason" % (path, state))
+    elif terminal_reason is not None:
+        raise TaskError("task record %s active state %r cannot carry "
+                        "terminal_reason" % (path, state))
     steps = _required_record_field(payload, "steps", path)
     if not isinstance(steps, list):
         raise TaskError("task record %s field steps must be a list" % path)
-    for step in steps:
+    max_steps = _record_int(payload, "max_steps", path)
+    if max_steps < 1 or len(steps) > max_steps:
+        raise TaskError("task record %s has %d steps above max_steps %d"
+                        % (path, len(steps), max_steps))
+    for index, step in enumerate(steps, 1):
         if not isinstance(step, dict):
             raise TaskError("task record %s field steps must contain objects"
                             % path)
+        _validate_step(step, index, path)
+    max_tool_calls = _record_int(payload, "max_tool_calls", path)
+    tool_calls = sum(1 for step in steps if step.get("kind") == "tool")
+    if tool_calls > max_tool_calls:
+        raise TaskError("task record %s has %d tool steps above "
+                        "max_tool_calls %d"
+                        % (path, tool_calls, max_tool_calls))
     return TaskRecord(
         schema_version=version,
-        task_id=str(_required_record_field(payload, "task_id", path)),
-        created=str(_required_record_field(payload, "created", path)),
-        objective=str(_required_record_field(payload, "objective", path)),
-        policy_sha256=str(_required_record_field(payload, "policy_sha256", path)),
+        task_id=record_task_id,
+        created=created,
+        objective=objective,
+        policy_sha256=policy_sha256,
         state=state,
-        max_steps=_record_int(payload, "max_steps", path),
-        max_tool_calls=_record_int(payload, "max_tool_calls", path),
-        workspace_root=str(payload.get("workspace_root", ".")),
-        terminal_reason=payload.get("terminal_reason"),
+        max_steps=max_steps,
+        max_tool_calls=max_tool_calls,
+        workspace_root=workspace_root,
+        terminal_reason=terminal_reason,
         steps=list(steps),
     )
 

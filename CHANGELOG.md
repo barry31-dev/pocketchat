@@ -6,7 +6,119 @@ All notable changes to `pocketchat` are recorded here. The format follows
 The versions below describe the public source tree. They do not describe a
 package-index publication.
 
-## [1.0.0] - unreleased release candidate
+## [Unreleased]
+
+- Add checkpoint-driven resume. `resume_from_checkpoint()` resolves one
+  checkpoint into the workspace-relative report and digest to resume from,
+  refusing a changed report digest, a report outside the reports directory or
+  a plan-digest mismatch; `task checkpoint resume` previews it read-only. The
+  resolved report and digest feed the existing `execute_plan` resume path.
+  See `docs/task-checkpoint.md`.
+
+- Add parent-plan-authorized delegation. A closed delegation request is checked
+  against the authorized ExecutionPlan and TaskSpec: the parent plan digest and
+  step must match, a child may only use a granted action and inputs inside that
+  action's allowlist, and `task delegate preview` authorizes read-only without
+  running a child. See `docs/task-delegate.md`.
+
+- Add explicit plan/command checkpoints derived from a bounded execution
+  report. A record binds spec/plan digests, the completed/pending step
+  partition, bounded file and command effect hashes and the source report
+  digest; `task checkpoint preview` validates one read-only and can bind it to
+  the execution being resumed. See `docs/task-checkpoint.md`.
+
+- Add bounded UTF-8 content snapshots over an explicit frozen context selection.
+  The command rederives and verifies selection provenance before opening only
+  its selected regular files, records per-file and canonical snapshot hashes,
+  and refuses path, encoding, sensitivity, size and budget violations without
+  writing runtime state or calling a model. See `docs/task-snapshot.md`.
+
+- Add deterministic path-token selection over a frozen bounded context-tree
+  manifest. The selector strictly validates and digests the manifest, explains
+  exact basename/path scores and truncation, and never opens candidate files or
+  calls a model.
+
+- Add a read-only `task context scan` command for deterministic, bounded
+  workspace-relative file metadata. It prunes runtime/generated directories,
+  never follows symlinks, reads no file contents and refuses partial results
+  when a file/depth/path budget is exceeded.
+
+- Replace scripted dogfood shortcuts with actual tool writes, fixed-template
+  bounded repair, report-bound continuation and independent acceptance. The
+  offline stub, operator-authored repair and file-only repair acceptance are
+  explicit; refusal no longer invents a trace or an unrelated plan identity.
+
+- Add explicit plan-step boundaries and hash-bound continuation. Completed file
+  and command steps retain their artifacts and are not replayed; incomplete,
+  conflicting or unconfirmed evidence refuses before new calls. Cumulative
+  execution reports retain their predecessor link without double-counting.
+
+### Added
+
+- Offline task-agent dogfood demo covers TaskSpec/TaskPlan execution, one
+  bounded command repair, recovery inventory and invalid-spec refusal in a
+  fresh temporary workspace. It records spec/plan/report hashes and never uses
+  a real provider. See `examples/task-dogfood/README.md`.
+- Read-only recovery side-effect inventory: completed command and file steps
+  are derived from existing execution reports, failed/not-executed steps remain
+  pending, and foreign/malformed evidence is refused or unknown. It does not
+  rerun commands or resume a provider turn. See `docs/task-recovery.md`.
+- Acceptance plans can cite an existing `command_succeeded` step from a
+  bounded execution report. The reader validates the completed/non-timeout
+  evidence and never reruns the command; missing, foreign or unreadable
+  evidence is `unknown`/`refused`, and a nonzero exit is `failed`.
+- Bounded command repair: one declared template may be rerun at most once after
+  an explicit repair decision, with a sibling trace and a stable failure
+  fingerprint that stops identical retries. Results are persisted once and
+  never imply task acceptance. See `docs/task-repair.md`.
+- `execute_plan()` now writes one closed
+  `pocketchat-task-execution-report.v1` report binding spec/plan digests, task
+  ids, step outcomes, verified command archive/stream hashes and counts, and
+  write-step file hashes/line counts. A stored command archive digest detects
+  byte changes before evidence is attached. `task report` reads it without
+  rerunning commands; missing,
+  malformed, foreign or tampered command evidence becomes `evidence_issues`
+  rather than a pass. See `docs/task-exec.md`.
+- Closed TaskSpec command templates and argv execution with `shell=False`, a
+  workspace-contained cwd, explicit timeouts and per-stream output bounds.
+  TaskPlan `run_command` steps may reference only a declared template id;
+  evidence records exit status, hashes and truncated previews, and command
+  success remains separate from task acceptance. See `docs/task-command.md`.
+  The published v1.1.0 artifact does not contain this capability.
+- Guarded TaskSpec overwrite for one existing UTF-8 workspace file. Optional
+  `overwrite_paths` must be both declared in `inputs` and write-allowlisted;
+  a dirty-target refusal, no-follow symbolic-link check, exact snapshot hash
+  recheck before atomic replacement, and bounded hash/line evidence prevent
+  blind overwrite. See `docs/task-edit.md`. The published v1.1.0 artifact does
+  not contain this capability.
+- Deterministic task acceptance: operator-declared `file_exists`,
+  `text_contains` and `json_equals` checks, bounded no-follow artifact reads,
+  independent task/plan/hash-bound receipts and explicit failed/refused/unknown
+  observations. `task run --acceptance` separates execution `completed` from
+  acceptance `passed`; `task verify` appends a new observation without a model,
+  and `task report` validates historical receipts without rechecking artifacts.
+  Existing task/policy/checkpoint/trace v1 shapes and unflagged run semantics
+  remain unchanged. See `docs/task-acceptance.md` for platform limitations and
+  `examples/task-acceptance/demo.py` for four offline evidence paths.
+
+### Fixed
+
+- Command traces now carry their declared `template_id`, exit code and both
+  output SHA-256 values on completed and failed terminal tool events. The
+  values are additive trace fields; they do not change run/tool event type
+  ownership or turn `exit 0` into acceptance.
+- `task report` now links a recorded run to a trace only when a parsed event's
+  `run_id` matches exactly. A malformed, unreadable or missing trace is listed
+  in additive `evidence_issues` with `refused` or `unknown` state instead of
+  being omitted. Task records also reject non-string root evidence fields, and
+  `artifacts` contains only completed `read_file` / `write_file` paths rather
+  than treating a `memory_search` query as a file.
+- `task resume` now checks the task id named on the command line against the
+  checkpoint's `task_id` before verifying or writing any recovery evidence.
+  A checkpoint belonging to another task is refused without creating the
+  resumed session.
+
+## [1.0.0] - superseded CLI-only candidate
 
 ### Added
 
@@ -23,15 +135,18 @@ package-index publication.
 - Local release checklist in `docs/release-1.0.md`; CI matrix and public
   release remain separate gates.
 
-## [Unreleased]
+## [1.1.0] - 2026-10-30
+
+### Fixed
+
+- Task record readers now fail closed on malformed evidence: a terminal state
+  without a non-empty reason, an active state carrying a terminal reason,
+  mismatched filename identity, unknown fields, non-contiguous step indexes,
+  invalid step shapes, or steps/tool calls above the declared budgets are
+  refused instead of being reported as task facts.
 
 ### Added
 
-- The v1.1.0 local release candidate record is documented in
-  `docs/release-1.1.md` and `release-1.1.zh-CN.md`: CPython 3.9/3.13 full
-  suites, wheel/clean-install evidence, three validated demo traces and replay
-  hash verification. Tag, GitHub Release and package-index publication were authorized for
-  v1.1.0 on 2026-10-30; execution and readback are recorded separately.
 - `task run`, `task status`, `task resume` and `task report` expose bounded
   task execution, closed-state inspection, checkpoint resume and evidence-only
   reporting with stable JSON envelopes and workspace-relative paths. The
@@ -176,8 +291,8 @@ package-index publication.
 > loopback Web UI code is removed from the product tree. The stable CLI surface,
 > compatibility policy, file-format versions and provider-adapter contract are
 > documented in `docs/compatibility.md` and `docs/provider-adapters.md`.
-> This tree is an unreleased release candidate; no v1.0.0 tag or Release has
-> been created.
+> The v1.0.0 candidate was superseded by v1.1.0; no v1.0.0 tag or Release was
+> created.
 
 ### CLI additions
 

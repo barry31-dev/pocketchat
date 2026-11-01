@@ -24,12 +24,16 @@ file to open instead of a memory to trust.
 
 ## Version boundaries
 
-`v1.0.0` is the stable CLI-only release candidate. It promises the command,
+`v1.1.0` is the current CLI-only source release. It keeps the command,
 exit-code, JSON-envelope, file-format and provider-adapter boundaries documented
 in [compatibility.md](docs/compatibility.md) and
 [provider-adapters.md](docs/provider-adapters.md). The development and release
-process is [development-and-release.md](docs/development-and-release.md). The
-version-specific v1.0 candidate record is [release-1.0.md](docs/release-1.0.md).
+process is [development-and-release.md](docs/development-and-release.md).
+Contributor rules are in [AGENTS.md](AGENTS.md); the current approved slice is
+in [slice-queue.md](docs/slice-queue.md) and publication status is in
+[release-ledger.md](docs/release-ledger.md). The version-specific v1.1 record
+is [release-1.1.md](docs/release-1.1.md); the v1.0.0
+candidate record remains [release-1.0.md](docs/release-1.0.md).
 The evidence-gated roadmap for future Agent foundations is in
 [agent-development-master-plan.zh-CN.md](docs/agent-development-master-plan.zh-CN.md).
 Candidate next slices are listed in
@@ -56,6 +60,19 @@ It does not add tool calling, automatic retries, branch trees, a web UI, a
 local server product or a second provider SDK. The interactive TTY surface
 streams assistant text and reasoning deltas; non-interactive commands retain
 their complete-response output.
+
+## Unreleased: verified task delivery
+
+The working source adds opt-in deterministic artifact acceptance after Task Run.
+Execution `completed` and acceptance `passed` are separate: a model answer alone
+cannot satisfy declared file/text/JSON conditions. Use `task run --acceptance`,
+`task verify` and the acceptance section of `task report`. This is not in the
+published v1.1.0 artifact. See [task-acceptance.md](docs/task-acceptance.md) for
+0/1/2 exit codes, historical receipts and the unsupported-platform boundary.
+
+```bash
+python3 examples/task-acceptance/demo.py
+```
 
 ## Requirements
 
@@ -279,10 +296,12 @@ manifest makes the boundary and interrupted rewind transaction auditable.
 same provider, tools, session and trace path. `task status` reports the closed
 task state, `task resume TASK --checkpoint ID --policy FILE` restores a task
 checkpoint and reports its recovery step, and `task report TASK` aggregates
-only existing steps, tools, budgets, checkpoints, trace paths and artifacts.
-All four support stable `--json`; token budgets are `unknown` unless the report
-receives the same policy and its digest matches. The deterministic local smoke
-demo is `examples/task-demo/demo.py`.
+only existing steps, tools, budgets, checkpoints, exact run-to-trace links and
+completed file artifacts. Malformed or missing trace evidence is reported in
+`evidence_issues`, not silently omitted. All four support stable `--json`;
+token budgets are `unknown` unless the report receives the same policy and its
+digest matches. The deterministic local smoke demo is
+`examples/task-demo/demo.py`.
 
 `context` previews a session's message budget and dry-runs the current
 drop-oldest-turns compaction without sending a request or writing any file.
@@ -379,10 +398,10 @@ Source is maintained at `barry31-dev/pocketchat`.
 
 ## Release status
 
-The `v0.3.0` source release is public. This tree is the unreleased `v1.0.0`
-CLI-only release candidate; it is not published to a package index, and no
-v1.0.0 tag or Release exists yet. Install it from the repository source as
-shown above.
+The `v1.1.0` source release is public, with a GitHub tag and Release. It is not
+published to a package index; install the attached wheel from that Release or
+install from the repository source as shown above. The earlier `v0.3.0` source
+release remains public.
 
 A Chinese README, command for command the same as this file, lives at
 [`README.zh-CN.md`](README.zh-CN.md).

@@ -245,6 +245,7 @@ class StableV1ContractTests(unittest.TestCase):
                      "provider-adapters.md", "provider-adapters.zh-CN.md"):
             self.assertTrue((docs / name).is_file(), name)
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("v1.1.0", readme)
         self.assertIn("v1.0.0", readme)
         self.assertIn("Python 3.9", readme)
         self.assertIn("OpenAI-compatible", readme)

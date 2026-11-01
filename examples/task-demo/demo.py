@@ -166,6 +166,7 @@ def _run_paths(root: Path, policy) -> None:
             policy_sha256=record.policy_sha256,
             turn_id="turn_000002", checkpoint_id="checkpoint_demo")
         resumed = resume_task(root, checkpoint["checkpoint_id"], policy,
+                              task_id=record.task_id,
                               name="resumed")
         print(json.dumps({
             "path": "checkpoint_resume", "status": resumed["report"]["state"],

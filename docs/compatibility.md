@@ -89,3 +89,16 @@ Web UI, local API, desktop packaging, remote access, account systems,
 telemetry, general-purpose tool calling, file access outside the explicit local
 tools, code execution, recursive multi-agent orchestration and provider SDK
 bundling are not part of the `v1.0.x` compatibility promise.
+
+## Unreleased: additive task acceptance
+
+`task verify`, opt-in `task run --acceptance`, and `task report.acceptance` are
+additive. Existing runs without the flag keep their fields and exit meanings;
+opt-in runs require execution completion **and** acceptance pass for `ok`/exit 0.
+Task execution states and all task policy/record/checkpoint/trace v1 shapes stay
+unchanged. Acceptance plans and receipts have separate version keys and unknown
+versions fail closed. An old workspace without receipts reports `not_recorded`,
+not `passed`. The new verifier needs POSIX descriptor-relative no-follow APIs;
+Windows currently refuses with `unsupported_platform`, rather than inheriting
+the ordinary CLI's runtime target. These are unreleased source additions, not
+retroactive v1.1.0 artifact guarantees. See [task-acceptance.md](task-acceptance.md).

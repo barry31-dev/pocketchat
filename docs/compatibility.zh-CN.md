@@ -78,3 +78,14 @@ trace 与 checkpoint 规则约束。
 Web UI、本地 API、桌面打包、远程访问、账号体系、telemetry、通用工具调用、显式本地
 工具之外的文件访问、代码执行、递归多 agent 编排与 provider SDK 捆绑，都不属于
 `v1.0.x` 兼容承诺。
+
+## 未发布：additive 任务验收
+
+新增 `task verify`、可选 `task run --acceptance` 和 `task report.acceptance`。
+不传 flag 的旧 run 保留字段/退出码；显式传入时，执行完成**并且**验收通过才是
+`ok`/exit 0。原 task 执行状态与 policy/record/checkpoint/trace v1 形状均不变。
+验收 plan/record 使用独立版本键，未知版本拒绝；旧 workspace 没有验收记录就是
+`not_recorded`，不是 `passed`。新验收器需要 POSIX descriptor-relative no-follow API；
+Windows 当前显式 `unsupported_platform`，不继承普通 CLI 的目标平台承诺。
+这是未发布源码新增能力，不追溯改变 v1.1.0 制品保证。完整边界见
+[task-acceptance.zh-CN.md](task-acceptance.zh-CN.md)。

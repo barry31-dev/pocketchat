@@ -34,8 +34,8 @@ commit, an older wheel or another machine.
 
 Read only the sources needed for the change:
 
-- the current slice in `内部切片队列` (内部规划仓) or the equivalent
-  public issue;
+- the current slice: a product issue in this repository, or an entry in
+  `docs/slice-queue.md` when the work is not tracked as an issue;
 - this file;
 - `compatibility.md`, `security.md`, `cli.md`, `formats.md` and the relevant
   tests.
@@ -51,10 +51,13 @@ Budget / stop:
 Rollback / next:
 ```
 
-A product-code change includes a PocketChat slice queue change before it can
-enter `main`. The queue entry must already be approved: machine confirmation
-that the file changed is a precondition, not approval. Documentation,
-process-tool and test-only maintenance does not create a product slice.
+A product-code change includes an update to the current slice record before it
+can enter `main`: either the referenced issue in this repository, or
+`docs/slice-queue.md` when the work is not tracked as an issue. The queue entry
+must already be approved: machine confirmation that the file or issue changed
+is a precondition, not approval. `CHANGELOG.md` is retained delivery history
+and does not substitute for the current slice. Documentation, process-tool and
+test-only maintenance does not create a product slice.
 
 The goal is testable. "Improve the agent" is not a goal; "record a stable
 `error_type` for five failure classes and keep the old JSON fields" is.
@@ -168,8 +171,8 @@ substitutes for another.
 
 ### 4.1 Required local checks for a release candidate
 
-Run these **from the package root**. Running `unittest discover` from the
-内部规划仓 repository root puts the package outside `sys.path` and produces import
+Run these **from the package root**. Running `unittest discover` from a
+directory above this package puts it outside `sys.path` and produces import
 errors that are environment mistakes, not product failures.
 
 ```bash
@@ -332,9 +335,10 @@ recorded, repeat the gate; an older green run is not evidence for the new SHA.
 
 ### 6.1 Version-specific checklist
 
-Keep a per-version checklist under `docs/releases/<version>.md`. The v1.0
-candidate currently lives in `release-1.0.md` and is explicitly a historical
-candidate record, not the general process.
+Keep a per-version checklist in this package's `docs/`. The v1.1 record is
+[release-1.1.md](release-1.1.md); the v1.0 candidate lives in
+[release-1.0.md](release-1.0.md) and is explicitly a historical candidate
+record, not the general process.
 
 ## 7. Publication
 
@@ -373,8 +377,9 @@ After publishing, re-read:
 - published tree and wheel asset hash;
 - a fresh install from the published artifact, when applicable.
 
-Record the actual URL, timestamp, version and unverified scope in the 内部规划仓
-release ledger. A local file or build log is not a remote publication fact.
+Record the actual URL, timestamp, version and unverified scope in
+`docs/release-ledger.md`. A local file or build log is not a remote publication
+fact.
 
 ## 8. Rollback and maintenance
 
@@ -392,23 +397,23 @@ the review evidence and update this process only when the failure reveals a
 missing rule. This keeps review calibrated to observed failures instead of
 expanding checks after every scare.
 
-The public charter's identity and material rules apply. Internal 内部规划仓 paths,
-automation names, worktree paths and local credentials never enter the public
-tree or release notes.
+The charter's identity and material rules apply. Paths, automation names,
+worktree paths and local credentials from any private environment never enter
+this repository or its release notes.
 
 ## 9. Documentation map
 
 | Question | Owner |
 |---|---|
-| Product direction and milestones | internal roadmap |
+| Product direction and milestones | `docs/slice-queue.md` and the product issues |
 | This process | `docs/development-and-release.md` and its Chinese counterpart |
 | Compatibility/deprecation | `docs/compatibility.md` |
 | Security boundaries | `docs/security.md` |
 | CLI, JSON and exit codes | `docs/cli.md` |
 | File formats | `docs/formats.md` |
 | Field evidence and gaps | `docs/pocketchat-evidence-matrix.md` |
-| Version-specific candidate | `docs/releases/<version>.md` or the existing v1.0 checklist |
-| Current public status | publication ledger |
+| Version-specific candidate | `docs/release-1.1.md` and the v1.0 checklist |
+| Current public status | `docs/release-ledger.md` |
 
 If a rule belongs to one of these owners, link to it rather than copying it
 here.

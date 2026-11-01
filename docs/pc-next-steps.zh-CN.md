@@ -1,25 +1,28 @@
 # PocketChat（pc）下一步计划
 
+> **2026-10-30 当前新增：** 可验证任务交付，独立验收计划/记录、`task run --acceptance`、
+> `task verify` 与历史报告；是未发布源码，不变更旧 v1.1.0 记录。产品契约见
+> [task-acceptance.zh-CN.md](task-acceptance.zh-CN.md)；不扩展 shell/网络/UI/自动修复。
+
+
 > **文档性质**：2026-10-28 候选计划的历史记录，不是当前队列。
 > **依据**：[`开发规划总则`](agent-development-master-plan.zh-CN.md) 与外部批准的产品路线。
-> **队列规则**：当前批准状态只看 `内部切片队列`；本文件不自动开工。
-> **维护日期**：2026-10-29
+> **队列规则**：当前批准状态只看本仓库的当前格记录（issue 或 `docs/slice-queue.md`）；本文件不自动开工。
+> **维护日期**：2026-10-30
 
 ## 0. 当前状态
 
-- 2026-10-29 用户批准六项候选方向；当前状态、契约、交付与执行顺序统一见 内部规划的
-  `内部切片队列`。本节不再复制队列状态。
-- v1.0.0 是本地候选：3.9/3.13 全量、ruff、wheel 与干净安装已完成；跨平台 CI workflow 在仓库中，但该候选 SHA 的 CI 结果未取得，当前只在本机测试；tag/Release 未授权。
+- 2026-10-29 用户批准六项候选方向；当前状态、契约、交付与执行顺序统一见本仓库的
+  当前格记录。本节不再复制队列状态。
+- v1.1.0 已发布为 GitHub tag/Release，未发布到包索引；v1.0.0 仅保留为已被 v1.1.0 取代的本地候选记录。
 - **本文件 §2「明确不做」的口径已过期，现按下方两栏读**：显式 allowlist 只读文件工具、
   显式受控写文件（create-only）、只读 `memory_search`、有界串行委派、checkpoint/rewind
   与有界 retry/fallback 已于 2026-10-29 实现并登记在
   [`formats.md`](formats.md) 与 [`compatibility.md`](compatibility.md)。
   仍然不做的是：shell 与任意代码执行、网络工具、文件覆盖与删除、递归委派、自动选优/评分、
   Web UI、本地 API、桌面端与账号云同步。
-- 下一阶段是 v1.1 Task Run：把上述已有能力组装成一个可审计、可恢复、可演示的有界任务闭环。
-  契约已冻结在 [`formats.md`](formats.md)「Task policy」「Task records」两节与
-  `schemas/task.schema.json`；范围、五个大格与验收判据见 内部规划的切片队列
-  `TASK-RUN-1` … `TASK-RUN-5`。本节不复制那些契约。
+- v1.1 Task Run 已交付；2026-10-30 当前新增可验证任务交付（独立 plan/记录与 CLI 验收）。
+  契约已登记；不因这格自动授权下一核心轴、工具扩展或公开发布。
 
 ## 1. 候选切片（按优先级）
 

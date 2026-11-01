@@ -18,12 +18,16 @@ trace 才是重点。其余一切都只是为了让「模型到底看到了什�
 
 ## 版本边界
 
-`v1.0.0` 是稳定的 CLI-only 发布候选。它承诺
+`v1.1.0` 是当前 CLI-only 源码版本。它沿用
 [兼容与弃用策略](docs/compatibility.zh-CN.md) 与
 [provider 适配器契约](docs/provider-adapters.zh-CN.md) 以及
 [开发与发布流程](docs/development-and-release.zh-CN.md) 中记录的命令、退出码、
-JSON envelope、文件格式与适配器边界。v1.0 的版本专属候选记录见
-[发布检查表](docs/release-1.0.zh-CN.md)。未来 Agent 基础能力的证据门槛见
+JSON envelope、文件格式与适配器边界。v1.1 的版本专属记录见
+[v1.1 发布记录](docs/release-1.1.zh-CN.md)；v1.0.0 候选记录保留在
+[发布检查表](docs/release-1.0.zh-CN.md)。协作者规则见
+[AGENTS.md](AGENTS.md)；当前已批准切片见
+[切片队列](docs/slice-queue.md)，发布状态见
+[发布台账](docs/release-ledger.md)。未来 Agent 基础能力的证据门槛见
 [开发规划总则](docs/agent-development-master-plan.zh-CN.md)。候选下一步切片见
 [pc 下一步计划](docs/pc-next-steps.zh-CN.md)，入队后才开工；已实现证据字段与缺口见
 [证据矩阵](docs/pocketchat-evidence-matrix.md)。运行目标是 Linux、macOS、Windows 上的 CPython 3.9 与 3.13；当前本机验证只在
@@ -40,6 +44,18 @@ trace SHA-256 `9102fab4a549ff398265d0094c38bf74cd81a33241db7bf77fbcd64621453e45`
 `v0.2.0` 增加多 profile 配置与选择、串行对比、请求快照、对比 manifest、成本与
 延迟，以及 replay dry-run。它不增加工具调用、自动重试、分支树、流式输出、
 Web UI、本地服务产品或第二个 provider SDK。
+
+## 未发布源码：可验证任务交付
+
+Task Run 后可选确定性产物验收：执行 `completed` 与验收 `passed` 分开，
+模型回答不能代替声明的文件/文本/JSON 条件。使用 `task run --acceptance`、
+`task verify` 和 `task report` 的验收节。**公开 v1.1.0 制品不含这些新增能力**。
+退出码 0/1/2、历史记录与平台拒绝边界见
+[task-acceptance.zh-CN.md](docs/task-acceptance.zh-CN.md)。
+
+```bash
+python3 examples/task-acceptance/demo.py
+```
 
 ## 环境要求
 
@@ -240,9 +256,10 @@ pocketchat compare "summarize this" --profiles local,hosted
 `task run --policy FILE --session NAME` 通过同一 provider、工具、session 与 trace
 路径执行一个有界任务。`task status` 报告封闭任务状态，
 `task resume TASK --checkpoint ID --policy FILE` 恢复 task checkpoint 并报告 recovery
-step，`task report TASK` 只聚合已存在的 steps、tools、budgets、checkpoints、trace
-和 artifacts。四个命令都支持稳定 `--json`；report 未收到 policy 或摘要不匹配时，
-token 预算保持 `unknown`。确定性的本地 smoke demo 是
+step，`task report TASK` 只聚合已存在的 steps、tools、budgets、checkpoints、精确的
+run 到 trace 关联和已完成的文件 artifacts。损坏或缺失的 trace 证据会进入
+`evidence_issues`，不会静默省略。四个命令都支持稳定 `--json`；report 未收到 policy
+或摘要不匹配时，token 预算保持 `unknown`。确定性的本地 smoke demo 是
 `examples/task-demo/demo.py`。
 
 `context` 预览 session 的消息预算，并按当前 drop-oldest-turns 策略干跑压缩，
@@ -323,8 +340,8 @@ Apache-2.0。见 `LICENSE`。
 
 ## 发布状态
 
-`v0.3.0` 的源码版本已公开。当前树是尚未发布的 **v1.0.0 CLI-only 发布候选**；
-尚未发布到包索引，也还没有 v1.0.0 tag 或 Release。请按上面的安装命令直接从
-仓库源码安装。
+`v1.1.0` 的源码版本已公开，并有 GitHub tag 与 Release；它尚未发布到包索引。
+可从该 Release 下载 wheel，或按上面的安装命令直接从仓库源码安装。此前的
+`v0.3.0` 源码版本仍保持公开。
 
 本文的中文版与英文版逐命令一致，英文版见 [`README.md`](README.md)。

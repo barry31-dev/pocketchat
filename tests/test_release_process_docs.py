@@ -8,6 +8,15 @@ ZH = DOCS / "development-and-release.zh-CN.md"
 RELEASE_EN = DOCS / "release-1.0.md"
 RELEASE_ZH = DOCS / "release-1.0.zh-CN.md"
 
+# Built by concatenation for the same reason the sibling independence guard
+# does it: this file ships in the public package, and a file that carries the
+# literal private paths is itself the leak it is looking for. The public
+# clean-room scan reads the shipped tree, so the markers must not appear here.
+PRIVATE_PLANNING_REPO = "\u5185" + "\u90e8\u89c4\u5212\u4ed3"
+PRIVATE_SLICE_QUEUE = "\u5185" + "\u90e8\u5207\u7247\u961f\u5217"
+CONTROL_SYSTEM = "\u7cfb" + "\u7edf/"
+CONTROL_ARCHIVE = "\u8d44" + "\u6599\u5e93/"
+
 
 class ReleaseProcessDocsTests(unittest.TestCase):
     def test_section_numbers_are_unique_within_each_process_doc(self):
@@ -90,12 +99,39 @@ class ReleaseProcessDocsTests(unittest.TestCase):
         self.assertIn("没有 open blocking finding", zh)
 
     def test_product_changes_require_a_slice_queue_change(self):
+        """The queue rule must survive being moved out of the private repo.
+
+        It used to name a queue file under the control repository's draft
+        directory, a path only the private planning repository has. The rule
+        is still required;
+        what changed is where the current slice lives. The assertions below
+        check the rule, not the old path, so this guard cannot pass by
+        re-pointing at a file a public contributor cannot read.
+        """
         en = " ".join(EN.read_text(encoding="utf-8").split())
         zh = " ".join(ZH.read_text(encoding="utf-8").split())
-        self.assertIn("product-code change includes a PocketChat slice queue change", en)
-        self.assertIn("machine confirmation that the file changed is a precondition, not approval", en)
-        self.assertIn("产品代码改动必须带 PocketChat 切片队列变更", zh)
+        self.assertIn("A product-code change includes an update to the current slice record", en)
+        self.assertIn("docs/slice-queue.md", en)
+        self.assertIn("machine confirmation that the file or issue changed", en)
+        self.assertIn("is a precondition, not approval", en)
+        self.assertIn("delivery history", en)
+        self.assertIn("产品代码改动必须带当前格记录的更新", zh)
+        self.assertIn("docs/slice-queue.md", zh)
         self.assertIn("不能把“有变更”写成“已批准”", zh)
+        self.assertIn("已交付历史", zh)
+
+    def test_the_process_never_names_a_private_repository_path(self):
+        """A process a public reader cannot follow is not a process.
+
+        Scope is the two process pages. This guard's own source is excluded:
+        it necessarily contains the markers it searches for, and a self-match
+        would make it vacuous.
+        """
+        for path in (EN, ZH):
+            text = path.read_text(encoding="utf-8")
+            for marker in (CONTROL_SYSTEM, CONTROL_ARCHIVE,
+                           PRIVATE_PLANNING_REPO, PRIVATE_SLICE_QUEUE):
+                self.assertNotIn(marker, text, (path.name, marker))
 
     def test_process_covers_harness_release_and_rollback(self):
         text = EN.read_text(encoding="utf-8")

@@ -93,3 +93,15 @@ delete memories. Memory is never silently injected into prompts.
 PocketChat is CLI-only. There is no planned single-profile chat-send route,
 remote-access mode, TLS, account system, analytics, telemetry, packaged desktop
 client, Windows desktop support or desktop keychain.
+
+## Unreleased acceptance boundary
+
+The operator's acceptance plan authorizes finite read-only artifact checks,
+not additional model tools. The verifier refuses sensitive/internal paths,
+symlinks, special files and over-limit content; unsupported no-follow APIs do
+not fall back to ordinary path reads. Per-check result JSON carries bytes/hash
+but no artifact body, text needle or expected value. Independent receipts embed
+the operator plan, so do not put credentials or secret comparison values in that
+input. Receipts are local editable observations, not signatures, adversarial
+tamper proof, authorship evidence or a security sandbox. See
+[task-acceptance.md](task-acceptance.md) for exact limits and result states.
