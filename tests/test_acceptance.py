@@ -7,6 +7,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+
+from tests import _helpers as hp
 from unittest.mock import patch
 
 try:
@@ -91,6 +93,7 @@ class AcceptanceTests(unittest.TestCase):
             with self.subTest(size=len(body)), self.assertRaises(ac.AcceptanceError):
                 ac.load_plan(path)
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_file_records_full_bytes_and_hash_without_content(self):
         data = b"private content\n"
         (self.root / "report.md").write_bytes(data)
@@ -100,11 +103,13 @@ class AcceptanceTests(unittest.TestCase):
             "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
         self.assertNotIn("private content", json.dumps(result))
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_missing_file_and_directory_do_not_pass(self):
         self.assertEqual(self.evaluate()["state"], "failed")
         (self.root / "report.md").mkdir()
         self.assertEqual(self.evaluate()["state"], "refused")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_text_contains_is_exact_and_does_not_emit_the_needle(self):
         (self.root / "report.md").write_text("## Findings\nhello", encoding="utf-8")
         good = {"id": "heading", "kind": "text_contains", "path": "report.md", "text": "## Findings"}
@@ -113,6 +118,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(result["state"], "failed")
         self.assertNotIn("## findings", json.dumps(result))
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_invalid_utf8_and_oversized_file_are_distinct(self):
         path = self.root / "report.md"
         path.write_bytes(b"\xff")
@@ -124,6 +130,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(result["checks"][0]["reason"], "file_too_large")
         self.assertNotIn("file", result["checks"][0])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_json_pointer_decodes_escape_and_array_index(self):
         (self.root / "data.json").write_text('{"a/b":{"~key":[null,true]}}', encoding="utf-8")
         checks = [{"id": "null", "kind": "json_equals", "path": "data.json",
@@ -134,12 +141,14 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(result["state"], "passed")
         self.assertEqual(result["checks"][0]["file"], result["checks"][1]["file"])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_json_equality_does_not_confuse_boolean_and_number(self):
         (self.root / "data.json").write_text('{"x":[true],"n":1.0}', encoding="utf-8")
         check = {"id": "x", "kind": "json_equals", "path": "data.json", "pointer": "/x", "expected": [1]}
         self.assertEqual(self.evaluate(check)["state"], "failed")
         self.assertEqual(self.evaluate(dict(check, pointer="/n", expected=1))["state"], "passed")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_json_missing_pointer_invalid_json_and_duplicate_keys_fail(self):
         check = {"id": "json", "kind": "json_equals", "path": "data.json", "pointer": "/items/01", "expected": 1}
         for content in ('{"items":[0,1]}', '{', '{"x":1,"x":2}', '{"x":NaN}'):
@@ -171,6 +180,7 @@ class AcceptanceTests(unittest.TestCase):
         os.mkfifo(self.root / "report.md")
         self.assertEqual(self.evaluate()["state"], "refused")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_overall_state_does_not_hide_refusal_behind_missing_file(self):
         result = self.evaluate({"id": "missing", "kind": "file_exists", "path": "x"},
                                {"id": "secret", "kind": "file_exists", "path": ".env"})
@@ -188,6 +198,7 @@ class AcceptanceTests(unittest.TestCase):
         save_record(self.root, record)
         return record
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_verify_persists_independent_task_bound_receipt(self):
         record = self.task()
         task_path = self.root / ".pocketchat" / "tasks" / (record.task_id + ".json")
@@ -204,6 +215,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertNotIn("plan", result)
         self.assertNotIn(str(self.root), json.dumps(result))
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_reverification_appends_without_rewriting_old_observations(self):
         record = self.task()
         plan = ac.parse_plan(plan_payload())
@@ -221,6 +233,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(history["state"], "passed")
         self.assertEqual(len(history["records"]), 2)
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_verify_uses_task_root_and_rejects_active_task(self):
         (self.root / "work").mkdir()
         (self.root / "work" / "report.md").write_bytes(b"in task root")
@@ -231,6 +244,7 @@ class AcceptanceTests(unittest.TestCase):
             ac.verify_task(self.root, active.task_id, ac.parse_plan(plan_payload()))
         self.assertFalse((self.root / ".pocketchat" / "acceptance" / active.task_id).exists())
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_history_is_recorded_evidence_not_fresh_file_check(self):
         record = self.task()
         (self.root / "report.md").write_bytes(b"original")
@@ -239,11 +253,13 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(ac.acceptance_history(self.root, record.task_id)["state"], "passed")
         self.assertEqual(ac.acceptance_history(self.root, record.task_id)["evidence_issues"], [])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_no_receipts_is_not_recorded_not_passed(self):
         record = self.task()
         self.assertEqual(ac.acceptance_history(self.root, record.task_id), {
             "state": "not_recorded", "records": [], "evidence_issues": []})
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_history_refuses_bad_identity_plan_hash_result_or_aggregate(self):
         record = self.task()
         (self.root / "report.md").write_bytes(b"report")
@@ -262,6 +278,7 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertEqual(history["records"], [])
                 self.assertTrue(history["evidence_issues"])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_history_names_corrupt_or_mismatched_task_evidence(self):
         record = self.task()
         result = ac.verify_task(self.root, record.task_id, ac.parse_plan(plan_payload()))
@@ -276,6 +293,7 @@ class AcceptanceTests(unittest.TestCase):
         task_path.write_text(json.dumps(data), encoding="utf-8")
         self.assertEqual(ac.acceptance_history(self.root, record.task_id)["state"], "refused")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_receipt_storage_rejects_symlinks(self):
         record = self.task()
         outside = self.root / "elsewhere"
@@ -286,6 +304,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(list(outside.iterdir()), [])
         self.assertEqual(ac.acceptance_history(self.root, record.task_id)["state"], "refused")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_history_refuses_untyped_result_reason_instead_of_crashing(self):
         record = self.task()
         result = ac.verify_task(self.root, record.task_id, ac.parse_plan(plan_payload()))
@@ -295,6 +314,7 @@ class AcceptanceTests(unittest.TestCase):
         path.write_text(json.dumps(value), encoding="utf-8")
         self.assertEqual(ac.acceptance_history(self.root, record.task_id)["state"], "refused")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_history_cannot_claim_order_for_conflicting_same_time_receipts(self):
         record = self.task()
         plan = ac.parse_plan(plan_payload())
@@ -306,12 +326,14 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual(history["state"], "unknown")
         self.assertEqual(history["evidence_issues"][0]["reason"], "ambiguous_record_order")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_verify_reads_task_from_bounded_snapshot_not_unbounded_path_read(self):
         record = self.task()
         with patch("pocketchat.tasking.Path.read_text", side_effect=AssertionError("unbounded task read")):
             result = ac.verify_task(self.root, record.task_id, ac.parse_plan(plan_payload()))
         self.assertEqual(result["state"], "failed")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_plan_and_artifact_json_nesting_is_bounded(self):
         value = None
         for _ in range(66):
@@ -324,6 +346,7 @@ class AcceptanceTests(unittest.TestCase):
                                 "pointer": "", "expected": None})
         self.assertEqual(result["state"], "failed")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_history_orders_offset_timestamps_by_actual_time(self):
         record = self.task()
         plan = ac.parse_plan(plan_payload())
@@ -338,6 +361,7 @@ class AcceptanceTests(unittest.TestCase):
         self.assertEqual([r["acceptance_id"] for r in history["records"]],
                          [first["acceptance_id"], second["acceptance_id"]])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_equivalent_instant_offsets_do_not_invent_an_order(self):
         record = self.task()
         plan = ac.parse_plan(plan_payload())

@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests import _helpers as hp
+
 from pocketchat import acceptance as ac
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +68,7 @@ class AcceptanceContractTests(unittest.TestCase):
         self.assertEqual({check["kind"] for check in plan.checks},
                          {"file_exists", "text_contains", "json_equals"})
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_demo_is_offline_and_preserves_four_evidence_paths(self):
         path = ROOT / "examples" / "task-acceptance" / "demo.py"
         self.assertTrue(path.is_file(), "acceptance demo is not implemented")

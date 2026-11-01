@@ -250,7 +250,7 @@ class DoctorTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, "-m", "pocketchat", "doctor", "--config",
              str(self.config), "--json"],
-            cwd=str(self.base), env=environ, capture_output=True, text=True,
+            cwd=str(self.base), env=hp.subprocess_environment(environ), capture_output=True, text=True,
             timeout=120,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

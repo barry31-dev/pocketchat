@@ -112,7 +112,7 @@ class WorkspaceTestBase(unittest.TestCase):
                    "POCKETCHAT_HOSTED_KEY": "test-key-not-real"}
         return subprocess.run(
             [sys.executable, "-m", "pocketchat"] + list(args),
-            cwd=str(self.base), env=environ, capture_output=True, text=True,
+            cwd=str(self.base), env=hp.subprocess_environment(environ), capture_output=True, text=True,
             timeout=120,
         )
 

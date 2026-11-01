@@ -121,6 +121,19 @@ def _is_a_guard(path):
         "for marker in" in text and "assertNotIn(marker" in text)
 
 
+class WorkflowPortabilityTests(unittest.TestCase):
+    def test_steps_using_bash_output_files_declare_bash(self):
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8")
+        for name in ("Record the runtime under test", "Write the job summary"):
+            with self.subTest(step=name):
+                block = workflow.split("      - name: " + name, 1)[1]
+                block = block.split("\n      - name: ", 1)[0]
+                self.assertIn(
+                    "shell: bash", block,
+                    name + " uses Bash output-file syntax but has no Bash shell")
+
+
 class SourceTreeTests(unittest.TestCase):
     def test_no_source_or_test_reads_the_control_repository(self):
         """No module may depend on the control repository's directories."""
@@ -141,15 +154,15 @@ class SourceTreeTests(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_the_package_root_carries_its_own_contributor_rules(self):
-        """A public repo needs its own rules file, not a link to AGENTS.md above."""
+        """A public repo needs its own contributor rules."""
         self.assertTrue((ROOT / "AGENTS.md").is_file(),
-                        "the package root has no AGENTS.md; a public "
+                        "the package root has no contributor rules; a public "
                         "contributor has no rules to read")
 
     def test_the_package_root_rules_name_the_product_queue_not_the_control_one(self):
         rules = ROOT / "AGENTS.md"
         if not rules.is_file():
-            self.skipTest("no package AGENTS.md yet")
+            self.skipTest("no package contributor rules yet")
         text = rules.read_text(encoding="utf-8")
         self.assertNotIn(PRIVATE_SLICE_QUEUE, text)
         self.assertNotIn(CONTROL_SYSTEM, text)

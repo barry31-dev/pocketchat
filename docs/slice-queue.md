@@ -34,7 +34,7 @@ product slice.
 
 | ID | State | Depends on | Done when | Evidence |
 |---|---|---|---|---|
-| `SLICE-PREP-1` | `in_progress` | — | Package can be maintained from this repository alone: process docs name a product-reachable slice location, package-level rules exist, and no doc or module depends on a private path | this file; `tests/test_package_independence.py`; `AGENTS.md` |
+| `SLICE-PREP-1` | `in_progress` | — | Package can be maintained from this repository alone: process docs name a product-reachable slice location, package-level rules exist, and no doc or module depends on a private path | this file; `tests/test_package_independence.py`; [package rules](../AGENTS.md) |
 | `SLICE-PREP-2` | `queued` | `SLICE-PREP-1` | Independent build, install and CI evidence recorded for the current candidate | `docs/release-ledger.md` §3 |
 
 Cancelled and delivered rows are moved to

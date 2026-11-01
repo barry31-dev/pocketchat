@@ -104,6 +104,10 @@ def trace_status_facts(trace_path: Path,
     return facts
 
 
+class TUIUnavailable(RuntimeError):
+    """The optional full-screen renderer is unavailable on this platform."""
+
+
 @dataclass
 class AgentTUI:
     state: AgentState
@@ -735,7 +739,12 @@ def run_tui(state, profiles, models, *, config=None, workspace=None,
     tests work without a terminal, while a piped invocation never pays for or
     depends on curses. The fallback to the line REPL lives in the caller.
     """
-    from .curses_ui import run_curses
+    try:
+        from .curses_ui import run_curses
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"curses", "_curses"}:
+            raise
+        raise TUIUnavailable("the full-screen UI requires curses") from exc
 
     controller = AgentTUI(
         state=state,

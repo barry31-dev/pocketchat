@@ -227,14 +227,17 @@ become user turns or trace events.
 pocketchat
 ```
 
-Bare `pocketchat` enters the interactive agent. On a terminal it opens a
-full-screen interface with a compact intro, compact message gutters
-and separators, a persistent status rule, scrolling conversation, input
+Bare `pocketchat` enters the interactive agent. On a terminal with the
+standard-library curses module it opens a full-screen interface with a compact
+intro, compact message gutters and separators, a persistent status rule, scrolling conversation, input
 history and slash-command completion. `Enter` sends,
 `Ctrl+J` inserts a newline, `Up`/`Down` recall history, `Ctrl+T`
 expands or collapses reasoning, `PgUp`/`PgDn` move through transcript
 history, `Ctrl+C` interrupts an in-flight reply and `Ctrl+D` exits. Type `/` to select a command with Up/Down and Tab; Enter first completes a
-partial command, then executes the completed command. Type `/model` with no
+partial command, then executes the completed command. On platforms whose
+standard library does not provide curses (including standard Windows Python),
+the same command falls back to the line interface instead of importing a
+third-party renderer. Type `/model` with no
 profile to choose from the profile picker. While a turn runs, the interface shows a
 live `thinking...` line, elapsed seconds, reasoning deltas and assistant text
 as they arrive. After a turn, the status rule reads the trace and shows reported

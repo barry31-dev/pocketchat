@@ -45,7 +45,7 @@ def _cli_subprocess(args, cwd, env=None):
         environ.update(env)
     return subprocess.run(
         [sys.executable, "-m", "pocketchat"] + args,
-        cwd=str(cwd), env=environ, capture_output=True, text=True, timeout=120,
+        cwd=str(cwd), env=hp.subprocess_environment(environ), capture_output=True, text=True, timeout=120,
     )
 
 
@@ -585,7 +585,7 @@ class ProfileRunTests(unittest.TestCase):
         proc = subprocess.Popen(
             [sys.executable, "-m", "pocketchat", "chat", "--quiet",
              "--config", str(self.config), "--profile", "hosted"],
-            cwd=str(self.base), env=environ, stdin=subprocess.PIPE,
+            cwd=str(self.base), env=hp.subprocess_environment(environ), stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         out, err = proc.communicate("hello\n/exit\n", timeout=120)
         self.assertEqual(proc.returncode, 0, out + err)
@@ -593,7 +593,7 @@ class ProfileRunTests(unittest.TestCase):
         events = self._trace()
         self.assertEqual(events[0]["payload"]["config_summary"]["profile"], "hosted")
 
-    @unittest.skipIf(pty is None, "requires a POSIX pty")
+    @unittest.skipUnless(os.name == "posix" and pty is not None, "requires a POSIX pty")
     def test_an_interrupted_chat_on_a_profile_ends_the_run(self):
         # The single-exit contract is a property of the run, not of the
         # profile: a run cancelled mid-turn still gets its terminal event.
@@ -607,7 +607,7 @@ class ProfileRunTests(unittest.TestCase):
         proc = subprocess.Popen(
             [sys.executable, "-m", "pocketchat", "chat", "--quiet",
              "--config", str(self.config), "--profile", "hosted"],
-            cwd=str(self.base), env=environ, stdin=secondary, stdout=secondary,
+            cwd=str(self.base), env=hp.subprocess_environment(environ), stdin=secondary, stdout=secondary,
             stderr=secondary, close_fds=True)
         os.close(secondary)
         os.set_blocking(primary, False)

@@ -633,7 +633,7 @@ class ComparisonCliTests(unittest.TestCase):
         return subprocess.run(
             [sys.executable, "-m", "pocketchat", "compare", "hello",
              "--config", str(self.config_path)] + list(extra),
-            cwd=str(self.workspace), env=environ, capture_output=True, text=True,
+            cwd=str(self.workspace), env=hp.subprocess_environment(environ), capture_output=True, text=True,
             timeout=120,
         )
 

@@ -39,7 +39,12 @@ class RecoveryError(ValueError):
 
 
 def _relative(path: Path, root: Path) -> str:
-    return os.path.relpath(str(Path(path).resolve()), str(Path(root).resolve()))
+    path = Path(path).resolve()
+    root = Path(root).resolve()
+    try:
+        return Path(os.path.relpath(str(path), str(root))).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _absolute(value: str, root: Path) -> Path:

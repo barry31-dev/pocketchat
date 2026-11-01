@@ -43,7 +43,7 @@ from .recovery import (RecoveryError, create_checkpoint, rewind_to_checkpoint,
 from .replay import ReplayError, replay_snapshots
 from .selection import SelectionError, record_selection
 from .repl import echo_reply, goodbye, read_lines
-from .tui import run_tui
+from .tui import TUIUnavailable, run_tui
 from .tools import (ToolError, ToolPermissionError, execute_read_file,
                     execute_write_file)
 from .service import (context_preview, export_record, export_session,
@@ -755,8 +755,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     return EXIT_USAGE
 
 
-def _json_path(value: Path) -> str:
-    return os.path.relpath(str(Path(value)), str(Path.cwd()))
+def _json_path(value: Path, start: Path = None) -> str:
+    value = Path(value)
+    start = Path.cwd() if start is None else Path(start)
+    try:
+        return Path(os.path.relpath(str(value), str(start))).as_posix()
+    except ValueError:
+        return value.as_posix()
 
 
 def _print_json_error(code: str, message: str) -> None:
@@ -944,7 +949,7 @@ def _task_trace_evidence(
     matched_run_ids = set()
     traces = root / "traces"
     for path in sorted(traces.glob("*.jsonl")) if traces.is_dir() else []:
-        relative = _json_path(path)
+        relative = _json_path(path, root)
         file_run_ids = set()
         try:
             with path.open("r", encoding="utf-8") as handle:
@@ -2093,14 +2098,20 @@ def _cmd_agent(args: argparse.Namespace) -> int:
 
     interactive = bool(getattr(sys.stdin, "isatty", lambda: False)())
     if interactive:
-        return run_tui(
-            state,
-            profiles,
-            models,
-            config=root_config,
-            workspace=Path.cwd(),
-            verbose=args.verbose,
-        )
+        try:
+            return run_tui(
+                state,
+                profiles,
+                models,
+                config=root_config,
+                workspace=Path.cwd(),
+                verbose=args.verbose,
+            )
+        except TUIUnavailable:
+            # Windows' standard library does not ship curses. Keep the agent
+            # usable and explicit by falling back to the same line interface
+            # used for piped input, rather than crashing during import.
+            pass
 
     print("PocketChat agent. Commands: /model /session /reasoning /context /status /exit")
     print(state.status_line())

@@ -410,8 +410,8 @@ class SnapshotRunTests(unittest.TestCase):
             [sys.executable, "-m", "pocketchat", "run", "hi", "--quiet",
              "--config", str(self.config)] + list(args),
             cwd=str(self.base),
-            env={"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
-                 "POCKETCHAT_LOCAL_KEY": "local-fake"},
+            env=hp.subprocess_environment({"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
+                 "POCKETCHAT_LOCAL_KEY": "local-fake"}),
             capture_output=True, text=True, timeout=120)
 
     def test_the_cli_runs_end_to_end_as_a_subprocess(self):
@@ -426,8 +426,8 @@ class SnapshotRunTests(unittest.TestCase):
             [sys.executable, "-m", "pocketchat", "replay", str(snapshots[0]),
              "--dry-run"],
             cwd=str(self.base),
-            env={"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
-                 "POCKETCHAT_LOCAL_KEY": "local-fake"},
+            env=hp.subprocess_environment({"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
+                 "POCKETCHAT_LOCAL_KEY": "local-fake"}),
             capture_output=True, text=True, timeout=120)
         self.assertEqual(replayed.returncode, 0,
                          replayed.stdout + replayed.stderr)

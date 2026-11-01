@@ -44,6 +44,7 @@ class TaskAcceptanceRunTests(unittest.TestCase):
             session_path=self.root / "sessions" / "task.jsonl",
             prompts=["write a report"], acceptance=acceptance)
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_opt_in_run_passes_on_tool_created_artifact(self):
         adapter = FakeTaskAdapter([
             model_tool("write", "write_file", {"path": "report.md", "content": "## Findings\nready"}),
@@ -59,6 +60,7 @@ class TaskAcceptanceRunTests(unittest.TestCase):
         self.assertEqual(events[-1]["payload"]["task_state"], "completed")
         self.assertTrue((self.root / result.acceptance["record"]).is_file())
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_completed_model_answer_does_not_pass_a_missing_artifact(self):
         result = self.execute(FakeTaskAdapter([final_response()]), parse_plan(plan_payload()))
         self.assertEqual(result.status, "completed")
@@ -130,6 +132,7 @@ class CommandEvidenceAcceptanceTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(record), encoding="utf-8")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_existing_command_evidence_is_accepted_without_execution(self):
         from pocketchat.task_command import parse_command_templates, run_command_template
         template = parse_command_templates([{
@@ -155,6 +158,7 @@ class CommandEvidenceAcceptanceTests(unittest.TestCase):
         self.assertEqual("passed", receipt["state"])
         self.assertEqual(before, archive.read_bytes())
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_failed_command_is_acceptance_failed_not_passed(self):
         from pocketchat.task_command import parse_command_templates, run_command_template
         template = parse_command_templates([{
@@ -185,6 +189,7 @@ class CommandEvidenceAcceptanceTests(unittest.TestCase):
         self.assertIn("command_succeeded", __import__(
             "pocketchat.acceptance", fromlist=["CHECK_KINDS"]).CHECK_KINDS)
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_unattached_or_tampered_command_cannot_pass(self):
         from pocketchat.acceptance import verify_task
         self._report({"template_id": "missing", "trace": "traces/missing.jsonl"})
@@ -221,9 +226,9 @@ class TaskAcceptanceCliTests(unittest.TestCase):
 
     def cli(self, args, *, process=False):
         if process:
-            env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]))
+            env = {"PYTHONPATH": str(Path(__file__).resolve().parents[1])}
             return subprocess.run([sys.executable, "-m", "pocketchat", *args], cwd=self.root,
-                                  env=env, capture_output=True, text=True, timeout=10)
+                                  env=hp.subprocess_environment(env), capture_output=True, text=True, timeout=10)
         return run_cli(args, self.root)
 
     def run_args(self, *, acceptance=True):
@@ -231,6 +236,7 @@ class TaskAcceptanceCliTests(unittest.TestCase):
                 "--config", "pocketchat.json", "--json"]
         return args + (["--acceptance", "acceptance.json"] if acceptance else [])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_real_process_run_then_verify_then_report(self):
         (self.root / "report.md").write_bytes(b"report")
         proc = self.cli(self.run_args(), process=True)
@@ -253,6 +259,7 @@ class TaskAcceptanceCliTests(unittest.TestCase):
         self.assertEqual(json.loads(report.stdout)["acceptance"]["state"], "passed")
         self.assertEqual(len(json.loads(report.stdout)["acceptance"]["records"]), 2)
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_acceptance_failed_run_is_exit_one_but_execution_stays_completed(self):
         proc = self.cli(self.run_args(), process=True)
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
@@ -274,6 +281,7 @@ class TaskAcceptanceCliTests(unittest.TestCase):
         self.assertFalse((self.root / ".pocketchat" / "tasks").exists())
         self.assertFalse((self.root / "traces").exists())
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_legacy_run_and_report_do_not_invent_passed_acceptance(self):
         proc = self.cli(self.run_args(acceptance=False))
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -282,6 +290,7 @@ class TaskAcceptanceCliTests(unittest.TestCase):
         report = self.cli(["task", "report", payload["task_id"], "--json"])
         self.assertEqual(json.loads(report.stdout)["acceptance"]["state"], "not_recorded")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_verify_uses_no_provider_and_appends_failed_observation(self):
         (self.root / "report.md").write_bytes(b"report")
         first = json.loads(self.cli(self.run_args()).stdout)
@@ -300,6 +309,7 @@ class TaskAcceptanceCliTests(unittest.TestCase):
         self.assertEqual(proc.stderr, "")
         self.assertFalse(json.loads(proc.stdout)["ok"])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_report_does_not_recheck_artifacts_and_names_bad_receipts(self):
         (self.root / "report.md").write_bytes(b"report")
         payload = json.loads(self.cli(self.run_args()).stdout)
@@ -313,6 +323,7 @@ class TaskAcceptanceCliTests(unittest.TestCase):
         self.assertEqual(value["acceptance"]["state"], "refused")
         self.assertTrue(value["acceptance"]["evidence_issues"])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_human_output_distinguishes_execution_and_acceptance(self):
         args = self.run_args()
         args.remove("--json")

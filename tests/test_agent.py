@@ -111,8 +111,8 @@ class AgentCommandTests(unittest.TestCase):
         empty.mkdir()
         result = hp.run_cli(
             [], empty,
-            env={"HOME": str(home), "LOCAL_KEY": "local-fake",
-                 "HOSTED_KEY": "hosted-fake"},
+            env={"HOME": str(home), "USERPROFILE": str(home),
+                 "LOCAL_KEY": "local-fake", "HOSTED_KEY": "hosted-fake"},
             stdin="/status\n/exit\n",
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -138,6 +138,24 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(calls[0][0].profile, "local")
         self.assertIn("local", calls[0][1])
         self.assertIn("hosted", calls[0][1])
+
+    def test_terminal_falls_back_to_line_agent_when_tui_is_unavailable(self):
+        from pocketchat import cli as cli_module
+
+        unavailable = getattr(cli_module, "TUIUnavailable", RuntimeError)
+        with unittest.mock.patch.object(
+                cli_module, "run_tui", side_effect=unavailable("no curses")):
+            result = hp.run_cli(
+                ["--config", str(self.config)],
+                self.base,
+                env={"LOCAL_KEY": "local-fake",
+                     "HOSTED_KEY": "hosted-fake"},
+                stdin="/status\n/exit\n",
+                stdin_isatty=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("PocketChat agent.", result.stdout)
+        self.assertIn("profile=local", result.stdout)
 
     def test_piped_agent_input_keeps_the_line_repl(self):
         result = hp.run_cli(
@@ -390,6 +408,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertFalse(tui.busy)
         self.assertEqual(tui.transcript, [("you", "hello")])
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_runs_on_a_real_terminal(self):
         import os as _os
         import pty
@@ -412,7 +431,7 @@ class AgentCommandTests(unittest.TestCase):
             stdin=slave,
             stdout=slave,
             stderr=slave,
-            env=env,
+            env=hp.subprocess_environment(env),
             close_fds=True,
         )
         _os.close(slave)
@@ -435,6 +454,7 @@ class AgentCommandTests(unittest.TestCase):
                 proc.wait(timeout=5)
             _os.close(master)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_key_handlers_apply_the_model_picker_and_command_completion(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -457,6 +477,7 @@ class AgentCommandTests(unittest.TestCase):
         apply_key(tui, state, "\n")
         self.assertEqual(tui.state.profile, "local")
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_history_navigation_restores_previous_input(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -474,6 +495,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(state.text, "first")
         self.assertEqual(state.cursor, 5)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_escape_closes_the_model_picker(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -604,6 +626,7 @@ class AgentCommandTests(unittest.TestCase):
         tui.open_model_picker()
         self.assertEqual(tui.picker_index, 1)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_ctrl_d_is_an_exit_even_when_curses_reports_an_error(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -615,6 +638,7 @@ class AgentCommandTests(unittest.TestCase):
         )
         self.assertEqual(apply_key(tui, InputState(), "\x04"), "exit")
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_key_reader_does_not_lose_ctrl_d_behind_nodelay_errors(self):
         from pocketchat.curses_ui import read_key
         import curses
@@ -652,6 +676,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertIn("p00", lines[-1])
         self.assertLessEqual(len(lines), 18)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_enter_sends_and_ctrl_j_inserts_a_newline(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -669,6 +694,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(apply_key(tui, state, "\n"), "send")
         self.assertEqual(state.text, "")
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_key_reader_parses_raw_arrow_sequences(self):
         from pocketchat.curses_ui import read_key
         import curses
@@ -688,6 +714,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(read_key(Window([27, 91, 68])), curses.KEY_LEFT)
         self.assertEqual(read_key(Window([27, 91, 67])), curses.KEY_RIGHT)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_idle_ctrl_c_exits_without_a_traceback(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -699,6 +726,7 @@ class AgentCommandTests(unittest.TestCase):
         )
         self.assertEqual(apply_key(tui, InputState(), "\x03"), "exit")
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_busy_ctrl_c_cancels_without_exiting(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -884,6 +912,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertIn("visible now", after)
         self.assertIn("thinking...", after)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_loop_refreshes_while_busy_even_without_a_key(self):
         from pocketchat.curses_ui import run_loop_for_test
         from pocketchat.tui import AgentTUI
@@ -992,6 +1021,7 @@ class AgentCommandTests(unittest.TestCase):
         text = "\n".join(compose_screen(tui, input_text="", width=80, height=20))
         self.assertIn("thought through the answer", text)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_real_terminal_enter_sends_but_raw_ctrl_j_does_not(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -1010,6 +1040,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(apply_key(tui, state, 10), "continue")
         self.assertEqual(state.text, "line one\n")
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_exit_command_returns_exit_from_the_key_path(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -1042,6 +1073,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(text.count("you>"), 0)
         self.assertEqual(text.count("第三段"), 1)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_reasoning_is_collapsed_until_ctrl_t(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI, compose_screen
@@ -1119,6 +1151,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertIn("Switch model", text)
         self.assertIn("/session", text)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_transcript_can_scroll_with_page_keys(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI, compose_screen
@@ -1274,6 +1307,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertIn("cost ?", status)
         self.assertIn("ttft ?", status)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tui_new_message_returns_the_view_to_the_latest_turn(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -1394,6 +1428,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertIn("Switch model", menu)
         self.assertNotIn("❯ /session", menu)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_command_menu_up_down_cycles_selection(self):
         import curses
         from pocketchat.curses_ui import InputState, apply_key
@@ -1412,6 +1447,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertIn("❯ /model", "\n".join(compose_screen(
             tui, input_text=state.text, width=72, height=24)))
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_tab_applies_the_selected_command(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -1426,6 +1462,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(state.text, "/model")
         self.assertEqual(state.cursor, len("/model"))
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_enter_accepts_partial_command_before_executing(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -1443,6 +1480,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(apply_key(tui, state, "\n"), "continue")
         self.assertTrue(tui.picker_open)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_enter_submits_a_complete_command_without_accepting_a_menu(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -1457,6 +1495,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(apply_key(tui, state, "\n"), "continue")
         self.assertTrue(tui.picker_open)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
     def test_escape_cancels_the_command_menu(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI

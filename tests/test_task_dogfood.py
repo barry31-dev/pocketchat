@@ -10,6 +10,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests import _helpers as hp
+
 from pocketchat.task_command import load_command_evidence
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +22,8 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+@unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                     "requires secure descriptor-relative reads")
 class DogfoodDemoTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

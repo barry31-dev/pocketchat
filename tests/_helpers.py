@@ -23,6 +23,36 @@ from http.server import HTTPServer
 from pocketchat.cli import main as _cli_main
 
 
+_WINDOWS_BOOTSTRAP_KEYS = (
+    "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP",
+)
+SECURE_DESCRIPTOR_READS = (
+    os.open in os.supports_dir_fd and hasattr(os, "O_NOFOLLOW")
+)
+
+
+def subprocess_environment(overrides=None):
+    """Build an isolated child environment without breaking Windows Python.
+
+    Tests must not inherit credentials or arbitrary user configuration. Python
+    on Windows still needs a small OS bootstrap (notably SystemRoot) before it
+    can initialize randomness and system DLL lookups, so those names are copied
+    deliberately and every other value must be supplied by the caller.
+    """
+    environment = {}
+    if os.name == "nt":
+        for key in _WINDOWS_BOOTSTRAP_KEYS:
+            value = os.environ.get(key)
+            if value:
+                environment[key] = value
+    for key, value in (overrides or {}).items():
+        if value is None:
+            environment.pop(key, None)
+        else:
+            environment[key] = str(value)
+    return environment
+
+
 class StubHTTPServer:
     """A local stub provider with a bounded, deterministic shutdown.
 

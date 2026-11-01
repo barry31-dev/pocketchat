@@ -94,7 +94,7 @@ class ToolCallTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        (self.root / "facts.txt").write_text("the answer\n", encoding="utf-8")
+        (self.root / "facts.txt").write_bytes(b"the answer\n")
 
     def config(self, adapter):
         return {

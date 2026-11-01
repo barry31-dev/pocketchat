@@ -304,10 +304,10 @@ def _expanded_context_messages(records: Iterable[Dict[str, Any]],
 
 def _relative_to(path: Path, start: Path) -> str:
     try:
-        return os.path.relpath(str(path), str(start))
+        return Path(os.path.relpath(str(path), str(start))).as_posix()
     except ValueError:
-        # Different drives on Windows. The bare name is still the honest answer.
-        return path.name
+        # Different drives on Windows: keep the actual absolute reference.
+        return Path(path).as_posix()
 
 
 def create_branch(path: Path, run_id: str, trace_path: Path, version: str,

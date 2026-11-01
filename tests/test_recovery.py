@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+from tests import _helpers as hp
 from unittest import mock
 
 from pocketchat import recovery
@@ -145,11 +147,11 @@ class RewindTests(RecoveryFixture):
 
     def test_recovery_cli_round_trip_runs_in_a_real_subprocess(self):
         package_root = Path(__file__).resolve().parents[1]
-        env = dict(os.environ, PYTHONPATH=str(package_root))
+        env = {"PYTHONPATH": str(package_root)}
         checkpoint = subprocess.run(
             [sys.executable, "-m", "pocketchat", "checkpoint", "notes",
              "--at", "turn_000002", "--id", "cp_cli", "--json"],
-            cwd=str(self.root), env=env, capture_output=True, text=True,
+            cwd=str(self.root), env=hp.subprocess_environment(env), capture_output=True, text=True,
             check=False)
         self.assertEqual(checkpoint.returncode, 0,
                          checkpoint.stdout + checkpoint.stderr)
@@ -157,7 +159,7 @@ class RewindTests(RecoveryFixture):
         rewind = subprocess.run(
             [sys.executable, "-m", "pocketchat", "rewind", "cp_cli",
              "--name", "child-cli", "--json"],
-            cwd=str(self.root), env=env, capture_output=True, text=True,
+            cwd=str(self.root), env=hp.subprocess_environment(env), capture_output=True, text=True,
             check=False)
         self.assertEqual(rewind.returncode, 0, rewind.stdout + rewind.stderr)
         payload = json.loads(rewind.stdout)

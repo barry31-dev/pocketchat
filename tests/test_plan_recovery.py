@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+
+from tests import _helpers as hp
 from unittest.mock import Mock
 
 from pocketchat.agent import run_task
@@ -103,6 +105,7 @@ class PlanRecoveryTests(unittest.TestCase):
         edit(payload)
         report.write_text(json.dumps(payload), encoding="utf-8")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_resume_completes_remaining_steps_without_repeating_side_effects(self):
         report, sha, initial = self.boundary()
         kept = [report, self.root / "report.md", self.root / "count.txt",
@@ -131,6 +134,7 @@ class PlanRecoveryTests(unittest.TestCase):
         self.assertEqual(1, self.runner.call_count)
         self.assertEqual(4, len(self.adapter.calls))
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_multiple_boundaries_preserve_original_evidence(self):
         report, sha, _ = self.boundary(1)
         self.assertEqual(0, self.runner.call_count)
@@ -274,6 +278,7 @@ class PlanRecoveryTests(unittest.TestCase):
             path.write_bytes(before)
             report.write_bytes(original)
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_repeated_noop_resume_does_not_create_reports_or_duplicate_commands(self):
         report, sha, results = self.boundary()
         self.resume(report, sha)
@@ -286,6 +291,7 @@ class PlanRecoveryTests(unittest.TestCase):
         self.assertEqual(1, len(summary["commands"]))
         self.assertEqual(3, len(summary["execution_steps"]))
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_command_acceptance_uses_the_recovered_result_not_the_old_boundary(self):
         from pocketchat.acceptance import evaluate_plan, parse_plan as acceptance_plan
         report, _, _ = self.boundary(1)
@@ -302,6 +308,7 @@ class PlanRecoveryTests(unittest.TestCase):
         self.assertEqual("passed", result["state"], result)
         self.assertEqual(1, self.runner.call_count)
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_custom_trace_directory_recovers_and_keeps_command_archive(self):
         custom = self.root / "custom-traces"
         self.execute(stop_after=2, trace_dir=custom)
@@ -316,6 +323,7 @@ class PlanRecoveryTests(unittest.TestCase):
         report, sha, _ = self.boundary()
         self.refuse(report, sha, trace_dir=self.root / "sessions/../traces")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
     def test_empty_oversized_or_nonregular_reports_refuse(self):
         import os
         report, _, _ = self.boundary()
