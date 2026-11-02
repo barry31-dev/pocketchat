@@ -342,7 +342,8 @@ class ComparisonKernelTests(unittest.TestCase):
         # a terminal event rather than left open.
         from pocketchat.provider import DEFAULT_PROVIDER_ADAPTER
 
-        def interrupt(context, config, api_key):
+        def interrupt(context, config, api_key, on_delta=None,
+                      prepared_payload=None):
             raise KeyboardInterrupt
 
         original = DEFAULT_PROVIDER_ADAPTER.complete
