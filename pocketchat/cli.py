@@ -1248,10 +1248,17 @@ def _cmd_task(args: argparse.Namespace) -> int:
                 if adapter is None:
                     from .provider import DEFAULT_PROVIDER_ADAPTER
                     adapter = DEFAULT_PROVIDER_ADAPTER
+                task_budget = None
+                if spec.source["budgets"].get("max_task_tokens") is not None:
+                    from .task_budget import TaskBudget
+                    task_budget = TaskBudget(
+                        limit_tokens=int(
+                            spec.source["budgets"]["max_task_tokens"]))
                 generation = generate_task_plan(
                     spec, adapter, selected,
                     requests_dir=requests_dir, run_id=args.run_id,
-                    api_key=api_key, out_path=out_path)
+                    api_key=api_key, out_path=out_path,
+                    task_budget=task_budget)
                 digest = generation.plan_sha256
                 relative_plan = Path(generation.plan_file).relative_to(Path.cwd()).as_posix()
                 relative_preview = Path(generation.plan_snapshot).relative_to(Path.cwd()).as_posix()

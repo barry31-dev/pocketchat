@@ -20,6 +20,7 @@ from .provider import ProviderError
 from .request import (CredentialInRequestError, canonical_bytes,
                       contains_credential, write_request_snapshot)
 from .request_admission import AdmissionError, admit_for_config
+from .task_budget import TaskBudgetError
 from .task_spec import TaskSpec
 from .trace import utc_now
 
@@ -491,7 +492,8 @@ def _write_plan_snapshot(path: Path, plan: TaskPlan, attempts: int,
 def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
                   *, requests_dir: Path, run_id: str,
                   api_key: Optional[str] = None,
-                  out_path: Optional[Path] = None) -> PlanGeneration:
+                  out_path: Optional[Path] = None,
+                  task_budget=None) -> PlanGeneration:
     """Generate a plan with at most one revision after a parse failure.
 
     Provider errors are not revised or retried: there is no evidence that a
@@ -549,7 +551,16 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
             payload = adapter.build_payload(messages, config)
             if not isinstance(payload, dict):
                 raise TaskPlanError("provider built a non-object request payload")
-            admit_for_config(payload, config)
+            admitted = admit_for_config(payload, config)
+            if task_budget is not None:
+                try:
+                    task_budget.reserve(
+                        admitted["estimated_input_tokens"],
+                        request_id=f"{run_id}:plan:{attempt}")
+                except TaskBudgetError as exc:
+                    raise PlanGenerationError(
+                        str(exc), attempts=attempt - 1,
+                        error_type=exc.error_type)
             path = Path(requests_dir) / ("%s.attempt-%d.json" % (run_id, attempt))
             write_request_snapshot(path, run_id=run_id, profile=config.get("profile"),
                                    created=utc_now(), payload=payload,
@@ -559,6 +570,8 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
             raise PlanGenerationError(
                 "plan request exceeds the local budget: %s" % exc,
                 attempts=attempt - 1, error_type=exc.error_type)
+        except PlanGenerationError:
+            raise
         except CredentialInRequestError as exc:
             raise PlanGenerationError(
                 "plan request evidence was refused: %s" % exc,
@@ -570,6 +583,21 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
         try:
             response = adapter.complete(messages, config, api_key or "")
             raw = _response_text(response)
+            if task_budget is not None:
+                usage = response.get("usage") if isinstance(response, dict) else None
+                if not isinstance(usage, dict):
+                    usage = {}
+                try:
+                    task_budget.settle(
+                        f"{run_id}:plan:{attempt}",
+                        input_tokens=int(usage.get("input_tokens", 0)),
+                        output_tokens=int(usage.get("output_tokens", 0)),
+                        reported=bool(response.get("usage_reported", False))
+                        if isinstance(response, dict) else False)
+                except TaskBudgetError as exc:
+                    raise PlanGenerationError(
+                        str(exc), attempts=attempt,
+                        error_type=exc.error_type)
         except ProviderError as exc:
             raise PlanGenerationError(
                 "plan provider failed: %s" % exc.error_type, attempts=attempt,

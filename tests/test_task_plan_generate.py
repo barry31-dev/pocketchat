@@ -82,6 +82,36 @@ class PlanGenerateCliTests(unittest.TestCase):
         return json.dumps(plan_payload(spec_sha256(self.spec),
                                        revision=revision))
 
+    def test_plan_generation_does_not_copy_budgets_into_the_plan(self):
+        payload = minimal()
+        payload["budgets"] = {**payload["budgets"], "max_task_tokens": 6000}
+        self.spec_payload = payload
+        self.spec = parse_spec(payload)
+        self.spec_path.write_text(json.dumps(payload), encoding="utf-8")
+        adapter = StubAdapter([self.valid_plan()])
+        self.bind_adapter(adapter)
+        result = run_cli(self.args("--json"), self.root,
+                         env={"POCKETCHAT_API_KEY": "not-a-real-key"})
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        document = json.loads(result.stdout)["plan_document"]
+        self.assertNotIn("budgets", document)
+
+    def test_plan_generation_can_be_bounded_by_a_task_budget(self):
+        payload = minimal()
+        payload["budgets"] = {**payload["budgets"], "max_task_tokens": 1}
+        self.spec_payload = payload
+        self.spec = parse_spec(payload)
+        self.spec_path.write_text(json.dumps(payload), encoding="utf-8")
+        adapter = StubAdapter([self.valid_plan()])
+        self.bind_adapter(adapter)
+        result = run_cli(self.args("--json"), self.root,
+                         env={"POCKETCHAT_API_KEY": "not-a-real-key"})
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("task_budget_exceeded", payload["error"])
+        self.assertEqual(0, len(adapter.calls))
+        self.assertFalse((self.root / "traces/requests").exists())
+
     def test_generate_persists_a_plan_and_prints_the_exact_exec_digest(self):
         adapter = StubAdapter([self.valid_plan()])
         self.bind_adapter(adapter)

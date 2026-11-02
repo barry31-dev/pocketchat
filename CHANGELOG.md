@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Bound TaskPlan generation by the optional task budget. Plan attempts reserve
+  before their provider request and settle reported usage; an over-limit
+  attempt is refused before any request snapshot or provider call. Budgets
+  remain on the TaskSpec and are not copied into the generated TaskPlan. See
+  `pocketchat/task_plan.py`.
 - Wire the optional whole-task token budget into `task exec`. One ledger is
   created per authorized plan and shared by its steps; model requests reserve
   before sending and settle from reported usage. Missing usage remains unknown
