@@ -317,7 +317,7 @@ class AttemptTests(unittest.TestCase):
             api_key="", root=self.root)
         self.assertEqual("same_failure", details["outcome"])
         self.assertEqual(1, len(calls))
-        self.assertEqual("traces/check.retry-1.jsonl", str(calls[0][1]))
+        self.assertEqual(Path("traces") / "check.retry-1.jsonl", Path(calls[0][1]))
         self.assertTrue((self.root / ".pocketchat/task-repair/check.json").is_file())
 
     def test_model_output_is_not_persisted_after_success(self):
