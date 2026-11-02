@@ -86,8 +86,12 @@ does not authorize a tag, GitHub Release or package-index upload.
   `git diff --check` pass. These checks cover the candidate tree at the time
   the evidence was written.
 - CI: [run 41466053639](https://github.com/barry31-dev/pocketchat/actions/runs/41466053639)
-  completed successfully for the exact SHA. It contains six Linux/macOS/Windows
+  completed successfully for `ca3dcfc`. It contains six Linux/macOS/Windows
   matrix jobs for Python 3.9/3.13 plus the `pocketchat-release-smoke` job.
+- Documentation follow-up: [run 41472710840](https://github.com/barry31-dev/pocketchat/actions/runs/41472710840)
+  completed successfully for the final tree
+  `74cc2596e0d0efdd78873b1dde7cbccac6c6192e`. All six matrix jobs and
+  `pocketchat-release-smoke` passed; artifact id `13156860069` was uploaded.
 - Release smoke artifact: `pocketchat-release-smoke`, 224986 bytes, artifact
   id `13151077049`. The downloaded archive contains
   `pocketchat-1.1.0-py3-none-any.whl` (228024 bytes) and its JSON evidence.
@@ -98,10 +102,12 @@ does not authorize a tag, GitHub Release or package-index upload.
 - Publication: **not authorized for this candidate and not performed**. No tag,
   GitHub Release or package-index upload exists for `ca3dcfc`.
 - Review gap: fresh-context review attempts were started against the full
-  candidate and a bounded recent diff, but the local provider stream did not
-  return a final findings report. The attempt is **not** recorded as a passing
-  review. The project review ladder still requires that review before a
-  publication decision.
+  candidate and a bounded recent diff, but the local provider stream repeatedly
+  closed before `response.completed`; the final bounded attempt exhausted five
+  reconnects and exited 1 after reading the target files. The alternative
+  Claude reviewer was not authenticated. None of these attempts is recorded as
+  a passing review. The project review ladder still requires that review before
+  a publication decision.
 - Unverified: real provider behavior/quality and billing, isolated-build
   reproducibility at another machine, package-index reachability, and all
   artifacts outside the exact SHA/run/artifact IDs above.
