@@ -62,7 +62,10 @@ from .task_checkpoint import (CheckpointError, load_checkpoint,
                               parse_checkpoint, resume_from_checkpoint)
 from .task_delegate import (TaskDelegateError, authorize_delegation,
                             load_delegation_request)
-from .task_plan import TaskPlanError, load_plan as load_task_plan, plan_sha256
+from .task_plan import (PlanGenerationError, TaskPlanError,
+                        generate_plan as generate_task_plan,
+                        load_plan as load_task_plan, plan_sha256,
+                        spec_sha256)
 from .task_exec import TaskExecutionError, authorize, execute_plan
 from .task_command import CommandError as TaskCommandError, run_command_template
 from .task_policy import TaskPolicyError, load_policy
@@ -418,6 +421,20 @@ def _parser() -> argparse.ArgumentParser:
                               help="TaskSpec the plan must remain inside")
     plan_preview.add_argument("--json", action="store_true", dest="as_json",
                               help="print one machine-readable JSON object")
+    plan_generate = plan_subparsers.add_parser(
+        "generate", help="generate one validated TaskPlan without executing it")
+    plan_generate.add_argument("--spec", type=Path, required=True,
+                               help="TaskSpec JSON the plan must stay inside")
+    plan_generate.add_argument("--run-id", required=True,
+                               help="operator-visible generation id")
+    plan_generate.add_argument("--out", type=Path, default=None,
+                               help="new plain TaskPlan path (default: .pocketchat/task-plans/<run-id>.json)")
+    plan_generate.add_argument("--config", type=Path, default=None,
+                               help="configuration file (default: ./pocketchat.json)")
+    plan_generate.add_argument("--profile", default=None,
+                               help="profile name (default: config's default profile)")
+    plan_generate.add_argument("--json", action="store_true", dest="as_json",
+                               help="print one machine-readable JSON object")
 
     task_exec = task_subparsers.add_parser(
         "exec", help="execute an explicitly authorized TaskPlan")
@@ -1166,6 +1183,93 @@ def _cmd_task(args: argparse.Namespace) -> int:
         return EXIT_OK
 
     if args.task_command == "plan":
+        if args.plan_command == "generate":
+            try:
+                spec = load_spec(args.spec)
+                requests_dir = Path.cwd() / "traces" / "requests"
+                default_plan = (Path.cwd() / ".pocketchat" / "task-plans" /
+                                ("%s.json" % args.run_id))
+                out_path = args.out or default_plan
+                if not out_path.is_absolute():
+                    out_path = Path.cwd() / out_path
+                try:
+                    out_path.resolve().relative_to(Path.cwd().resolve())
+                except (OSError, ValueError) as exc:
+                    raise PlanGenerationError(
+                        "generated plan path escapes the workspace: %s" % exc,
+                        attempts=0, error_type="path_escape")
+                config = load_config(_config_path(args.config))
+                selected = profile_config(config, args.profile)
+                api_key = ""
+                if requires_api_key(selected):
+                    api_key = load_api_key(selected)
+                    if api_key is None:
+                        raise ConfigError(
+                            "%s is not set" % selected["api_key_env"])
+                adapter = selected.get("provider_adapter")
+                if adapter is None:
+                    from .provider import DEFAULT_PROVIDER_ADAPTER
+                    adapter = DEFAULT_PROVIDER_ADAPTER
+                generation = generate_task_plan(
+                    spec, adapter, selected,
+                    requests_dir=requests_dir, run_id=args.run_id,
+                    api_key=api_key, out_path=out_path)
+                digest = generation.plan_sha256
+                relative_plan = Path(generation.plan_file).relative_to(Path.cwd()).as_posix()
+                relative_preview = Path(generation.plan_snapshot).relative_to(Path.cwd()).as_posix()
+                request_paths = [path.relative_to(Path.cwd()).as_posix()
+                                 for path in generation.request_snapshots]
+            except ConfigError as exc:
+                if args.as_json:
+                    _print_json_error("task", str(exc))
+                else:
+                    print("pocketchat: %s" % exc, file=sys.stderr)
+                return EXIT_USAGE
+            except PlanGenerationError as exc:
+                payload = {"ok": False, "schema_version": "1",
+                           "error": exc.error_type, "message": str(exc),
+                           "attempts": exc.attempts}
+                if args.as_json:
+                    print(json.dumps(payload, sort_keys=True))
+                else:
+                    print("pocketchat: %s" % exc, file=sys.stderr)
+                run_errors = {
+                    "provider_failed", "plan_generation_failed",
+                    "plan_evidence_write_failed", "plan_write_failed",
+                    "snapshot_changed",
+                }
+                return (EXIT_RUN_FAILED if exc.error_type in run_errors
+                        else EXIT_USAGE)
+            except (TaskPlanError, TaskSpecError, TaskPolicyError,
+                    OSError, ValueError) as exc:
+                if args.as_json:
+                    _print_json_error("task", str(exc))
+                else:
+                    print("pocketchat: %s" % exc, file=sys.stderr)
+                return EXIT_USAGE
+            payload = {
+                "ok": True,
+                "schema_version": "1",
+                "status": "generated",
+                "run_id": args.run_id,
+                "attempts": generation.attempts,
+                "spec_sha256": spec_sha256(spec),
+                "plan_sha256": digest,
+                "plan": relative_plan,
+                "plan_document": generation.plan.source,
+                "plan_snapshot": generation.plan_snapshot.relative_to(Path.cwd()).as_posix(),
+                "preview_snapshot": relative_preview,
+                "request_snapshots": request_paths,
+            }
+            if args.as_json:
+                print(json.dumps(payload, sort_keys=True))
+            else:
+                print("TaskPlan generated  spec=%s  plan=%s"
+                      % (payload["spec_sha256"][:12], digest[:12]))
+                print("plan %s" % relative_plan)
+                print("steps %d  attempts %d"
+                      % (len(generation.plan.steps), generation.attempts))
+            return EXIT_OK
         try:
             spec = load_spec(args.spec)
             plan = load_task_plan(args.plan, spec=spec)

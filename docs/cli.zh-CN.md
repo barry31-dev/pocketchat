@@ -331,6 +331,21 @@ stderr 为空。
 /usr/bin/python3 examples/task-demo/demo.py
 ```
 
+### 未发布：有界 TaskPlan 生成
+
+`task plan generate` 把一份 TaskSpec 生成已验证但不可执行的计划：
+
+```bash
+pocketchat task plan generate --spec spec.json --run-id plan-review \
+  --config pocketchat.json --profile local --json
+```
+
+默认写入普通计划 `.pocketchat/task-plans/<run-id>.json`（也可用工作区相对的
+`--out` 指定新路径），并在 `traces/requests/` 写独占 plan snapshot。JSON 结果
+包含 `plan` 路径、精确 `plan_sha256`、`spec_sha256`、request snapshots 与
+attempt 数。生成不执行 step。provider 失败退出 1；非法输入或输出/快照已存在
+退出 2。详见 [task-plan.zh-CN.md](task-plan.zh-CN.md)。
+
 ### 未发布：已授权 TaskPlan 执行
 
 `task exec` 是产品 CLI 的完整执行入口：它接收操作者已审阅的 TaskSpec 与

@@ -44,17 +44,33 @@ pocketchat task plan preview plan.json --spec spec.json --json
 
 ## 有界生成
 
+不执行计划，只生成一份可审阅计划：
+
+```bash
+pocketchat task plan generate --spec spec.json --run-id plan-review \
+  --config pocketchat.json --profile local --json
+```
+
+默认把普通 TaskPlan 写到 `.pocketchat/task-plans/<run-id>.json`，也可用
+工作区相对的 `--out` 指定新路径。输出的 `plan` 是计划路径，`plan_sha256`
+可直接交给 `task exec`。计划本身不是执行授权；该命令不执行 step、不调用工具、
+不创建 session、task record 或验收回执。
+
 `generate_plan()` 接收 provider adapter、config 与显式 request 目录。调用
 `complete()` 之前，它先用独占创建记录每个请求正文的 request snapshot。合法计划
 只写入一次 plan snapshot，并携带自身 digest 与本次使用的 request snapshot 文件名；
-两类 snapshot 都不覆盖已有文件。
+两类 snapshot 都不覆盖已有文件。普通计划文件也独占创建，随后用同一 TaskSpec
+从磁盘回读校验，输出的 digest 由回读内容重新计算。
 
 只有非法计划获得一次修订。修订会对着同一份不可变 TaskSpec 重新解析，因此不能
 扩大路径、工具或 retry 上限，且必须声明 `revision: 1`。provider 失败不重试、
 不修订。最终没有合法计划时，不产生可执行计划，也不写 plan snapshot。
 
 测试只使用本地 stub adapter。本格不调用真实 provider，也不能据此声称计划在
-任意真实任务上都“好用”。
+任意真实任务上都“好用”。provider 失败退出 1；非法输入、输出/快照已存在、
+路径越界或生成契约拒绝退出 2。失败运行可能留下记录实际请求的 request snapshot，
+但不会留下普通计划或 plan snapshot。一次解析失败后成功会留下两份 request
+snapshot 与 revision-1 计划，且不会发送第三次请求。
 ## 命令 step
 
 只有 TaskSpec 声明了命令模板时，TaskPlan 才可使用 `run_command`。它的

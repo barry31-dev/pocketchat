@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add `task plan generate` as the product CLI path from one TaskSpec to a
+  validated TaskPlan. It uses the configured provider with at most one
+  revision, writes exclusive request/plan snapshots, persists a plain plan,
+  reads it back against the same TaskSpec, and prints the exact `plan_sha256`
+  accepted by `task exec`. It never executes a step. See `docs/task-plan.md`.
 - Add opt-in model-authored command repair. `task exec --repair-model`
   binds one model action to the authorized TaskSpec, TaskPlan and original
   template; the action may replace only an `overwrite_paths` file through the

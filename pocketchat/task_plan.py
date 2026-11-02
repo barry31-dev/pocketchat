@@ -45,9 +45,11 @@ class TaskPlanError(ValueError):
 class PlanGenerationError(TaskPlanError):
     """Plan generation failed before producing an executable plan."""
 
-    def __init__(self, message: str, *, attempts: int) -> None:
+    def __init__(self, message: str, *, attempts: int,
+                 error_type: str = "plan_generation_failed") -> None:
         super().__init__(message)
         self.attempts = attempts
+        self.error_type = error_type
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,7 @@ class PlanGeneration:
     plan_snapshot: Path
     plan_sha256: str
     request_snapshots: List[Path]
+    plan_file: Optional[Path] = None
 
 
 def _canonical_spec_bytes(spec: TaskSpec) -> bytes:
@@ -340,6 +343,28 @@ def load_plan(path: Path, *, spec: TaskSpec) -> TaskPlan:
     return parse_plan(payload, spec=spec)
 
 
+def write_plan(path: Path, plan: TaskPlan, *, spec: TaskSpec) -> str:
+    """Persist one plain TaskPlan once and verify the bytes that were read back."""
+    if not isinstance(plan, TaskPlan) or not isinstance(spec, TaskSpec):
+        raise TaskPlanError("plan persistence needs parsed TaskPlan and TaskSpec")
+    reparsed = parse_plan(plan.source, spec=spec)
+    digest = plan_sha256(reparsed)
+    if digest != plan_sha256(plan):
+        raise TaskPlanError("TaskPlan changed before persistence")
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    data = canonical_bytes(reparsed.source)
+    handle = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    with os.fdopen(handle, "wb") as stream:
+        stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+    loaded = load_plan(target, spec=spec)
+    if plan_sha256(loaded) != digest:
+        raise TaskPlanError("TaskPlan changed while it was persisted")
+    return digest
+
+
 def _actionable_action(spec: TaskSpec) -> Optional[str]:
     """Return one action that can name at least one valid input.
 
@@ -464,7 +489,8 @@ def _write_plan_snapshot(path: Path, plan: TaskPlan, attempts: int,
 
 def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
                   *, requests_dir: Path, run_id: str,
-                  api_key: Optional[str] = None) -> PlanGeneration:
+                  api_key: Optional[str] = None,
+                  out_path: Optional[Path] = None) -> PlanGeneration:
     """Generate a plan with at most one revision after a parse failure.
 
     Provider errors are not revised or retried: there is no evidence that a
@@ -481,7 +507,29 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
                                   attempts=0)
     if plan_snapshot_path(requests_dir, run_id).exists():
         raise PlanGenerationError("plan snapshot already exists for this run_id",
-                                  attempts=0)
+                                  attempts=0,
+                                  error_type="snapshot_exists")
+    if out_path is not None:
+        target = Path(out_path)
+        if target.exists():
+            raise PlanGenerationError(
+                "plain plan path already exists", attempts=0,
+                error_type="snapshot_exists")
+        snapshot_target = plan_snapshot_path(Path(requests_dir), run_id)
+        try:
+            requests_root = Path(requests_dir)
+            workspace = requests_root.resolve().parent.parent
+            target.resolve().relative_to(workspace)
+            if target.resolve() == snapshot_target.resolve():
+                raise PlanGenerationError(
+                    "plain plan path collides with its snapshot", attempts=0,
+                    error_type="path_escape")
+        except PlanGenerationError:
+            raise
+        except (OSError, ValueError):
+            raise PlanGenerationError(
+                "plain plan path escapes the workspace", attempts=0,
+                error_type="path_escape")
     if _actionable_action(spec) is None:
         raise PlanGenerationError("TaskSpec grants no action with a usable input",
                                   attempts=0)
@@ -507,17 +555,19 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
             snapshots.append(path)
         except CredentialInRequestError as exc:
             raise PlanGenerationError(
-                "plan request evidence was refused: %s" % exc, attempts=attempt)
+                "plan request evidence was refused: %s" % exc,
+                attempts=attempt, error_type="request_evidence_refused")
         except (OSError, ValueError) as exc:
             raise PlanGenerationError(
                 "plan request evidence could not be written: %s" % exc,
-                attempts=attempt)
+                attempts=attempt, error_type="request_evidence_write_failed")
         try:
             response = adapter.complete(messages, config, api_key or "")
             raw = _response_text(response)
         except ProviderError as exc:
             raise PlanGenerationError(
-                "plan provider failed: %s" % exc.error_type, attempts=attempt)
+                "plan provider failed: %s" % exc.error_type, attempts=attempt,
+                error_type="provider_failed")
         try:
             try:
                 draft = json.loads(raw)
@@ -535,12 +585,22 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
             except (OSError, CredentialInRequestError) as exc:
                 raise PlanGenerationError(
                     "plan evidence could not be written: %s" % exc,
-                    attempts=attempt)
+                    attempts=attempt, error_type="plan_evidence_write_failed")
             if verify_plan_snapshot(plan_path, spec=spec) != plan:
                 raise PlanGenerationError(
                     "plan snapshot changed before it could be returned",
-                    attempts=attempt)
-            return PlanGeneration(plan, attempt, plan_path, digest, snapshots)
+                    attempts=attempt, error_type="snapshot_changed")
+            plan_file = None
+            if out_path is not None:
+                try:
+                    plan_file = Path(out_path)
+                    write_plan(plan_file, plan, spec=spec)
+                except (OSError, TaskPlanError) as exc:
+                    raise PlanGenerationError(
+                        "plain plan file could not be written: %s" % exc,
+                        attempts=attempt, error_type="plan_write_failed")
+            return PlanGeneration(plan, attempt, plan_path, digest, snapshots,
+                                  plan_file)
         except PlanGenerationError:
             raise
         except (ValueError, TaskPlanError) as exc:

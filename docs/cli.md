@@ -409,6 +409,22 @@ refusal:
 ```
 
 
+### Unreleased: bounded TaskPlan generation
+
+`task plan generate` turns one TaskSpec into a validated, non-executable plan:
+
+```bash
+pocketchat task plan generate --spec spec.json --run-id plan-review \
+  --config pocketchat.json --profile local --json
+```
+
+It writes a plain plan to `.pocketchat/task-plans/<run-id>.json` (or a new
+workspace-relative `--out` path) plus an exclusive plan snapshot under
+`traces/requests/`. The JSON result carries the plain `plan` path, exact
+`plan_sha256`, `spec_sha256`, request snapshots and attempt count. Generation
+does not execute a step. Provider failure exits 1; invalid input or an existing
+output/snapshot exits 2. See [task-plan.md](task-plan.md).
+
 ### Unreleased: authorized TaskPlan execution
 
 `task exec` is the product CLI entry for an already authorized TaskSpec and
