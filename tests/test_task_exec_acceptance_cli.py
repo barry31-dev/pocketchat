@@ -9,6 +9,7 @@ from pathlib import Path
 from pocketchat import cli
 from pocketchat.task_plan import parse_plan, plan_sha256, spec_sha256
 from pocketchat.task_spec import parse_spec
+from tests import _helpers as hp
 from tests._helpers import run_cli
 from tests.test_task_run import FakeTaskAdapter, final_response, model_tool
 from tests.test_task_spec import minimal
@@ -80,6 +81,8 @@ class TaskExecAcceptanceTests(unittest.TestCase):
             "--config", str(self.config_path), *extra,
         )
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "file acceptance requires secure descriptor-relative reads")
     def test_passing_acceptance_is_separate_from_execution_and_bound_to_report(self):
         result = run_cli(self.args(
             "--check-acceptance", str(self.acceptance_path), "--json"),
@@ -100,6 +103,8 @@ class TaskExecAcceptanceTests(unittest.TestCase):
         self.assertNotIn("record", acceptance)
         self.assertFalse((self.root / ".pocketchat/acceptance").exists())
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "file acceptance requires secure descriptor-relative reads")
     def test_missing_artifact_fails_acceptance_without_reclassifying_execution(self):
         (self.root / "acceptance.json").write_text(json.dumps({
             "schema_version": "pocketchat-acceptance-plan.v1",
@@ -115,6 +120,20 @@ class TaskExecAcceptanceTests(unittest.TestCase):
         self.assertEqual("completed", payload["status"])
         self.assertEqual("failed", payload["acceptance"]["state"])
         self.assertEqual("missing_file", payload["acceptance"]["checks"][0]["reason"])
+
+    def test_platform_refusal_keeps_execution_completed_and_returns_one(self):
+        result = run_cli(self.args(
+            "--check-acceptance", str(self.acceptance_path), "--json"),
+            self.root, env={})
+        if hp.SECURE_DESCRIPTOR_READS:
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            return
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("completed", payload["status"])
+        self.assertEqual("refused", payload["acceptance"]["state"])
+        self.assertEqual("unsupported_platform",
+                         payload["acceptance"]["checks"][0]["reason"])
 
     def test_invalid_acceptance_plan_is_refused_before_provider(self):
         self.acceptance_path.write_text('{"schema_version":"bad"}', encoding="utf-8")
