@@ -7,6 +7,10 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Admit model-authored repair requests before their snapshots and provider
+  calls. An oversized repair request leaves the target file unchanged, creates
+  no edit and performs no command retry; the existing repair authority and
+  single-retry bound are unchanged. See `pocketchat/task_model_repair.py`.
 - Admit both TaskPlan generation requests before their snapshots and provider
   calls. An oversized corrective request now fails before a second model call,
   while successful generation still executes no task step. See

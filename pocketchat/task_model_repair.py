@@ -21,6 +21,7 @@ from .request import (
     contains_credential,
     write_request_snapshot,
 )
+from .request_admission import AdmissionError, admit_for_config
 from .task_edit import (
     OverwriteResult,
     TaskEditError,
@@ -210,6 +211,11 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
             "repair provider payload failed: %s" % type(exc).__name__) from exc
     if not isinstance(request_payload, dict):
         raise ModelRepairError("provider built a non-object request payload")
+    try:
+        admit_for_config(request_payload, config)
+    except AdmissionError as exc:
+        raise ModelRepairError(
+            "repair request exceeds the local budget: %s" % exc) from exc
     if root is not None:
         request_path = Path(root) / ".pocketchat" / "task-repair" / (
             "%s.attempt-1.json" % run_id)

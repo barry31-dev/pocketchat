@@ -165,6 +165,25 @@ class AttemptTests(unittest.TestCase):
         self.assertIn("private input", prompt)
         self.assertNotIn("trace.jsonl", json.dumps(details))
 
+    def test_oversized_repair_request_leaves_file_and_retry_untouched(self):
+        first = self.run_first()
+        adapter = StubAdapter(json.dumps(action()))
+        calls = []
+        config = {**self.config, "provider_adapter": adapter,
+                  "max_payload_bytes": 1}
+        with self.assertRaisesRegex(ModelRepairError, "local budget"):
+            attempt_model_repair(
+                command_runner=lambda *args: calls.append(args),
+                template_id="check",
+                trace_path=self.root / "traces/check.jsonl", run_id="check",
+                failed=first, spec=self.spec, plan=self.plan,
+                config=config, api_key="", root=self.root)
+        self.assertEqual([], calls)
+        self.assertEqual(0, len(adapter.calls))
+        self.assertEqual("wrong\n", (self.root / "answer.txt").read_text())
+        self.assertFalse(
+            (self.root / ".pocketchat/task-repair/check.attempt-1.json").exists())
+
     def test_unexpected_provider_build_failure_leaves_file_and_retry_untouched(self):
         first = self.run_first()
         class BrokenAdapter(StubAdapter):
