@@ -71,6 +71,37 @@ not a remote publication fact.
 ## 3. Unreleased source
 
 The `main` branch ahead of `v1.1.0` holds unreleased source. It is not a
-release candidate until the checks in
-[development-and-release.md](development-and-release.md) §4.1 have been run
-against it and recorded.
+published release. The current machine-checked candidate record is below; it
+does not authorize a tag, GitHub Release or package-index upload.
+
+### Candidate `ca3dcfc6c0519427319790eab0eb27645e1e9986`
+
+- Candidate SHA: `ca3dcfc6c0519427319790eab0eb27645e1e9986`; branch `main` in
+  `barry31-dev/pocketchat`.
+- Identity: commit author and committer are
+  `barry31-dev <329888575+barry31-dev@users.noreply.github.com>`. No tag was
+  created for this candidate.
+- Local machine checks: 1033 tests OK on CPython 3.13.9; full
+  `ruff check --select E9,F pocketchat tests`, `compileall` and
+  `git diff --check` pass. These checks cover the candidate tree at the time
+  the evidence was written.
+- CI: [run 41466053639](https://github.com/barry31-dev/pocketchat/actions/runs/41466053639)
+  completed successfully for the exact SHA. It contains six Linux/macOS/Windows
+  matrix jobs for Python 3.9/3.13 plus the `pocketchat-release-smoke` job.
+- Release smoke artifact: `pocketchat-release-smoke`, 224986 bytes, artifact
+  id `13151077049`. The downloaded archive contains
+  `pocketchat-1.1.0-py3-none-any.whl` (228024 bytes) and its JSON evidence.
+  The wheel SHA-256 recomputed from the downloaded asset is
+  `1981c149ceba7fc42a79f6ac608cd91007c500d09ce6f1fd0677749532ca3e7b`,
+  equal to the JSON value. It contains 55 members, all five schemas and the
+  complete installed task command family.
+- Publication: **not authorized for this candidate and not performed**. No tag,
+  GitHub Release or package-index upload exists for `ca3dcfc`.
+- Review gap: fresh-context review attempts were started against the full
+  candidate and a bounded recent diff, but the local provider stream did not
+  return a final findings report. The attempt is **not** recorded as a passing
+  review. The project review ladder still requires that review before a
+  publication decision.
+- Unverified: real provider behavior/quality and billing, isolated-build
+  reproducibility at another machine, package-index reachability, and all
+  artifacts outside the exact SHA/run/artifact IDs above.
