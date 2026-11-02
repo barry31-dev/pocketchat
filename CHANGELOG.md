@@ -7,6 +7,10 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add read-only `task exec --check-acceptance`. It validates the operator plan
+  before provider configuration and evaluates it against the exact execution
+  report from that invocation, while keeping execution status separate from
+  acceptance and creating no historical receipt. See `docs/task-exec.md`.
 - Add a repository-owned release smoke gate and CI job. It builds one real
   wheel, validates required package/schema/surface members and removed
   web/server paths, installs into a clean venv, checks the full installed task

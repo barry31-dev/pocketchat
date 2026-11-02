@@ -68,6 +68,16 @@ no-op，不会生成新报告。失败/未知副作用、报告 digest 改变、
 缺失都会在新的模型/命令调用前拒绝。`--resume-report` 与 `--checkpoint` 互斥；直接
 报告必须同时给出 `--report-sha256`；两种接续都不能与 `--stop-after` 组合。
 
+## 执行内验收检查
+
+`task exec --check-acceptance FILE` 会在读取 provider 配置前先解析操作者验收计划；
+计划执行完成后，只对本次调用产生的精确 execution report 做只读评估。结果把执行
+`status` 与 `acceptance.state` 分开，并用 `spec_sha256`、`plan_sha256` 与
+`execution_report_sha256` 绑定。执行完成但验收 failed/refused/unknown 返回 1；执行
+失败时验收保持 `not_evaluated`；有意步骤边界返回 0，验收为
+`not_evaluated`/`execution_incomplete`。这是只读检查，不写 acceptance receipt，
+也不成为历史任务验收记录。
+
 ## 顺序执行
 
 `execute_plan()` 显式接收现有 `run_task` callable，测试可传 stub。各 step

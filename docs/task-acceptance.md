@@ -6,6 +6,16 @@ operator-declared set of local conditions, evaluated without a model or shell.
 This is unreleased source functionality; the published v1.1.0 artifact does not
 contain these commands or formats.
 
+## Execution-plan check
+
+`task exec --check-acceptance acceptance.json` evaluates the same deterministic
+checks against the execution report produced by that `task exec` invocation.
+It is a read-only, execution-bound view: no receipt is written and no single
+step task is nominated as the whole plan. The result carries the exact Spec,
+Plan and execution-report digests; execution status remains separate from
+acceptance state. Use `task run --acceptance` or `task verify` when a persisted
+single-task receipt is required.
+
 ## Run and verify
 
 ```bash

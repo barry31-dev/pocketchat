@@ -13,6 +13,7 @@ the config does not leave a half-written run behind.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -20,7 +21,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from . import __version__
-from .acceptance import (AcceptanceError, acceptance_history, load_plan, verify_task)
+from .acceptance import (AcceptanceError, acceptance_history, evaluate_plan,
+                         load_plan, verify_task)
 from .agent import (AgentCommandError, AgentState, apply_command,
                     run_task, DEFAULT_REASONING)
 from .branching import BranchError, create_branch_from
@@ -460,6 +462,8 @@ def _parser() -> argparse.ArgumentParser:
                            help="exact SHA-256 of --resume-report")
     task_exec.add_argument("--checkpoint", type=Path, default=None,
                            help="checkpoint that resolves the report to resume")
+    task_exec.add_argument("--check-acceptance", type=Path, default=None,
+                           help="evaluate this acceptance plan against the produced report")
     task_exec.add_argument("--json", action="store_true", dest="as_json",
                            help="print one machine-readable JSON object")
 
@@ -1465,6 +1469,8 @@ def _cmd_task(args: argparse.Namespace) -> int:
             plan = load_task_plan(args.plan, spec=spec)
             execution = authorize(plan, spec,
                                   expected_plan_sha256=args.plan_sha256)
+            acceptance_plan = (load_plan(args.check_acceptance)
+                               if args.check_acceptance else None)
             uses_report = args.resume_report is not None
             uses_checkpoint = args.checkpoint is not None
             if uses_report and uses_checkpoint:
@@ -1565,8 +1571,41 @@ def _cmd_task(args: argparse.Namespace) -> int:
                        for item in results)
         failed = any(item.get("status") == "failed" for item in results)
         status = "failed" if failed else ("boundary" if boundary else "completed")
+        acceptance_result = None
+        if acceptance_plan is not None:
+            if failed or boundary:
+                acceptance_result = {
+                    "state": "not_evaluated",
+                    "reason": ("execution_failed" if failed
+                               else "execution_incomplete"),
+                    "spec_sha256": execution.spec_sha256,
+                    "plan_sha256": execution.plan_sha256,
+                }
+            else:
+                try:
+                    report_path = Path.cwd() / reports[-1]
+                    execution_report_sha256 = hashlib.sha256(
+                        report_path.read_bytes()).hexdigest()
+                    evaluated = evaluate_plan(Path.cwd(), acceptance_plan)
+                except (AcceptanceError, OSError) as exc:
+                    acceptance_result = {
+                        "state": "unknown", "reason": "acceptance_unavailable",
+                        "message": str(exc),
+                        "spec_sha256": execution.spec_sha256,
+                        "plan_sha256": execution.plan_sha256,
+                    }
+                else:
+                    acceptance_result = {
+                        **evaluated,
+                        "spec_sha256": execution.spec_sha256,
+                        "plan_sha256": execution.plan_sha256,
+                        "execution_report_sha256": execution_report_sha256,
+                    }
+        ok = not failed
+        if acceptance_result is not None and status == "completed":
+            ok = acceptance_result["state"] == "passed"
         payload = {
-            "ok": not failed,
+            "ok": ok,
             "status": status,
             "schema_version": "1",
             "spec_sha256": execution.spec_sha256,
@@ -1578,6 +1617,8 @@ def _cmd_task(args: argparse.Namespace) -> int:
         if uses_report or uses_checkpoint:
             payload["resumed_from_report"] = Path(resume_report).as_posix()
             payload["resumed_from_report_sha256"] = expected_report_sha256
+        if acceptance_result is not None:
+            payload["acceptance"] = acceptance_result
         if args.as_json:
             print(json.dumps(payload, sort_keys=True))
         else:
@@ -1588,6 +1629,10 @@ def _cmd_task(args: argparse.Namespace) -> int:
                 print("%s  %s  %s" % (item.get("step_id"), item.get("action"),
                                       item.get("status")))
             print("reports %s" % (", ".join(reports) or "(none)"))
+            if acceptance_result is not None:
+                print("acceptance %s" % acceptance_result["state"])
+                if acceptance_result.get("reason"):
+                    print("acceptance reason %s" % acceptance_result["reason"])
         return EXIT_OK if payload["ok"] else EXIT_RUN_FAILED
 
     if args.task_command == "run":

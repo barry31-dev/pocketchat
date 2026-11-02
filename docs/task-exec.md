@@ -71,6 +71,16 @@ and the execution report created by this invocation. A failed step returns 1
 and the report remains inspectable. A completed step is not acceptance:
 command evidence keeps `task_acceptance: not_evaluated`.
 
+`--check-acceptance FILE` parses the operator acceptance plan before provider
+configuration, then evaluates it against the exact execution report produced by
+this invocation. The result keeps execution `status` separate from
+`acceptance.state` and binds the acceptance view to `spec_sha256`,
+`plan_sha256` and `execution_report_sha256`. A completed execution with failed,
+refused or unknown acceptance returns 1; a failed execution keeps acceptance
+`not_evaluated`; an intentional step boundary returns 0 with acceptance
+`not_evaluated`/`execution_incomplete`. This is a read-only check: it writes no
+acceptance receipt and does not become a historical task acceptance record.
+
 ## Sequential execution
 
 `execute_plan()` accepts the existing `run_task` callable explicitly, so tests
