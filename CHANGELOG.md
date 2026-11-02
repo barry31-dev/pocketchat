@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add a pure bounded projector for tool results sent to a model. It limits
+  the complete JSON envelope in UTF-8 bytes, records omitted bytes, supports
+  omitting a file-write content echo, and refuses metadata that cannot fit.
+  This slice does not yet change the live tool-call path. See
+  `pocketchat/tool_results.py`.
 - Admit model-authored repair requests before their snapshots and provider
   calls. An oversized repair request leaves the target file unchanged, creates
   no edit and performs no command retry; the existing repair authority and
