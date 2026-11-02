@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Make explicit memory mutations transactional within one process and fail
+  closed across writers: add/remove hold one lock over read-modify-write, use a
+  unique temporary file, reject a symlinked store, and report a held lock as
+  `memory_store_busy` instead of silently losing an update. See
+  `pocketchat/memory.py`.
 - Harden the explicit local memory store before reading it. Reads now refuse
   symlinks and non-regular files, cap the complete store and each JSONL line,
   and keep oversized or corrupt stores explicit instead of treating them as

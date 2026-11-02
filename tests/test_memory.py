@@ -86,6 +86,49 @@ class MemoryStoreTests(unittest.TestCase):
         with self.assertRaises(MemoryError):
             add_memory(self.root, "x" * (16 * 1024 + 1))
 
+    def test_concurrent_writers_do_not_lose_an_update(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from pocketchat.memory import add_memory
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(add_memory, self.root, value)
+                       for value in ("first", "second")]
+            results = []
+            for future in futures:
+                try:
+                    results.append(future.result())
+                except MemoryError as exc:
+                    self.assertIn("busy", str(exc).lower())
+        contents = sorted(item["content"] for item in list_memory(self.root))
+        # The two writers either both commit, or one gets an explicit busy
+        # result. The important property is that a completed write is never
+        # silently lost behind another writer's replace.
+        self.assertEqual(sorted(item for item in ("first", "second")
+                                if item in contents), contents)
+        self.assertEqual(len(results), len(contents))
+        if len(results) == 2:
+            self.assertEqual(["first", "second"], contents)
+
+    def test_refused_mutation_leaves_previous_store_intact(self):
+        add_memory(self.root, "keep me")
+        path = self.root / ".pocketchat" / "memory.jsonl"
+        before = path.read_bytes()
+        with self.assertRaises(MemoryError):
+            add_memory(self.root, "x" * (16 * 1024 + 1))
+        self.assertEqual(before, path.read_bytes())
+
+    def test_stale_lock_holder_is_reported_as_busy(self):
+        import fcntl
+        from pocketchat.memory import memory_path
+        path = memory_path(self.root)
+        path.parent.mkdir(parents=True)
+        lock = path.with_name("memory.jsonl.lock")
+        descriptor = lock.open("a+")
+        self.addCleanup(descriptor.close)
+        fcntl.flock(descriptor.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with self.assertRaises(MemoryError) as caught:
+            add_memory(self.root, "blocked")
+        self.assertIn("busy", str(caught.exception).lower())
+
     def test_cli_add_list_search_remove_json(self):
         added = run_cli(("memory", "add", "hello memory", "--tag", "test", "--json"),
                         self.root)
