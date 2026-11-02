@@ -26,6 +26,7 @@ from .context import context_chars as _context_chars
 from .provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
 from .provider import estimate_tokens, tool_offer_summary
 from .request_admission import AdmissionError, admit_for_config
+from .tool_results import ResultProjectionError, project_result
 from .memory import search_memory
 from .tools import (ToolError, ToolPermissionError,
                     execute_read_file, execute_write_file)
@@ -788,15 +789,36 @@ class Session:
                 result = {"items": items}
                 encoded = json.dumps(result, ensure_ascii=False, sort_keys=True)
                 if len(encoded.encode("utf-8")) > result_limit:
-                    raise SessionError(
-                        "tool_result_too_large", "memory search result exceeds limit")
+                    kept = []
+                    for item in items:
+                        trial = kept + [item]
+                        encoded_trial = json.dumps(
+                            {"items": trial}, ensure_ascii=False, sort_keys=True)
+                        if len(encoded_trial.encode("utf-8")) > result_limit:
+                            break
+                        kept = trial
+                    if not kept and items:
+                        kept = items[:1]
+                    result = {
+                        "items": kept,
+                        "total_items": len(items),
+                        "omitted_items": max(0, len(items) - len(kept)),
+                        "bytes_omitted": max(
+                            0, len(encoded.encode("utf-8"))
+                            - len(json.dumps(
+                                {"items": kept}, ensure_ascii=False,
+                                sort_keys=True).encode("utf-8"))),
+                        "truncated": len(kept) < len(items),
+                    }
+                    encoded = json.dumps(result, ensure_ascii=False,
+                                         sort_keys=True)
                 self.recorder.append("tool.call.completed", {
                     "tool": "memory_search",
                     "tool_call_id": str(call.get("id") or ""),
                     "status": "completed",
                     "duration_ms": 0,
                     "result_bytes": len(encoded.encode("utf-8")),
-                    "result_truncated": False,
+                    "result_truncated": bool(result.get("truncated")),
                     "effect_disposition": "none",
                 })
         except ToolPermissionError as exc:
@@ -807,7 +829,29 @@ class Session:
                 return self._tool_failure_result(
                     call, exc.error_type, str(exc), result_limit)
             raise SessionError("tool_failed", str(exc))
-        return json.dumps(result, ensure_ascii=False, sort_keys=True)
+        try:
+            if tool_name == "memory_search":
+                # The memory branch above already bounded the list by whole
+                # records and computed its omission count.
+                pass
+            elif tool_name == "write_file":
+                result = {
+                    "path": result.get("path"),
+                    "bytes": result.get("bytes"),
+                    "overwritten": result.get("overwritten"),
+                }
+            projected = project_result(
+                str(call.get("id") or ""),
+                str(tool_name),
+                result,
+                max_bytes=result_limit,
+                omit_content_echo=(tool_name == "write_file"),
+                effect_disposition=("applied" if tool_name == "write_file"
+                                    else "none"),
+            )
+            return projected.encoded
+        except ResultProjectionError as exc:
+            raise SessionError(exc.error_type, str(exc)) from exc
 
     def _record_invalid_arguments(self, call: Dict[str, Any], message: str,
                                   result_limit: int) -> str:
@@ -823,15 +867,17 @@ class Session:
 
     def _tool_failure_result(self, call: Dict[str, Any], error_type: str,
                              message: str, result_limit: int) -> str:
-        encoded = json.dumps({
-            "status": "failed",
-            "error": {"type": error_type, "message": message},
-        }, ensure_ascii=False, sort_keys=True)
-        if len(encoded.encode("utf-8")) > result_limit:
-            raise SessionError(
-                "tool_result_too_large",
-                "tool failure result exceeds the configured limit")
-        return encoded
+        try:
+            projection = project_result(
+                str(call.get("id") or ""),
+                str(call.get("name") or "unknown"),
+                {"status": "failed", "error": {
+                    "type": error_type, "message": message}},
+                max_bytes=result_limit,
+            )
+        except ResultProjectionError as exc:
+            raise SessionError(exc.error_type, str(exc)) from exc
+        return projection.encoded
 
     def _write_request_snapshot(self, context: List[Dict[str, str]],
                                 turn: int, config: Optional[Dict[str, Any]] = None,

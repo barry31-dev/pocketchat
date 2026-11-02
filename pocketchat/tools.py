@@ -150,18 +150,25 @@ def execute_read_file(root: Path, path: str, *,
             "args_summary": "read %s" % requested,
         })
     try:
-        data = candidate.read_bytes()
-        data.decode("utf-8")
+        total_bytes = candidate.stat().st_size
+        with candidate.open("rb") as handle:
+            data = handle.read(max_bytes + 1)
+        complete = len(data) >= total_bytes
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError:
+            if complete or len(data) <= max_bytes:
+                raise
     except UnicodeDecodeError as exc:
         if recorder is not None:
             recorder.append("tool.call.failed", {
                 "tool": "read_file", "tool_call_id": tool_call_id,
                 "status": "failed",
                 "error": {"type": "invalid_encoding", "message": str(exc)},
-                "duration_ms": 0, "result_bytes": len(data),
+                "duration_ms": 0, "result_bytes": total_bytes,
             })
         raise ToolError("file is not UTF-8 text", error_type="invalid_encoding")
-    truncated = len(data) > max_bytes
+    truncated = total_bytes > max_bytes
     clipped = data[:max_bytes]
     if truncated:
         while clipped:
@@ -178,13 +185,13 @@ def execute_read_file(root: Path, path: str, *,
         recorder.append("tool.call.completed", {
             "tool": "read_file", "tool_call_id": tool_call_id,
             "status": "completed", "duration_ms": 0,
-            "result_bytes": len(data), "result_truncated": truncated,
+            "result_bytes": total_bytes, "result_truncated": truncated,
             "effect_disposition": "none",
         })
     return {
         "path": requested,
         "content": body,
-        "bytes": len(data),
+        "bytes": total_bytes,
         "truncated": truncated,
     }
 

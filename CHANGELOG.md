@@ -7,6 +7,10 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Bound live tool results before they return to the model. File reads acquire
+  only a limited prefix, write confirmations omit the full content echo, and
+  memory search drops whole records with an explicit omitted count instead of
+  failing the run. See `pocketchat/session.py` and `pocketchat/tools.py`.
 - Add a pure bounded projector for tool results sent to a model. It limits
   the complete JSON envelope in UTF-8 bytes, records omitted bytes, supports
   omitting a file-write content echo, and refuses metadata that cannot fit.

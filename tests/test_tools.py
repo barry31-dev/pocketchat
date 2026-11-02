@@ -171,6 +171,30 @@ class ReadFileToolTests(unittest.TestCase):
                           "tool.call.started", "tool.call.completed"],
                          [event["type"] for event in events])
 
+    def test_large_file_is_read_only_up_to_the_bounded_prefix(self):
+        from unittest import mock
+        (self.root / "large.txt").write_text("abcdef", encoding="utf-8")
+        real_open = Path.open
+
+        def tracking_open(path, *args, **kwargs):
+            handle = real_open(path, *args, **kwargs)
+            if path.name == "large.txt" and "r" in (args[0] if args else kwargs.get("mode", "r")):
+                original_read = handle.read
+
+                def bounded_read(size=-1):
+                    self.assertGreaterEqual(size, 0)
+                    return original_read(size)
+
+                handle.read = bounded_read
+            return handle
+
+        with mock.patch.object(Path, "open", tracking_open):
+            result, _ = self.execute(
+                "large.txt", allowed=("large.txt",), max_bytes=3)
+        self.assertEqual("abc", result["content"])
+        self.assertTrue(result["truncated"])
+        self.assertEqual(6, result["bytes"])
+
     def test_large_file_is_explicitly_truncated(self):
         (self.root / "large.txt").write_text("abcdef", encoding="utf-8")
         result, events = self.execute(

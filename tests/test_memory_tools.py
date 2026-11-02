@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -90,6 +91,25 @@ class MemoryToolTests(unittest.TestCase):
         self.assertEqual("completed", session.run(["search memory"]))
         self.assertEqual(2, len(adapter.calls))
         self.assertIn("the answer is 42", adapter.calls[1][-1]["content"])
+
+    def test_memory_results_are_bounded_without_becoming_an_empty_search(self):
+        for index in range(8):
+            add_memory(self.root, ("answer-%d-" % index) + "x" * 240,
+                       tags=["fact"])
+        adapter = FakeMemoryAdapter([
+            memory_response("call_m", "answer"), text_response(),
+        ])
+        config = self.config(adapter)
+        config["tool_memory_search_max_results"] = 10
+        config["tool_result_max_bytes"] = 900
+        session = Session(config, self.root / "traces" / "bounded.jsonl",
+                          "run_memory_bounded", api_key="secret-tool")
+        self.assertEqual("completed", session.run(["search memory"]))
+        result = json.loads(adapter.calls[1][-1]["content"])
+        self.assertEqual("memory_search", result["kind"])
+        self.assertTrue(result["truncated"])
+        self.assertGreater(result["bytes_omitted"], 0)
+        self.assertGreater(len(result["items"]), 0)
 
     def test_memory_search_is_disabled_by_default(self):
         config = self.config(FakeMemoryAdapter([]))

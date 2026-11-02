@@ -74,6 +74,14 @@ def project_result(tool_call_id: str, kind: str, result: Any, *,
     if not isinstance(kind, str) or not kind:
         raise ResultProjectionError("tool kind must be non-empty")
 
+    if result.get("status") == "failed":
+        error = result.get("error")
+        if not isinstance(error, dict):
+            raise ResultProjectionError("failed tool result needs an error object")
+        if not isinstance(error.get("type"), str) or not isinstance(
+                error.get("message"), str):
+            raise ResultProjectionError(
+                "failed tool result error needs text type and message")
     source = result.get("path")
     if source is not None and not isinstance(source, str):
         raise ResultProjectionError("tool result path must be text")
@@ -85,15 +93,20 @@ def project_result(tool_call_id: str, kind: str, result: Any, *,
         "schema_version": "pocketchat-tool-result.v1",
         "tool_call_id": tool_call_id,
         "kind": kind,
-        "status": "completed",
+        "status": result.get("status", "completed"),
         "effect_disposition": effect_disposition or (
             "applied" if kind == "write_file" else "none"),
         "source": source or "",
         "truncated": bool(result.get("truncated", False)),
     }
-    for key in ("bytes", "overwritten"):
+    if result.get("bytes_omitted") not in (None, 0):
+        projection["bytes_omitted"] = result["bytes_omitted"]
+    for key in ("bytes", "overwritten", "items", "total_items",
+                "omitted_items", "bytes_omitted"):
         if key in result:
             projection[key] = result[key]
+    if result.get("status") == "failed":
+        projection["error"] = result["error"]
     if content is not None and not omit_content_echo:
         projection["content"] = content
 

@@ -324,6 +324,20 @@ class ToolCallTests(unittest.TestCase):
         self.assertEqual("failed", session.run(["read"]))
         self.assertEqual(3, len(adapter.calls))
 
+    def test_model_write_result_does_not_echo_the_written_content(self):
+        adapter = FakeToolAdapter([
+            write_response("call_w", "new.txt", "created"), text_response(),
+        ])
+        session = Session(self.config(adapter), self.root / "traces" / "write_echo.jsonl",
+                          "run_echo", api_key="secret-tool")
+        self.assertEqual("completed", session.run(["create a file"]))
+        result = json.loads(adapter.calls[1][-1]["content"])
+        self.assertEqual("write_file", result["kind"])
+        self.assertEqual("new.txt", result["source"])
+        self.assertEqual("applied", result["effect_disposition"])
+        self.assertNotIn("content", result)
+        self.assertEqual("created", (self.root / "new.txt").read_text())
+
     def test_model_write_creates_only_new_allowlisted_file(self):
         adapter = FakeToolAdapter([
             write_response("call_w", "new.txt", "created"), text_response(),
