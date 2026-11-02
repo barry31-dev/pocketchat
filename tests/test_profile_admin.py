@@ -65,8 +65,27 @@ class ProfileWriteCliTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         result = hp.run_cli(["profile", "set", "--help"], self.base)
         for option in ("--base-url", "--model", "--api-key-env", "--json",
-                       "--max-turn-tokens", "--max-session-tokens"):
+                       "--max-turn-tokens", "--max-session-tokens",
+                       "--model-context-window-tokens",
+                       "--output-reserve-tokens", "--safety-margin-tokens",
+                       "--max-output-tokens-supported"):
             self.assertIn(option, result.stdout)
+
+    def test_set_carries_model_window_capacity(self):
+        result = self._run(
+            "set", "window", "--base-url", "https://new.invalid/v1",
+            "--model", "window-model", "--api-key-env", "NEW_KEY",
+            "--model-context-window-tokens", "128000",
+            "--output-reserve-tokens", "4096",
+            "--safety-margin-tokens", "1024",
+            "--max-output-tokens-supported", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        raw = json.loads(self.config.read_text(encoding="utf-8"))
+        profile = raw["profiles"]["window"]
+        self.assertEqual(128000, profile["model_context_window_tokens"])
+        self.assertEqual(4096, profile["output_reserve_tokens"])
+        self.assertEqual(1024, profile["safety_margin_tokens"])
+        self.assertIs(True, profile["max_output_tokens_supported"])
 
     def test_set_carries_token_budget_fields(self):
         result = self._run(

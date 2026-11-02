@@ -254,6 +254,21 @@ class ProfileConfigTests(unittest.TestCase):
         self.assertEqual(profile_config(config), profile_config(config, "local"))
         self.assertEqual(profile_config(config)["model"], "stub")
 
+    def test_profile_carries_optional_model_window_capacity(self):
+        payload = _v2_config()
+        payload["profiles"]["local"].update({
+            "model_context_window_tokens": 128000,
+            "output_reserve_tokens": 4096,
+            "safety_margin_tokens": 1024,
+            "max_output_tokens_supported": True,
+        })
+        config = load_config(self.write(payload))
+        selected = profile_config(config)
+        self.assertEqual(128000, selected["model_context_window_tokens"])
+        self.assertEqual(4096, selected["output_reserve_tokens"])
+        self.assertEqual(1024, selected["safety_margin_tokens"])
+        self.assertIs(True, selected["max_output_tokens_supported"])
+
     def test_profile_config_rejects_unknown_name(self):
         # The plan's case, in the shape the CLI will hand it: a loaded config
         # plus a name that is not in it.
@@ -322,7 +337,9 @@ class ProfileConfigTests(unittest.TestCase):
                 "tool_write_enabled", "tool_write_allow_paths",
                 "tool_memory_search_enabled", "tool_memory_search_max_results",
                 "tool_call_max_count", "tool_result_max_bytes",
-                "max_payload_bytes", "profile", "system_prompt",
+                "max_payload_bytes", "model_context_window_tokens",
+                "output_reserve_tokens", "safety_margin_tokens",
+                "max_output_tokens_supported", "profile", "system_prompt",
             })
 
 

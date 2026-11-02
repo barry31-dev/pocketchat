@@ -70,6 +70,15 @@ class BuildPayloadTests(unittest.TestCase):
             "stream": False,
         })
 
+    def test_output_cap_is_sent_only_when_the_profile_supports_it(self):
+        messages = [{"role": "user", "content": "hello"}]
+        unsupported = build_payload(messages, _config(
+            output_reserve_tokens=128, max_output_tokens_supported=False))
+        supported = build_payload(messages, _config(
+            output_reserve_tokens=128, max_output_tokens_supported=True))
+        self.assertNotIn("max_tokens", unsupported)
+        self.assertEqual(128, supported["max_tokens"])
+
     def test_complete_sends_exactly_what_build_payload_returns(self):
         # The plan's real requirement: `complete()` must not carry a second,
         # slightly different body. A stub that records the raw body is the only

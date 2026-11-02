@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add explicit model-capacity fields to profiles: context window, output
+  reserve, safety margin and whether the endpoint accepts a max-token cap.
+  Known windows reduce the admission limit; unknown values remain unknown.
+  `max_tokens` is sent only when the profile explicitly declares support. See
+  `pocketchat/request_admission.py` and `pocketchat/config.py`.
 - Make explicit memory mutations transactional within one process and fail
   closed across writers: add/remove hold one lock over read-modify-write, use a
   unique temporary file, reject a symlinked store, and report a held lock as

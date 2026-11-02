@@ -158,6 +158,12 @@ def build_payload(messages: List[Dict[str, str]],
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
+    # Only send a generation cap when the profile says the endpoint accepts
+    # this extension. A configured reserve without provider support is local
+    # policy, not a claim that the response was capped.
+    if (config.get("max_output_tokens_supported") is True
+            and config.get("output_reserve_tokens")):
+        payload["max_tokens"] = int(config["output_reserve_tokens"])
     return payload
 
 

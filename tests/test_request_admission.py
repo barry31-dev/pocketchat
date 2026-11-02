@@ -138,6 +138,38 @@ class RequestAdmissionTests(unittest.TestCase):
             prepare_admission(payload, max_payload_bytes=80,
                               max_context_chars=80)
 
+    def test_known_context_window_reduces_the_input_limit(self):
+        payload = {"model": "fixture", "messages": [
+            {"role": "user", "content": "x" * 80}]}
+        report = prepare_admission(
+            payload, max_payload_bytes=4096, max_context_chars=4096,
+            model_context_window_tokens=100,
+            output_reserve_tokens=40, safety_margin_tokens=20)
+        self.assertEqual(40, report["effective_input_tokens"])
+        with self.assertRaises(AdmissionError):
+            prepare_admission(
+                payload, max_payload_bytes=4096, max_context_chars=4096,
+                model_context_window_tokens=20,
+                output_reserve_tokens=10, safety_margin_tokens=20)
+
+    def test_unknown_context_window_does_not_invent_a_model_limit(self):
+        payload = {"model": "fixture", "messages": [
+            {"role": "user", "content": "x"}]}
+        report = prepare_admission(
+            payload, max_payload_bytes=4096, max_context_chars=4096,
+            model_context_window_tokens=None,
+            output_reserve_tokens=None, safety_margin_tokens=None)
+        self.assertIsNone(report["effective_input_tokens"])
+
+    def test_negative_window_parts_are_refused(self):
+        payload = {"model": "fixture", "messages": []}
+        with self.assertRaises(AdmissionError) as caught:
+            prepare_admission(
+                payload, max_payload_bytes=4096, max_context_chars=4096,
+                model_context_window_tokens=100,
+                output_reserve_tokens=-1, safety_margin_tokens=0)
+        self.assertEqual("invalid_admission_limit", caught.exception.error_type)
+
     def test_the_estimated_token_limit_is_enforced_when_supplied(self):
         payload = {"model": "fixture", "messages": [
             {"role": "user", "content": "x" * 80}]}

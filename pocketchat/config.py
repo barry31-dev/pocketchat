@@ -139,6 +139,8 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
         "tool_write_enabled", "tool_write_allow_paths",
         "tool_memory_search_enabled", "tool_memory_search_max_results",
         "tool_call_max_count", "tool_result_max_bytes", "max_payload_bytes",
+        "model_context_window_tokens", "output_reserve_tokens",
+        "safety_margin_tokens", "max_output_tokens_supported",
     }
     unknown = sorted(set(provider) - allowed)
     if unknown:
@@ -218,6 +220,17 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
         "max_payload_bytes": _optional_int(
             provider, "max_payload_bytes", where,
             1, 16 * 1024 * 1024, 1024 * 1024),
+        "model_context_window_tokens": _optional_int(
+            provider, "model_context_window_tokens", where,
+            1, 10 ** 9, None),
+        "output_reserve_tokens": _optional_int(
+            provider, "output_reserve_tokens", where,
+            0, 10 ** 9, None),
+        "safety_margin_tokens": _optional_int(
+            provider, "safety_margin_tokens", where,
+            0, 10 ** 9, None),
+        "max_output_tokens_supported": _optional_bool(
+            provider, "max_output_tokens_supported", where, False),
     }
 
 
@@ -230,10 +243,12 @@ _PROFILE_FIELDS = {
     "retry_max_attempts", "retry_backoff_ms", "fallback_max_attempts",
     "fallback_profile",
     "max_turn_tokens", "max_session_tokens",
+    "model_context_window_tokens", "output_reserve_tokens",
+    "safety_margin_tokens", "max_output_tokens_supported",
     "tool_read_enabled", "tool_read_allow_paths",
     "tool_write_enabled", "tool_write_allow_paths",
     "tool_memory_search_enabled", "tool_memory_search_max_results",
-    "tool_call_max_count", "tool_result_max_bytes",
+    "tool_call_max_count", "tool_result_max_bytes", "max_payload_bytes",
 }
 
 
@@ -505,6 +520,10 @@ def load_config(path: Path) -> Dict[str, Any]:
         "tool_call_max_count": selected["tool_call_max_count"],
         "tool_result_max_bytes": selected["tool_result_max_bytes"],
         "max_payload_bytes": selected["max_payload_bytes"],
+        "model_context_window_tokens": selected["model_context_window_tokens"],
+        "output_reserve_tokens": selected["output_reserve_tokens"],
+        "safety_margin_tokens": selected["safety_margin_tokens"],
+        "max_output_tokens_supported": selected["max_output_tokens_supported"],
         "system_prompt": system_prompt or "",
     }
 

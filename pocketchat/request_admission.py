@@ -74,12 +74,18 @@ def admit_for_config(payload: Any, config: dict) -> dict:
         max_payload_bytes=int(config.get("max_payload_bytes", 1024 * 1024)),
         max_context_chars=int(config.get("max_context_chars", 24000)),
         max_input_tokens=config.get("max_input_tokens"),
+        model_context_window_tokens=config.get("model_context_window_tokens"),
+        output_reserve_tokens=config.get("output_reserve_tokens"),
+        safety_margin_tokens=config.get("safety_margin_tokens"),
     )
 
 
 def prepare_admission(payload: Any, *, max_payload_bytes: int,
                       max_context_chars: int,
                       max_input_tokens: int | None = None,
+                      model_context_window_tokens: int | None = None,
+                      output_reserve_tokens: int | None = None,
+                      safety_margin_tokens: int | None = None,
                       estimator_id: str = ESTIMATOR_ID) -> dict:
     """Count one complete payload and refuse limits it cannot meet.
 
@@ -96,6 +102,16 @@ def prepare_admission(payload: Any, *, max_payload_bytes: int,
     max_context_chars = _positive_int(max_context_chars, "max_context_chars")
     if max_input_tokens is not None:
         max_input_tokens = _positive_int(max_input_tokens, "max_input_tokens")
+    for name, value in (
+            ("model_context_window_tokens", model_context_window_tokens),
+            ("output_reserve_tokens", output_reserve_tokens),
+            ("safety_margin_tokens", safety_margin_tokens)):
+        if value is not None and (isinstance(value, bool)
+                                  or not isinstance(value, int)
+                                  or value < 0):
+            raise AdmissionError(
+                f"{name} must be a non-negative integer",
+                error_type="invalid_admission_limit")
     if estimator_id != ESTIMATOR_ID:
         raise AdmissionError(
             f"unsupported token estimator: {estimator_id}",
@@ -127,11 +143,20 @@ def prepare_admission(payload: Any, *, max_payload_bytes: int,
             f"request payload cannot be serialized: {exc}",
             error_type="invalid_request_payload")
 
+    effective_input_tokens = None
+    if model_context_window_tokens is not None:
+        reserved = (output_reserve_tokens or 0) + (safety_margin_tokens or 0)
+        effective_input_tokens = model_context_window_tokens - reserved
+        if effective_input_tokens < 1:
+            raise AdmissionError(
+                "context window leaves no room for input",
+                error_type="request_budget_exceeded")
     counts = {
         "payload_bytes": len(encoded),
         "message_chars": message_chars,
         "tool_schema_bytes": tool_schema_bytes,
         "estimated_input_tokens": estimated,
+        "effective_input_tokens": effective_input_tokens,
     }
     reasons = []
     if counts["payload_bytes"] > max_payload_bytes:
@@ -142,6 +167,11 @@ def prepare_admission(payload: Any, *, max_payload_bytes: int,
             f"message_chars {counts['message_chars']} > {max_context_chars}")
     if max_input_tokens is not None and estimated > max_input_tokens:
         reasons.append(f"estimated_input_tokens {estimated} > {max_input_tokens}")
+    if (effective_input_tokens is not None
+            and estimated > effective_input_tokens):
+        reasons.append(
+            f"estimated_input_tokens {estimated} > effective_input_tokens "
+            f"{effective_input_tokens}")
     if reasons:
         raise AdmissionError(
             "request exceeds local budget: " + "; ".join(reasons))
@@ -153,5 +183,6 @@ def prepare_admission(payload: Any, *, max_payload_bytes: int,
         "message_chars": counts["message_chars"],
         "tool_schema_bytes": counts["tool_schema_bytes"],
         "estimated_input_tokens": counts["estimated_input_tokens"],
+        "effective_input_tokens": counts["effective_input_tokens"],
         "estimator_id": estimator_id,
     }

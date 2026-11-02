@@ -610,6 +610,19 @@ def _parser() -> argparse.ArgumentParser:
                              dest="max_session_tokens", default=None,
                              help="maximum reported tokens for one run "
                                   "(default: unbounded)")
+    profile_set.add_argument("--model-context-window-tokens", type=int,
+                             dest="model_context_window_tokens", default=None,
+                             help="known model context window (default: unknown)")
+    profile_set.add_argument("--output-reserve-tokens", type=int,
+                             dest="output_reserve_tokens", default=None,
+                             help="tokens reserved for one response")
+    profile_set.add_argument("--safety-margin-tokens", type=int,
+                             dest="safety_margin_tokens", default=None,
+                             help="extra input-estimate margin")
+    profile_set.add_argument("--max-output-tokens-supported",
+                             action="store_true",
+                             dest="max_output_tokens_supported", default=None,
+                             help="send a max_tokens cap to this endpoint")
     tool_read_group = profile_set.add_mutually_exclusive_group()
     tool_read_group.add_argument("--tool-read", action="store_true",
                                  dest="tool_read_enabled", default=None,
@@ -1827,6 +1840,8 @@ def _cmd_profile_write(args: argparse.Namespace) -> int:
                 "summary_prefix_chars", "input_price_per_million",
                 "output_price_per_million", "reasoning_effort_supported",
                 "max_turn_tokens", "max_session_tokens",
+                "model_context_window_tokens", "output_reserve_tokens",
+                "safety_margin_tokens", "max_output_tokens_supported",
                 "tool_read_enabled", "tool_read_allow_paths",
                 "tool_write_enabled", "tool_write_allow_paths",
                 "tool_memory_search_enabled", "tool_memory_search_max_results",
