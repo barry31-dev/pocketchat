@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add a pure request-admission check for complete provider payloads. It
+  counts the canonical payload bytes, serialized messages and tool schemas,
+  exposes an explicitly identified token estimate, and refuses oversized input
+  before any caller can send it. This slice does not yet wire admission into
+  the Session or provider path. See `pocketchat/request_admission.py`.
 - Mark package independence delivered. Public docs stay inside the package,
   the product queue and contributor rules are reachable, no source module
   reads the control repository, and the CI workflow declares Bash for its
