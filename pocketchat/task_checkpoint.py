@@ -411,6 +411,30 @@ def create_checkpoint(report: Any, *, report_path, checkpoint_id=None,
 REPORTS_DIR = Path(".pocketchat") / "task-reports"
 
 
+def write_checkpoint(path: Path, record: Any, *, credential=None) -> str:
+    """Persist one parsed checkpoint exclusively and verify its bytes."""
+    parsed = parse_checkpoint(record)
+    data = (_canonical(parsed) + "\n").encode("utf-8")
+    if credential and credential.encode("utf-8") in data:
+        raise CheckpointError("checkpoint contains the configured credential")
+    target = Path(path)
+    if target.is_symlink():
+        raise CheckpointError("checkpoint output must not be a symlink")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    handle = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    with os.fdopen(handle, "wb") as stream:
+        stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+    try:
+        loaded = load_checkpoint(target)
+    except CheckpointError:
+        raise
+    if loaded != parsed or target.read_bytes() != data:
+        raise CheckpointError("checkpoint changed while it was persisted")
+    return _digest(data)
+
+
 def resume_from_checkpoint(root: Path, checkpoint_path: Path, *,
                            expected_spec_sha256=None,
                            expected_plan_sha256=None) -> Dict[str, Any]:

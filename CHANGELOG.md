@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add `task checkpoint create` so a CLI caller can derive a closed checkpoint
+  from one exact digest-bound execution report without Python. Creation is
+  read/derive/write only: it executes no step or command, calls no provider,
+  refuses reports outside `.pocketchat/task-reports/`, writes exclusively,
+  and reads the checkpoint back for equality. See `docs/task-checkpoint.md`.
 - Add CLI step-boundary continuation for `task exec`. `--stop-after` records an
   intentional boundary and exits 0; `--resume-report` plus `--report-sha256`,
   or `--checkpoint`, re-verifies the completed prefix and executes only the

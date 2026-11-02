@@ -7,10 +7,23 @@ steps are known complete and which remain. It is evidence for a later resume,
 not a new execution authorization.
 
 ```bash
+pocketchat task checkpoint create \
+  --report .pocketchat/task-reports/<report>.json \
+  --report-sha256 <exact report digest> \
+  --checkpoint-id <stable id> \
+  --out .pocketchat/task-checkpoints/<id>.json --json
 pocketchat task checkpoint preview ckpt.json --json
 pocketchat task checkpoint preview ckpt.json \
   --spec-sha256 <TaskSpec digest> --plan-sha256 <TaskPlan digest>
 ```
+
+`create` reads only a regular report directly under
+`.pocketchat/task-reports/`. It verifies the explicit report digest, derives
+the completed/pending partition and bounded effects, writes the checkpoint
+exclusively, and reads it back for equality. It never executes a step, calls
+a provider, reruns a command or accepts the checkpoint on behalf of a later
+execution. The output must stay in the workspace, must not be the report
+itself, and is never overwritten.
 
 ## What a checkpoint binds
 

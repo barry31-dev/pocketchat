@@ -44,6 +44,21 @@ pocketchat task checkpoint resume ckpt.json \
 `execute_plan(..., resume_report=..., expected_report_sha256=...)`
 即执行恢复；已完成步骤会被重新校验，而不是重放。
 
+## 从执行报告创建
+
+```bash
+pocketchat task checkpoint create \
+  --report .pocketchat/task-reports/<report>.json \
+  --report-sha256 <报告精确 digest> \
+  --checkpoint-id <稳定 id> \
+  --out .pocketchat/task-checkpoints/<id>.json --json
+```
+
+`create` 只读取 `.pocketchat/task-reports/` 下直接存在的常规报告文件，校验显式
+报告 digest，推导已完成/待执行 step 分区与有界 effects，然后独占写 checkpoint
+并回读确认字节一致。它不执行 step、不调用 provider、不重跑命令，也不替后续执行
+自动授权。输出必须留在工作区，不能覆盖报告本身，也不能覆盖已有 checkpoint。
+
 ## 边界
 
 checkpoint 文件与其报告文件都必须是常规非符号链接文件，且分别不超过 1 MiB 与

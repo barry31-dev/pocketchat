@@ -58,8 +58,9 @@ from .task_selection import (DEFAULT_MAX_SELECTED_FILES, TaskSelectionError,
                              load_tree as load_context_tree, select_files)
 from .task_snapshot import (DEFAULT_MAX_SNAPSHOT_BYTES, TaskSnapshotError,
                             load_selection, snapshot_files)
-from .task_checkpoint import (CheckpointError, load_checkpoint,
-                              parse_checkpoint, resume_from_checkpoint)
+from .task_checkpoint import (CheckpointError, create_checkpoint as create_task_checkpoint,
+                              load_checkpoint, parse_checkpoint,
+                              resume_from_checkpoint, write_checkpoint)
 from .task_delegate import (TaskDelegateError, authorize_delegation,
                             load_delegation_request)
 from .task_plan import (PlanGenerationError, TaskPlanError,
@@ -477,6 +478,18 @@ def _parser() -> argparse.ArgumentParser:
     checkpoint_preview.add_argument("--json", action="store_true",
                                     dest="as_json",
                                     help="print one machine-readable JSON object")
+    checkpoint_create = checkpoint_subparsers.add_parser(
+        "create", help="derive a checkpoint from an exact execution report")
+    checkpoint_create.add_argument("--report", type=Path, required=True,
+                                   help="execution report under .pocketchat/task-reports")
+    checkpoint_create.add_argument("--report-sha256", required=True,
+                                   help="exact SHA-256 of the execution report")
+    checkpoint_create.add_argument("--checkpoint-id", required=True,
+                                   help="stable checkpoint id")
+    checkpoint_create.add_argument("--out", type=Path, required=True,
+                                   help="new checkpoint JSON path")
+    checkpoint_create.add_argument("--json", action="store_true", dest="as_json",
+                                   help="print one machine-readable JSON object")
     checkpoint_resume = checkpoint_subparsers.add_parser(
         "resume", help="resolve a checkpoint into the report to resume from")
     checkpoint_resume.add_argument("checkpoint", type=Path,
@@ -1299,6 +1312,69 @@ def _cmd_task(args: argparse.Namespace) -> int:
             print("TaskPlan %s" % plan.source["schema_version"])
             print("spec_sha256 %s" % plan.spec_sha256)
             print("steps %d" % len(plan.steps))
+        return EXIT_OK
+
+    if args.task_command == "checkpoint" and args.checkpoint_command == "create":
+        try:
+            root = Path.cwd().resolve()
+            report_path = args.report.resolve()
+            relative_report = report_path.relative_to(root)
+            if relative_report.parent != Path(".pocketchat/task-reports"):
+                raise CheckpointError(
+                    "report must be directly under .pocketchat/task-reports")
+            if not report_path.is_file() or report_path.is_symlink():
+                raise CheckpointError("report must be a regular file")
+            try:
+                payload = json.loads(report_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValueError) as exc:
+                raise CheckpointError(
+                    "cannot read execution report: %s" % exc)
+            record = create_task_checkpoint(
+                payload, report_path=report_path,
+                checkpoint_id=args.checkpoint_id,
+                expected_report_sha256=args.report_sha256)
+            out = args.out
+            if not out.is_absolute():
+                out = root / out
+            try:
+                relative_out = out.resolve().relative_to(root)
+            except (OSError, ValueError) as exc:
+                raise CheckpointError(
+                    "checkpoint output escapes the workspace: %s" % exc)
+            if relative_out == relative_report:
+                raise CheckpointError(
+                    "checkpoint output cannot replace its execution report")
+            write_checkpoint(out, record)
+            loaded = load_checkpoint(out)
+        except (CheckpointError, OSError, ValueError) as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        result = {
+            "ok": True,
+            "schema_version": "1",
+            "status": "created",
+            "checkpoint": relative_out.as_posix(),
+            "checkpoint_id": loaded["checkpoint_id"],
+            "report_id": loaded["report_id"],
+            "report": relative_report.as_posix(),
+            "report_sha256": loaded["report_sha256"],
+            "completed_step_ids": loaded["completed_step_ids"],
+            "pending_step_ids": loaded["pending_step_ids"],
+            "boundary_index": loaded["boundary_index"],
+        }
+        if args.as_json:
+            print(json.dumps(result, sort_keys=True))
+        else:
+            print("checkpoint %s  report=%s"
+                  % (loaded["checkpoint_id"], loaded["report_id"]))
+            print("path %s" % relative_out.as_posix())
+            print("boundary %d  completed=%s  pending=%s"
+                  % (loaded["boundary_index"],
+                     ",".join(loaded["completed_step_ids"]) or "(none)",
+                     ",".join(loaded["pending_step_ids"]) or "(none)"))
         return EXIT_OK
 
     if args.task_command == "checkpoint" and args.checkpoint_command == "preview":
