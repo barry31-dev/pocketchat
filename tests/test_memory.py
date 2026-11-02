@@ -40,6 +40,33 @@ class MemoryStoreTests(unittest.TestCase):
         with self.assertRaises(MemoryError):
             remove_memory(self.root, record["memory_id"])
 
+    def test_store_total_size_is_bounded(self):
+        path = self.root / ".pocketchat" / "memory.jsonl"
+        path.parent.mkdir(parents=True)
+        record = {
+            "schema_version": "pocketchat-memory.v1",
+            "memory_id": "mem_" + "x" * 40,
+            "created": "2026-01-01T00:00:00Z",
+            "content": "x" * 1024,
+            "tags": [],
+        }
+        line = json.dumps(record) + "\n"
+        path.write_text(line * (4 * 1024 * 1024 // len(line.encode("utf-8")) + 5),
+                        encoding="utf-8")
+        with self.assertRaises(MemoryError) as caught:
+            list_memory(self.root)
+        self.assertIn("exceeds", str(caught.exception))
+
+    def test_symlinked_store_is_refused_without_following_it(self):
+        outside = self.root / "outside.jsonl"
+        outside.write_text('{"schema_version":"pocketchat-memory.v1"}\n',
+                           encoding="utf-8")
+        path = self.root / ".pocketchat" / "memory.jsonl"
+        path.parent.mkdir(parents=True)
+        path.symlink_to(outside)
+        with self.assertRaises(MemoryError):
+            list_memory(self.root)
+
     def test_corrupt_store_fails_closed(self):
         path = self.root / ".pocketchat" / "memory.jsonl"
         path.parent.mkdir(parents=True)

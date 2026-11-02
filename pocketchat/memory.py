@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
-import datetime
+import stat
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 from uuid import uuid4
@@ -12,6 +13,8 @@ from uuid import uuid4
 SCHEMA_VERSION = "pocketchat-memory.v1"
 STORE_PATH = Path(".pocketchat") / "memory.jsonl"
 MAX_CONTENT_BYTES = 16 * 1024
+MAX_STORE_BYTES = 4 * 1024 * 1024
+MAX_LINE_BYTES = 32 * 1024
 MAX_TAGS = 16
 
 
@@ -25,16 +28,58 @@ def memory_path(root: Path) -> Path:
 
 def _read(root: Path) -> List[Dict[str, Any]]:
     path = memory_path(root)
-    if not path.exists():
-        return []
-    records = []
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        path.lstat()
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        raise MemoryError("cannot inspect memory store: %s" % exc)
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        if path.is_symlink():
+            raise MemoryError("memory store must not be a symlink")
+        descriptor = os.open(str(path), flags)
+    except MemoryError:
+        raise
+    except OSError as exc:
+        raise MemoryError("cannot open memory store: %s" % exc)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise MemoryError("memory store must be a regular file")
+        if info.st_size > MAX_STORE_BYTES:
+            raise MemoryError(
+                "memory store exceeds %d bytes" % MAX_STORE_BYTES)
+        chunks = []
+        remaining = MAX_STORE_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > MAX_STORE_BYTES:
+            raise MemoryError(
+                "memory store exceeds %d bytes" % MAX_STORE_BYTES)
+        text = raw.decode("utf-8")
+    except MemoryError:
+        raise
     except (OSError, UnicodeError) as exc:
         raise MemoryError("cannot read memory store: %s" % exc)
-    for number, line in enumerate(lines, 1):
+    finally:
+        os.close(descriptor)
+
+    records = []
+    for number, line in enumerate(text.splitlines(), 1):
         if not line.strip():
             continue
+        if len(line.encode("utf-8")) > MAX_LINE_BYTES:
+            raise MemoryError(
+                "memory store line %d exceeds %d bytes"
+                % (number, MAX_LINE_BYTES))
         try:
             record = json.loads(line)
         except ValueError as exc:

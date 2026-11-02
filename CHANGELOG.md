@@ -7,6 +7,10 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Harden the explicit local memory store before reading it. Reads now refuse
+  symlinks and non-regular files, cap the complete store and each JSONL line,
+  and keep oversized or corrupt stores explicit instead of treating them as
+  empty. See `pocketchat/memory.py`.
 - Bound live tool results before they return to the model. File reads acquire
   only a limited prefix, write confirmations omit the full content echo, and
   memory search drops whole records with an explicit omitted count instead of
