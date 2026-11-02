@@ -16,14 +16,14 @@ the `checkpointed -> running` transition.
 Run from the package root:
 
 ```bash
-/usr/bin/python3 开源/pocketchat/examples/task-demo/demo.py
+/usr/bin/python3 examples/task-demo/demo.py
 ```
 
 Pass `--output DIR` to retain the generated workspace for evidence review. The
 directory must be new or empty:
 
 ```bash
-/usr/bin/python3 开源/pocketchat/examples/task-demo/demo.py --output /tmp/task-demo
+/usr/bin/python3 examples/task-demo/demo.py --output /tmp/task-demo
 ```
 
 The output is three JSON objects, one per path. It is a deterministic smoke

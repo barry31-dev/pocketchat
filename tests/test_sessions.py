@@ -434,7 +434,10 @@ class SessionTests(unittest.TestCase):
                 result = self._run("export", "notes", "--format", "trace",
                                    "--out", str(out))
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-                self.assertIn(str(trace), result.stderr)
+                expected = os.path.realpath(trace)
+                self.assertTrue(
+                    expected in result.stderr or repr(expected) in result.stderr,
+                    result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
                 self.assertFalse(out.exists())
 
