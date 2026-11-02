@@ -66,10 +66,7 @@ class RequestAdmissionTests(unittest.TestCase):
         self.assertEqual(report["payload_bytes"], len(encoded))
         self.assertEqual(report["payload_sha256"],
                          hashlib.sha256(encoded).hexdigest())
-        self.assertEqual(report["message_chars"],
-                         len(json.dumps(payload["messages"],
-                                        ensure_ascii=False,
-                                        separators=(",", ":"))))
+        self.assertEqual(report["message_chars"], 11)
         self.assertGreater(report["tool_schema_bytes"], 0)
         self.assertGreater(report["estimated_input_tokens"], 0)
         self.assertEqual(report["estimator_id"], "chars4.v1")
@@ -129,6 +126,17 @@ class RequestAdmissionTests(unittest.TestCase):
                               max_context_chars=64)
         self.assertEqual(caught.exception.error_type,
                          "request_budget_exceeded")
+
+    def test_envelope_bytes_do_not_redefine_the_legacy_context_char_budget(self):
+        payload = {"model": "fixture", "messages": [
+            {"role": "user", "content": "x" * 80}]}
+        report = prepare_admission(payload, max_payload_bytes=4096,
+                                   max_context_chars=80)
+        self.assertEqual(80, report["message_chars"])
+        self.assertGreater(report["payload_bytes"], report["message_chars"])
+        with self.assertRaises(AdmissionError):
+            prepare_admission(payload, max_payload_bytes=80,
+                              max_context_chars=80)
 
     def test_the_estimated_token_limit_is_enforced_when_supplied(self):
         payload = {"model": "fixture", "messages": [

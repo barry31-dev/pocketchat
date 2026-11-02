@@ -322,7 +322,7 @@ class ProfileConfigTests(unittest.TestCase):
                 "tool_write_enabled", "tool_write_allow_paths",
                 "tool_memory_search_enabled", "tool_memory_search_max_results",
                 "tool_call_max_count", "tool_result_max_bytes",
-                "profile", "system_prompt",
+                "max_payload_bytes", "profile", "system_prompt",
             })
 
 

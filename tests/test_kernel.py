@@ -803,7 +803,8 @@ class ProviderStreamHttpTests(unittest.TestCase):
         from pocketchat.session import Session
 
         class StreamAdapter(OpenAICompatibleAdapter):
-            def complete(self, messages, config, api_key, on_delta=None):
+            def complete(self, messages, config, api_key, on_delta=None,
+                         prepared_payload=None):
                 on_delta("content", "x")
                 return {
                     "content": "x", "finish_reason": "stop",
@@ -921,7 +922,8 @@ class SessionStreamTests(unittest.TestCase):
             def build_payload(self, messages, config):
                 return {"model": config["model"], "stream": True}
 
-            def complete(self, messages, config, api_key, on_delta=None):
+            def complete(self, messages, config, api_key, on_delta=None,
+                         prepared_payload=None):
                 if on_delta is not None:
                     on_delta("reasoning", "think ")
                     on_delta("content", "hello ")
@@ -994,7 +996,8 @@ class ProviderAdapterContractTests(unittest.TestCase):
                 self.payloads.append(payload)
                 return payload
 
-            def complete(self, messages, config, api_key):
+            def complete(self, messages, config, api_key,
+                         on_delta=None, prepared_payload=None):
                 self.calls.append((list(messages), config["model"], api_key))
                 return {
                     "content": "adapter reply",

@@ -21,7 +21,8 @@ class FakeToolAdapter:
     def build_payload(self, messages, config):
         return build_payload(messages, config)
 
-    def complete(self, messages, config, api_key, on_delta=None):
+    def complete(self, messages, config, api_key, on_delta=None,
+                 prepared_payload=None):
         self.calls.append(list(messages))
         return self.responses.pop(0)
 
@@ -180,6 +181,55 @@ class ToolCallTests(unittest.TestCase):
         offered = events[0]["payload"]["config_summary"]["tools"]
         self.assertTrue(offered[0]["available"])
         self.assertEqual(64, len(offered[0]["schema_hash"]))
+
+    def test_adapter_rebuild_drift_is_not_sent(self):
+        adapter = FakeToolAdapter([text_response()])
+        original_build = adapter.build_payload
+
+        builds = []
+
+        def drifting_build(messages, config):
+            builds.append(messages)
+            payload = original_build(messages, config)
+            if len(builds) == 2:
+                payload["marker"] = "drift"
+            return payload
+
+        adapter.build_payload = drifting_build
+        session = Session(self.config(adapter),
+                          self.root / "traces" / "drift.jsonl",
+                          "run_drift", api_key="secret-tool")
+        self.assertEqual("failed", session.run(["hello"]))
+        self.assertEqual(0, len(adapter.calls))
+        events = [json.loads(line) for line in
+                  (self.root / "traces" / "drift.jsonl").read_text().splitlines()]
+        self.assertEqual("request_payload_mismatch",
+                         events[-1]["payload"]["error"]["type"])
+
+    def test_tool_result_is_admitted_before_the_second_provider_call(self):
+        adapter = FakeToolAdapter([
+            tool_response("call_1", "facts.txt"),
+            text_response(),
+        ])
+        config = self.config(adapter)
+        config["max_payload_bytes"] = 4096
+        first_payload_bytes = len(__import__(
+            "pocketchat.request", fromlist=["canonical_bytes"]).canonical_bytes(
+                adapter.build_payload(
+                    [{"role": "user", "content": "read the fact"}], config)))
+        config["max_payload_bytes"] = first_payload_bytes + 1
+        session = Session(config, self.root / "traces" / "admission.jsonl",
+                          "run_admission", api_key="secret-tool")
+        self.assertEqual("failed", session.run(["read the fact"]))
+        self.assertEqual(1, len(adapter.calls))
+        events = [json.loads(line) for line in
+                  (self.root / "traces" / "admission.jsonl").read_text().splitlines()]
+        failed = events[-1]
+        self.assertEqual("run.failed", failed["type"])
+        self.assertEqual("request_budget_exceeded",
+                         failed["payload"]["error"]["type"])
+        self.assertEqual(1, sum(event["type"] == "model.request.started"
+                                for event in events))
 
     def test_tool_call_budget_is_enforced(self):
         adapter = FakeToolAdapter([

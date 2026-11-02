@@ -111,6 +111,38 @@ class BuildPayloadTests(unittest.TestCase):
                          build_payload(messages, config))
 
 
+class PreparedPayloadTests(unittest.TestCase):
+    def test_complete_sends_the_already_admitted_payload(self):
+        state = self
+        state.sent = []
+
+        class Stub(BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                state.sent.append(self.rfile.read(length))
+                body = json.dumps({
+                    "choices": [{"message": {"content": "ok"},
+                                 "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+                }).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        stub = hp.StubHTTPServer(Stub)
+        self.addCleanup(stub.close)
+        from pocketchat.provider import complete
+        config = _config(base_url="http://127.0.0.1:%d/v1" % stub.port)
+        payload = {"model": "stub", "messages": [
+            {"role": "user", "content": "already prepared"}], "stream": False}
+        complete([], config, "fake-key", prepared_payload=payload)
+        self.assertEqual(json.loads(self.sent[0].decode("utf-8")), payload)
+
 class CanonicalBytesTests(unittest.TestCase):
     """The hash is only meaningful if the bytes it hashes are stable."""
 

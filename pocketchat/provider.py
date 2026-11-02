@@ -18,8 +18,9 @@ evidence into guesswork:
 
 from __future__ import annotations
 
-import json
+import copy
 import hashlib
+import json
 import re
 import socket
 import time
@@ -61,7 +62,7 @@ class ProviderAdapter:
         raise NotImplementedError
 
     def complete(self, messages: List[Dict[str, str]], config: Dict[str, Any],
-                 api_key: str, on_delta=None) -> Dict[str, Any]:
+                 api_key: str, on_delta=None, **kwargs: Any) -> Dict[str, Any]:
         raise NotImplementedError
 
 
@@ -75,8 +76,9 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         return build_payload(messages, config)
 
     def complete(self, messages: List[Dict[str, str]], config: Dict[str, Any],
-                 api_key: str, on_delta=None) -> Dict[str, Any]:
-        return complete(messages, config, api_key, on_delta=on_delta)
+                 api_key: str, on_delta=None, **kwargs: Any) -> Dict[str, Any]:
+        return complete(messages, config, api_key, on_delta=on_delta,
+                        prepared_payload=kwargs.get("prepared_payload"))
 
 
 DEFAULT_PROVIDER_ADAPTER = OpenAICompatibleAdapter()
@@ -320,7 +322,8 @@ def _sanitize_body(text: str, credential: Optional[str] = None) -> str:
 
 def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
              api_key: str, timeout_seconds: Optional[int] = None,
-             on_delta=None) -> Dict[str, Any]:
+             on_delta=None, prepared_payload: Optional[Dict[str, Any]] = None
+             ) -> Dict[str, Any]:
     """POST one chat completion and return a normalized response.
 
     The returned dict always carries ``content`` (a string, empty when the
@@ -332,13 +335,16 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
     readable completion. The caller turns that into a trace event and stops the
     turn; nothing here retries.
     """
-    if not messages:
+    if not messages and prepared_payload is None:
         raise ProviderError("empty_context", "no messages to send")
 
     timeout = timeout_seconds or int(config.get("timeout_seconds") or 60)
-    # The body comes from the one builder, so a snapshot of this payload is a
-    # snapshot of this request.
-    payload = build_payload(messages, config)
+    # A caller that already admitted a payload sends that exact body. The
+    # legacy path still uses the one builder, so both paths snapshot what they
+    # send rather than reconstructing a second body inside complete().
+    payload = (copy.deepcopy(prepared_payload)
+               if prepared_payload is not None
+               else build_payload(messages, config))
     if on_delta is not None:
         payload["stream"] = True
     body = canonical_bytes(payload)

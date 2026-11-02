@@ -7,6 +7,13 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Enforce request admission at every Session model-request boundary. Session
+  now counts the complete payload before writing its snapshot, covers requests
+  after tool results and retry/fallback attempts, and hands the admitted body to
+  the provider instead of letting it rebuild a second payload. Profiles gain an
+  additive `max_payload_bytes` limit (default 1 MiB); the existing
+  `max_context_chars` unit is unchanged. See `pocketchat/session.py` and
+  `pocketchat/request_admission.py`.
 - Add a pure request-admission check for complete provider payloads. It
   counts the canonical payload bytes, serialized messages and tool schemas,
   exposes an explicitly identified token estimate, and refuses oversized input

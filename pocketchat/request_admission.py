@@ -35,8 +35,31 @@ def _positive_int(value: Any, name: str) -> int:
 
 
 def _message_chars(messages: Any) -> int:
-    encoded = json.dumps(messages, ensure_ascii=False, separators=(",", ":"))
-    return len(encoded)
+    """The established context-budget unit: message and tool-call text.
+
+    This intentionally does not count JSON punctuation. ``max_context_chars``
+    predates object-level admission, and keeping its unit stable prevents an
+    unrelated envelope limit from silently changing an existing profile.
+    """
+    total = 0
+    for message in messages:
+        if not isinstance(message, dict):
+            raise ValueError("each message must be an object")
+        content = message.get("content") or ""
+        if not isinstance(content, str):
+            raise ValueError("message content must be text")
+        total += len(content)
+        for key in ("tool_calls", "name", "tool_call_id"):
+            value = message.get(key)
+            if value is None:
+                continue
+            if isinstance(value, str):
+                total += len(value)
+            else:
+                total += len(json.dumps(
+                    value, ensure_ascii=False, sort_keys=True,
+                    separators=(",", ":")))
+    return total
 
 
 def prepare_admission(payload: Any, *, max_payload_bytes: int,
@@ -65,12 +88,14 @@ def prepare_admission(payload: Any, *, max_payload_bytes: int,
 
     messages = payload.get("messages")
     if not isinstance(messages, list):
-        raise AdmissionError(
-            "request messages must be a list",
-            error_type="invalid_request_payload")
+        # Streaming adapters may provide their payload after the already
+        # budgeted context has been passed to complete(). The payload bytes are
+        # still admitted, but message-level units are explicitly unknown.
+        messages = []
     try:
         encoded = canonical_bytes(payload)
-        message_chars = _message_chars(messages)
+        message_chars = (
+            0 if not messages else _message_chars(messages))
         tools = payload.get("tools")
         tool_schema_bytes = (
             len(canonical_bytes(tools)) if tools is not None else 0)

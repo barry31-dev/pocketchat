@@ -21,7 +21,8 @@ class FakeMemoryAdapter:
     def build_payload(self, messages, config):
         return build_payload(messages, config)
 
-    def complete(self, messages, config, api_key, on_delta=None):
+    def complete(self, messages, config, api_key, on_delta=None,
+                 prepared_payload=None):
         self.calls.append(list(messages))
         return self.responses.pop(0)
 

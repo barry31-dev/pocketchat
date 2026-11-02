@@ -37,7 +37,8 @@ class SequenceAdapter:
     def build_payload(self, messages, config):
         return {"model": config["model"], "messages": messages, "stream": False}
 
-    def complete(self, messages, config, api_key, on_delta=None):
+    def complete(self, messages, config, api_key, on_delta=None,
+                 prepared_payload=None):
         self.calls.append((config["profile"], config["model"], api_key))
         outcome = self.outcomes.pop(0)
         if isinstance(outcome, Exception):

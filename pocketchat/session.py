@@ -25,11 +25,13 @@ from .context import ContextBudgetExceeded, apply_budget, build_initial_messages
 from .context import context_chars as _context_chars
 from .provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
 from .provider import estimate_tokens, tool_offer_summary
+from .request_admission import AdmissionError, prepare_admission
 from .memory import search_memory
 from .tools import (ToolError, ToolPermissionError,
                     execute_read_file, execute_write_file)
 from .request import (CredentialInRequestError, next_request_turn,
-                     request_snapshot_path, write_request_snapshot)
+                     request_digest, request_snapshot_path,
+                     write_request_snapshot)
 from .sessions import SessionFile, SessionFileError
 from .trace import TraceRecorder, utc_now
 
@@ -514,9 +516,27 @@ class Session:
             snapshot_ref = ""
             snapshot_digest = ""
             try:
+                payload = self.provider_adapter.build_payload(
+                    working_context, config)
+                rebuilt = self.provider_adapter.build_payload(
+                    working_context, config)
+                if request_digest(payload) != request_digest(rebuilt):
+                    raise SessionError(
+                        "request_payload_mismatch",
+                        "provider rebuilt a different request payload")
+                admitted = prepare_admission(
+                    payload,
+                    max_payload_bytes=_bounded_count(
+                        config, "max_payload_bytes", 1024 * 1024),
+                    max_context_chars=int(config["max_context_chars"]),
+                    max_input_tokens=turn_budget,
+                )
+                snapshot_digest = admitted["payload_sha256"]
                 snapshot_ref = self._write_request_snapshot(
-                    working_context, self.request_count, config=config, api_key=api_key)
-                snapshot_digest = self.request_digests[-1]
+                    working_context, self.request_count, config=config,
+                    api_key=api_key, payload=payload)
+            except AdmissionError as exc:
+                raise SessionError(exc.error_type, str(exc)) from exc
             except OSError as exc:
                 self.recorder.append("error.recorded", {
                     "error": {"type": "snapshot_unwritable",
@@ -548,10 +568,12 @@ class Session:
             try:
                 if self.on_delta is None:
                     response = self.provider_adapter.complete(
-                        working_context, config, api_key)
+                        working_context, config, api_key,
+                        prepared_payload=payload)
                 else:
                     response = self.provider_adapter.complete(
-                        working_context, config, api_key, on_delta=self.on_delta)
+                        working_context, config, api_key, on_delta=self.on_delta,
+                        prepared_payload=payload)
             except ProviderError as exc:
                 self.recorder.append("model.response.failed", {
                     "model": config["model"],
@@ -816,7 +838,8 @@ class Session:
 
     def _write_request_snapshot(self, context: List[Dict[str, str]],
                                 turn: int, config: Optional[Dict[str, Any]] = None,
-                                api_key: Optional[str] = None) -> str:
+                                api_key: Optional[str] = None,
+                                payload: Optional[Dict[str, Any]] = None) -> str:
         """Write the exact request body for this turn and return its path.
 
         The recorded path is relative to the trace itself, which is the file a
@@ -833,7 +856,8 @@ class Session:
         """
         path = request_snapshot_path(self.trace_path, turn)
         config = config or self.config
-        payload = self.provider_adapter.build_payload(context, config)
+        if payload is None:
+            payload = self.provider_adapter.build_payload(context, config)
         digest = write_request_snapshot(
             path,
             run_id=self.run_id,

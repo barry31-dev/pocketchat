@@ -138,7 +138,7 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
         "tool_read_enabled", "tool_read_allow_paths",
         "tool_write_enabled", "tool_write_allow_paths",
         "tool_memory_search_enabled", "tool_memory_search_max_results",
-        "tool_call_max_count", "tool_result_max_bytes",
+        "tool_call_max_count", "tool_result_max_bytes", "max_payload_bytes",
     }
     unknown = sorted(set(provider) - allowed)
     if unknown:
@@ -215,6 +215,9 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
         "tool_result_max_bytes": _optional_int(
             provider, "tool_result_max_bytes", where,
             1, 1024 * 1024, DEFAULT_TOOL_RESULT_MAX_BYTES),
+        "max_payload_bytes": _optional_int(
+            provider, "max_payload_bytes", where,
+            1, 16 * 1024 * 1024, 1024 * 1024),
     }
 
 
@@ -501,6 +504,7 @@ def load_config(path: Path) -> Dict[str, Any]:
         "tool_write_allow_paths": selected["tool_write_allow_paths"],
         "tool_call_max_count": selected["tool_call_max_count"],
         "tool_result_max_bytes": selected["tool_result_max_bytes"],
+        "max_payload_bytes": selected["max_payload_bytes"],
         "system_prompt": system_prompt or "",
     }
 
