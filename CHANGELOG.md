@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Account model-repair usage against the same whole-task budget as execution.
+  The repair request reserves before its provider call and settles reported
+  usage; an exhausted budget leaves the target file and retry untouched, and
+  the existing one-repair/one-retry authority is not reset. See
+  `pocketchat/task_model_repair.py`.
 - Bound TaskPlan generation by the optional task budget. Plan attempts reserve
   before their provider request and settle reported usage; an over-limit
   attempt is refused before any request snapshot or provider call. Budgets

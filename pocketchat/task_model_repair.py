@@ -22,6 +22,7 @@ from .request import (
     write_request_snapshot,
 )
 from .request_admission import AdmissionError, admit_for_config
+from .task_budget import TaskBudgetError
 from .task_edit import (
     OverwriteResult,
     TaskEditError,
@@ -161,7 +162,7 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
                          run_id: str, *, failed, spec: TaskSpec,
                          plan: TaskPlan, config: Dict[str, Any],
                          api_key: Optional[str] = None, root=None,
-                         ) -> Tuple[Any, Dict[str, Any]]:
+                         task_budget=None) -> Tuple[Any, Dict[str, Any]]:
     """Ask for one bounded repair, apply it, and retry the same template once."""
     if not callable(command_runner):
         raise ModelRepairError("a command runner is required")
@@ -212,7 +213,14 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
     if not isinstance(request_payload, dict):
         raise ModelRepairError("provider built a non-object request payload")
     try:
-        admit_for_config(request_payload, config)
+        admitted = admit_for_config(request_payload, config)
+        if task_budget is not None:
+            try:
+                task_budget.reserve(
+                    admitted["estimated_input_tokens"],
+                    request_id=f"{run_id}:repair")
+            except TaskBudgetError as exc:
+                raise ModelRepairError(str(exc)) from exc
     except AdmissionError as exc:
         raise ModelRepairError(
             "repair request exceeds the local budget: %s" % exc) from exc
@@ -240,6 +248,19 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
         raise ModelRepairError(
             "repair provider call failed: %s" % type(exc).__name__) from exc
     raw = _response_text(response)
+    if task_budget is not None:
+        usage = response.get("usage") if isinstance(response, dict) else None
+        if not isinstance(usage, dict):
+            usage = {}
+        try:
+            task_budget.settle(
+                f"{run_id}:repair",
+                input_tokens=int(usage.get("input_tokens", 0)),
+                output_tokens=int(usage.get("output_tokens", 0)),
+                reported=bool(response.get("usage_reported", False))
+                if isinstance(response, dict) else False)
+        except TaskBudgetError as exc:
+            raise ModelRepairError(str(exc)) from exc
     if contains_credential(raw.encode("utf-8"), api_key):
         raise ModelRepairError("repair response contains the configured credential")
     try:

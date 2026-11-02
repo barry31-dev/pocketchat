@@ -135,6 +135,24 @@ class AttemptTests(unittest.TestCase):
         return run_command_template(
             self.root, self.spec.commands[0], trace_path=trace, run_id="check")
 
+    def test_repair_usage_is_settled_into_the_shared_task_budget(self):
+        from pocketchat.task_budget import TaskBudget
+        first = self.run_first()
+        adapter = StubAdapter(json.dumps(action()))
+        budget = TaskBudget(limit_tokens=1000000)
+        result, _ = attempt_model_repair(
+            command_runner=lambda template_id, trace, run_id: run_command_template(
+                self.root, self.spec.commands[0], trace_path=trace,
+                run_id=run_id),
+            template_id="check", trace_path=self.root / "traces/check.jsonl",
+            run_id="check", failed=first, spec=self.spec, plan=self.plan,
+            config={**self.config, "provider_adapter": adapter},
+            api_key="", root=self.root, task_budget=budget)
+        self.assertTrue(result.ok)
+        state = budget.to_dict()
+        self.assertEqual("pocketchat-task-budget.v1", state["schema_version"])
+        self.assertTrue(state["requests"])
+
     def test_model_action_is_applied_and_exactly_one_identical_retry_runs(self):
         template = self.spec.commands[0]
         first = self.run_first()
@@ -164,6 +182,24 @@ class AttemptTests(unittest.TestCase):
         prompt = adapter.calls[0][0]["content"]
         self.assertIn("private input", prompt)
         self.assertNotIn("trace.jsonl", json.dumps(details))
+
+    def test_exhausted_task_budget_leaves_file_and_retry_untouched(self):
+        from pocketchat.task_budget import TaskBudget
+        first = self.run_first()
+        adapter = StubAdapter(json.dumps(action()))
+        budget = TaskBudget(limit_tokens=1)
+        calls = []
+        with self.assertRaises(ModelRepairError):
+            attempt_model_repair(
+                command_runner=lambda *args: calls.append(args),
+                template_id="check",
+                trace_path=self.root / "traces/check.jsonl", run_id="check",
+                failed=first, spec=self.spec, plan=self.plan,
+                config={**self.config, "provider_adapter": adapter},
+                api_key="", root=self.root, task_budget=budget)
+        self.assertEqual([], calls)
+        self.assertEqual(0, len(adapter.calls))
+        self.assertEqual("wrong\n", (self.root / "answer.txt").read_text())
 
     def test_oversized_repair_request_leaves_file_and_retry_untouched(self):
         first = self.run_first()

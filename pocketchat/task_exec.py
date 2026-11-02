@@ -431,7 +431,8 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                         command, repair_details = attempt_model_repair(
                             command_runner, step.command_template_id, path,
                             step.id, failed=command, spec=spec, plan=plan,
-                            config=config, api_key=api_key, root=root)
+                            config=config, api_key=api_key, root=root,
+                            task_budget=task_budget)
                 except Exception as exc:
                     results.append({
                         "step_id": step.id, "action": "run_command",
