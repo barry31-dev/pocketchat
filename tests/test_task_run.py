@@ -113,6 +113,30 @@ class TaskRunTests(unittest.TestCase):
         return [json.loads(line) for line in
                 path.read_text(encoding="utf-8").splitlines()]
 
+    def test_task_policy_can_carry_a_task_token_budget(self):
+        policy = self.policy(max_task_tokens=50)
+        self.assertEqual(50, policy.max_task_tokens)
+
+    def test_task_budget_is_shared_across_the_tool_turn(self):
+        adapter = FakeTaskAdapter([
+            model_tool("call_read", "read_file", {"path": "facts.txt"}),
+            final_response(),
+        ])
+        budget = __import__("pocketchat.task_budget",
+                            fromlist=["TaskBudget"]).TaskBudget(limit_tokens=10)
+        result = run_task(
+            policy=self.policy(max_task_tokens=10),
+            workspace=self.root,
+            config=self.config(adapter),
+            trace_path=self.root / "traces" / "task.jsonl",
+            session_path=self.root / "sessions" / "task.jsonl",
+            prompts=["compare the fact"],
+            task_budget=budget,
+        )
+        self.assertEqual("failed", result.status)
+        self.assertTrue(result.record.terminal_reason.startswith(
+            "task_budget_exceeded"))
+
     def test_task_run_writes_report_and_complete_trace(self):
         adapter = FakeTaskAdapter([
             model_tool("call_read", "read_file", {"path": "facts.txt"}),

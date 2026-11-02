@@ -1531,16 +1531,24 @@ def _cmd_task(args: argparse.Namespace) -> int:
                     Path.cwd(), template_by_id[template_id],
                     trace_path=trace_path, run_id=run_id)
 
+            task_budget = None
+            if spec.source["budgets"].get("max_task_tokens") is not None:
+                from .task_budget import TaskBudget
+                task_budget = TaskBudget(
+                    limit_tokens=int(
+                        spec.source["budgets"]["max_task_tokens"]))
             results = execute_plan(
                 execution, run_task=run_task, workspace=Path.cwd(),
                 config=selected, trace_dir=Path.cwd() / "traces",
                 session_dir=Path.cwd() / DEFAULT_SESSIONS_DIR,
+                acceptance=acceptance_plan,
                 command_runner=command_runner,
                 model_repair="model" if args.repair_model else None,
                 spec=spec, plan=plan, api_key=api_key,
                 stop_after=args.stop_after,
                 resume_report=resume_report,
                 expected_report_sha256=expected_report_sha256,
+                task_budget=task_budget,
             )
         except (AcceptanceError, TaskError, ConfigError, TaskPolicyError,
                 TaskSpecError, TaskPlanError, TaskExecutionError,

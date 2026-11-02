@@ -18,7 +18,8 @@ v1.1.0 artifact does not contain this unreleased source capability.
     "max_tool_calls": 4,
     "max_context_chars": 8000,
     "max_turn_tokens": 2000,
-    "max_session_tokens": 6000
+    "max_session_tokens": 6000,
+    "max_task_tokens": 12000
   },
   "tools": {"read_file": {"allow_paths": ["input.md"]}},
   "commands": [],
@@ -31,8 +32,13 @@ workspace-relative files the task may read. `workspace_root` and acceptance
 paths are workspace-relative too; absolute paths, backslashes, empty segments,
 `.` segments and `..` are refused rather than normalized.
 
-Budgets use the same ceilings and type rules as the existing policy. The
-supported tools are `read_file`, create-only `write_file` and bounded
+Budgets use the same ceilings and type rules as the existing policy.
+`max_session_tokens` remains the existing per-step Session limit.
+`max_task_tokens` is an optional separate whole-task limit: `task exec` creates
+one ledger for the authorized plan, reserves an estimate before each model
+request, and settles it from reported usage. Missing usage stays unknown and
+fails closed when the task ledger is active. The supported tools are
+`read_file`, create-only `write_file` and bounded
 `memory_search`. A read allowlist must stay inside the declared inputs.
 `write_file.create_only` may only be `true`; delete, free-form shell strings
 and unknown tools are refused. `commands` is a closed list of argv templates;

@@ -65,6 +65,16 @@ class ParseTests(unittest.TestCase):
                 with self.assertRaises(TaskSpecError):
                     parse_spec(payload)
 
+    def test_max_task_tokens_is_an_optional_closed_budget(self):
+        spec = parse_spec(minimal(budgets={
+            **minimal()["budgets"], "max_task_tokens": 5000,
+        }))
+        self.assertEqual(5000, spec.to_policy().max_task_tokens)
+        with self.assertRaises(TaskSpecError):
+            parse_spec(minimal(budgets={
+                **minimal()["budgets"], "max_task_tokens": 0,
+            }))
+
     def test_paths_budgets_and_types_fail_closed(self):
         for payload in (
             minimal(workspace_root="../out"),

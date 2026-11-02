@@ -17,7 +17,8 @@ v1.1.0 制品不含这项未发布源码能力。
     "max_tool_calls": 4,
     "max_context_chars": 8000,
     "max_turn_tokens": 2000,
-    "max_session_tokens": 6000
+    "max_session_tokens": 6000,
+    "max_task_tokens": 12000
   },
   "tools": {"read_file": {"allow_paths": ["input.md"]}},
   "commands": [],
@@ -29,7 +30,10 @@ v1.1.0 制品不含这项未发布源码能力。
 `workspace_root` 与 acceptance 路径也必须是工作区相对路径。绝对路径、反斜杠、
 空段、`.` 段和 `..` 一律拒绝，不做“规范化后再放行”。
 
-预算沿用现有 policy 的上限与类型规则。工具仅支持 `read_file`、create-only
+预算沿用现有 policy 的上限与类型规则。`max_session_tokens` 仍是既有的
+单步骤 Session 限额；`max_task_tokens` 是可选的整项任务限额：`task exec`
+为授权计划建立一份账本，在每次模型请求前预约估算值，并按 provider
+自报 usage 结算；缺 usage 时保持 unknown，并在任务账本启用时失败关闭。工具仅支持 `read_file`、create-only
 `write_file` 与有界 `memory_search`；读 allowlist 必须属于已声明 inputs。
 `write_file.create_only` 只能为 `true`，删除、自由 shell 字符串与未知工具均
 拒绝。`commands` 是封闭的 argv 模板列表，每个模板经校验后只能由 TaskPlan

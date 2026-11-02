@@ -39,7 +39,7 @@ _REQUIRED_ROOT_KEYS = ("schema_version", "objective", "workspace_root",
 _OPTIONAL_ROOT_KEYS = ("overwrite_paths",)
 _ROOT_KEYS = _REQUIRED_ROOT_KEYS + _OPTIONAL_ROOT_KEYS
 _BUDGET_KEYS = ("max_steps", "max_tool_calls", "max_context_chars",
-                "max_turn_tokens", "max_session_tokens")
+                "max_turn_tokens", "max_session_tokens", "max_task_tokens")
 _TOOL_KEYS = {
     "read_file": ("allow_paths",),
     "write_file": ("allow_paths", "create_only"),
@@ -83,6 +83,8 @@ class TaskSpec:
         }
         if "max_session_tokens" in budgets:
             policy["max_session_tokens"] = budgets["max_session_tokens"]
+        if "max_task_tokens" in budgets:
+            policy["max_task_tokens"] = budgets["max_task_tokens"]
         try:
             return parse_policy(policy)
         except TaskPolicyError as exc:
@@ -166,6 +168,10 @@ def _budgets(value: Any) -> Dict[str, int]:
     if "max_session_tokens" in payload:
         result["max_session_tokens"] = _integer(
             payload["max_session_tokens"], "budgets.max_session_tokens",
+            MIN_TOKENS, MAX_TOKENS)
+    if "max_task_tokens" in payload:
+        result["max_task_tokens"] = _integer(
+            payload["max_task_tokens"], "budgets.max_task_tokens",
             MIN_TOKENS, MAX_TOKENS)
     return result
 

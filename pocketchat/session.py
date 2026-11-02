@@ -26,6 +26,7 @@ from .context import context_chars as _context_chars
 from .provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
 from .provider import estimate_tokens, tool_offer_summary
 from .request_admission import AdmissionError, admit_for_config
+from .task_budget import TaskBudgetError
 from .tool_results import ResultProjectionError, project_result
 from .memory import search_memory
 from .tools import (ToolError, ToolPermissionError,
@@ -184,6 +185,8 @@ class Session:
         self.provider_adapter = config.get("provider_adapter") or DEFAULT_PROVIDER_ADAPTER
         self.on_delta = on_delta
         self.task_observer = task_observer
+        self.task_budget = None
+        self.task_budget_request_id = ""
 
         self.session_file: Optional[SessionFile] = None
         if session_path is not None:
@@ -529,6 +532,15 @@ class Session:
                     payload,
                     {**config, "max_input_tokens": turn_budget},
                 )
+                if self.task_budget is not None:
+                    self.task_budget_request_id = (
+                        f"{self.run_id}:request:{self.request_count}")
+                    try:
+                        self.task_budget.reserve(
+                            admitted["estimated_input_tokens"],
+                            request_id=self.task_budget_request_id)
+                    except TaskBudgetError as exc:
+                        raise SessionError(exc.error_type, str(exc)) from exc
                 snapshot_digest = admitted["payload_sha256"]
                 snapshot_ref = self._write_request_snapshot(
                     working_context, self.request_count, config=config,
@@ -622,6 +634,16 @@ class Session:
                 if key in response:
                     payload[key] = response[key]
             self.recorder.append("model.response.completed", payload)
+            if self.task_budget is not None:
+                try:
+                    self.task_budget.settle(
+                        self.task_budget_request_id,
+                        input_tokens=usage["input_tokens"],
+                        output_tokens=usage["output_tokens"],
+                        reported=bool(response.get("usage_reported", False)),
+                    )
+                except TaskBudgetError as exc:
+                    raise SessionError(exc.error_type, str(exc)) from exc
             if turn_budget is not None and turn_usage + actual_turn > turn_budget:
                 raise TokenBudgetExceeded(
                     "token_budget_exceeded",

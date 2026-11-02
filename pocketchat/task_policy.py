@@ -61,6 +61,7 @@ class TaskPolicy:
     max_turn_tokens: int
     max_session_tokens: Optional[int]
     tools: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    max_task_tokens: Optional[int] = None
     delegate_enabled: bool = False
     delegate_max_children: int = 0
     #: The document that was signed, kept so its digest is over the policy
@@ -216,8 +217,8 @@ def parse_policy(payload: Any) -> TaskPolicy:
     data = _require_object(payload, "the task policy")
     _closed(data, ("schema_version", "objective", "workspace_root",
                    "max_steps", "max_tool_calls", "max_context_chars",
-                   "max_turn_tokens", "max_session_tokens", "tools",
-                   "delegate"), "the task policy")
+                   "max_turn_tokens", "max_session_tokens", "max_task_tokens",
+                   "tools", "delegate"), "the task policy")
     version = data.get("schema_version")
     if version != POLICY_SCHEMA:
         raise TaskPolicyError(
@@ -235,6 +236,9 @@ def parse_policy(payload: Any) -> TaskPolicy:
         raise TaskPolicyError(
             "max_session_tokens (%d) cannot be below one turn's budget "
             "max_turn_tokens (%d)" % (session_tokens, turn_tokens))
+    task_tokens = data.get("max_task_tokens")
+    task_tokens = (_bound(task_tokens, "max_task_tokens", MIN_TOKENS,
+                          MAX_TOKENS) if task_tokens is not None else None)
     delegate = _delegate(data.get("delegate"))
     return TaskPolicy(
         schema_version=POLICY_SCHEMA,
@@ -248,6 +252,7 @@ def parse_policy(payload: Any) -> TaskPolicy:
                                  MAX_CONTEXT_CHARS),
         max_turn_tokens=turn_tokens,
         max_session_tokens=session_tokens,
+        max_task_tokens=task_tokens,
         tools=_tool_grants(data.get("tools")),
         delegate_enabled=delegate["enabled"],
         delegate_max_children=delegate["max_children"],

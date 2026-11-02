@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Wire the optional whole-task token budget into `task exec`. One ledger is
+  created per authorized plan and shared by its steps; model requests reserve
+  before sending and settle from reported usage. Missing usage remains unknown
+  and fails closed when this limit is active. Existing per-turn and per-step
+  Session limits are unchanged. See `docs/task-spec.md`.
 - Add a pure task-level token-budget ledger. It reserves before a request,
   settles a request at most once, retains unknown usage as an explicit unknown
   reservation, and serializes a versioned state record for later wiring. The

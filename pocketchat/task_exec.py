@@ -351,7 +351,8 @@ def _write_execution_report(execution: ExecutionPlan, root: Path,
 def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                  trace_dir, session_dir, acceptance=None, command_runner=None,
                  stop_after=None, resume_report=None, expected_report_sha256=None,
-                 model_repair=None, spec=None, plan=None, api_key=None):
+                 model_repair=None, spec=None, plan=None, api_key=None,
+                 task_budget=None):
     """Execute converted steps serially and persist a bounded report.
 
     Dependency order is validated by TaskPlan parsing, so each step is a
@@ -463,7 +464,8 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
             result = run_task(
                 policy=step.policy, workspace=root, config=config,
                 trace_path=path, session_path=session_path,
-                prompts=[step.prompt], acceptance=acceptance)
+                prompts=[step.prompt], acceptance=acceptance,
+                task_budget=task_budget)
             results.append({"step_id": step.id, "action": step.action,
                             "status": result.status,
                             "task_id": result.task_id,

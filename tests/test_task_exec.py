@@ -135,6 +135,25 @@ class ExecutionTests(unittest.TestCase):
         self.execution = authorize(
             self.plan, self.spec, expected_plan_sha256=plan_sha256(self.plan))
 
+    def test_execute_plan_passes_one_task_budget_to_the_run(self):
+        from pocketchat.task_budget import TaskBudget
+        budget = TaskBudget(limit_tokens=100)
+        seen = []
+
+        def fake_run_task(**kwargs):
+            seen.append(kwargs.get("task_budget"))
+            return type("Result", (), {
+                "status": "completed", "task_id": "task", "record": None,
+                "trace_path": self.root / "traces" / "task.jsonl",
+                "session_path": self.root / "sessions" / "task.jsonl",
+            })()
+
+        execute_plan(self.execution, run_task=fake_run_task,
+                     workspace=self.root, config={},
+                     trace_dir=self.root / "traces",
+                     session_dir=self.root / "sessions", task_budget=budget)
+        self.assertEqual([budget], seen)
+
     def test_execute_plan_reuses_run_task_in_dependency_order(self):
         calls = []
 

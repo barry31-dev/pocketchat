@@ -219,7 +219,8 @@ def _task_config(config: Dict[str, Any], policy, workspace_root: Path) -> Dict[s
 
 def run_task(*, policy, workspace: Path, config: Dict[str, Any],
              trace_path: Path, session_path: Path,
-             prompts: Iterable[str], acceptance=None) -> TaskRunResult:
+             prompts: Iterable[str], acceptance=None,
+             task_budget=None) -> TaskRunResult:
     """Run one bounded task through the existing model and tool path."""
     from .session import Session
     from .tasking import (create_record, save_record, task_summary,
@@ -247,6 +248,7 @@ def run_task(*, policy, workspace: Path, config: Dict[str, Any],
             api_key=config.get("api_key"),
             task_observer=controller,
         )
+        session.task_budget = task_budget
     except Exception as exc:
         transition(
             record, "fail",
