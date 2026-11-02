@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add a pure task-state projector for cross-step context. It includes only
+  completed, explicitly depended-on steps and declared file evidence, excludes
+  unrelated steps, and refuses missing digests, unresolved evidence, malformed
+  paths or oversized projections. Execution is not wired to it yet. See
+  `pocketchat/task_state.py`.
 - Account model-repair usage against the same whole-task budget as execution.
   The repair request reserves before its provider call and settles reported
   usage; an exhausted budget leaves the target file and retry untouched, and
