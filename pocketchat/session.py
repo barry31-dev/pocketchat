@@ -25,7 +25,7 @@ from .context import ContextBudgetExceeded, apply_budget, build_initial_messages
 from .context import context_chars as _context_chars
 from .provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
 from .provider import estimate_tokens, tool_offer_summary
-from .request_admission import AdmissionError, prepare_admission
+from .request_admission import AdmissionError, admit_for_config
 from .memory import search_memory
 from .tools import (ToolError, ToolPermissionError,
                     execute_read_file, execute_write_file)
@@ -524,12 +524,9 @@ class Session:
                     raise SessionError(
                         "request_payload_mismatch",
                         "provider rebuilt a different request payload")
-                admitted = prepare_admission(
+                admitted = admit_for_config(
                     payload,
-                    max_payload_bytes=_bounded_count(
-                        config, "max_payload_bytes", 1024 * 1024),
-                    max_context_chars=int(config["max_context_chars"]),
-                    max_input_tokens=turn_budget,
+                    {**config, "max_input_tokens": turn_budget},
                 )
                 snapshot_digest = admitted["payload_sha256"]
                 snapshot_ref = self._write_request_snapshot(

@@ -7,6 +7,10 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Admit both TaskPlan generation requests before their snapshots and provider
+  calls. An oversized corrective request now fails before a second model call,
+  while successful generation still executes no task step. See
+  `pocketchat/task_plan.py`.
 - Enforce request admission at every Session model-request boundary. Session
   now counts the complete payload before writing its snapshot, covers requests
   after tool results and retry/fallback attempts, and hands the admitted body to

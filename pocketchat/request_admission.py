@@ -44,10 +44,10 @@ def _message_chars(messages: Any) -> int:
     total = 0
     for message in messages:
         if not isinstance(message, dict):
-            raise ValueError("each message must be an object")
+            raise TypeError("each message must be an object")
         content = message.get("content") or ""
         if not isinstance(content, str):
-            raise ValueError("message content must be text")
+            raise TypeError("message content must be text")
         total += len(content)
         for key in ("tool_calls", "name", "tool_call_id"):
             value = message.get(key)
@@ -60,6 +60,21 @@ def _message_chars(messages: Any) -> int:
                     value, ensure_ascii=False, sort_keys=True,
                     separators=(",", ":")))
     return total
+
+
+def admit_for_config(payload: Any, config: dict) -> dict:
+    """Apply the admission limits carried by one selected profile.
+
+    The Session, plan generator and repair path all cross the same local
+    boundary. Keeping the default and error type here prevents those paths
+    from drifting into slightly different payload limits.
+    """
+    return prepare_admission(
+        payload,
+        max_payload_bytes=int(config.get("max_payload_bytes", 1024 * 1024)),
+        max_context_chars=int(config.get("max_context_chars", 24000)),
+        max_input_tokens=config.get("max_input_tokens"),
+    )
 
 
 def prepare_admission(payload: Any, *, max_payload_bytes: int,

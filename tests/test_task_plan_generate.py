@@ -149,6 +149,46 @@ class PlanGenerateCliTests(unittest.TestCase):
         self.assertFalse((self.root / "traces/requests/plan_cli.plan.json").exists())
         self.assertFalse((self.root / ".pocketchat/task-preview/plan_cli.json").exists())
 
+    def test_oversized_second_plan_request_is_refused_before_its_provider_call(self):
+        adapter = StubAdapter([
+            "not valid json",
+            self.valid_plan(revision=1),
+        ])
+        self.bind_adapter(adapter)
+        original = cli.profile_config
+
+        def with_adapter(config, profile):
+            record = original(config, profile)
+            record["provider_adapter"] = adapter
+            record["max_payload_bytes"] = 4096
+            return record
+
+        cli.profile_config = with_adapter
+        self.addCleanup(setattr, cli, "profile_config", original)
+
+        # The first request has to fit; the revision request carries the
+        # rejected response and must not reach the provider once it is too big.
+        original_build = adapter.build_payload
+        builds = []
+
+        def growing_build(messages, config):
+            builds.append(messages)
+            payload = original_build(messages, config)
+            if len(builds) == 2:
+                # Make the complete canonical payload larger than the limit
+                # without changing the prompt or claiming a different request.
+                payload["revision_padding"] = "x" * 5000
+            return payload
+
+        adapter.build_payload = growing_build
+        result = run_cli(self.args("--json"), self.root,
+                         env={"POCKETCHAT_API_KEY": "not-a-real-key"})
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("request_budget_exceeded", payload["error"])
+        self.assertEqual(1, len(adapter.calls))
+
+
     def test_bad_config_and_missing_credential_are_refused_before_provider(self):
         self.config_path.write_text("{not json\n", encoding="utf-8")
         result = run_cli(self.args("--json"), self.root, env={})

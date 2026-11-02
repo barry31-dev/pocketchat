@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Mapping, Optional
 from .provider import ProviderError
 from .request import (CredentialInRequestError, canonical_bytes,
                       contains_credential, write_request_snapshot)
+from .request_admission import AdmissionError, admit_for_config
 from .task_spec import TaskSpec
 from .trace import utc_now
 
@@ -548,11 +549,16 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
             payload = adapter.build_payload(messages, config)
             if not isinstance(payload, dict):
                 raise TaskPlanError("provider built a non-object request payload")
+            admit_for_config(payload, config)
             path = Path(requests_dir) / ("%s.attempt-%d.json" % (run_id, attempt))
             write_request_snapshot(path, run_id=run_id, profile=config.get("profile"),
                                    created=utc_now(), payload=payload,
                                    credential=api_key)
             snapshots.append(path)
+        except AdmissionError as exc:
+            raise PlanGenerationError(
+                "plan request exceeds the local budget: %s" % exc,
+                attempts=attempt - 1, error_type=exc.error_type)
         except CredentialInRequestError as exc:
             raise PlanGenerationError(
                 "plan request evidence was refused: %s" % exc,
