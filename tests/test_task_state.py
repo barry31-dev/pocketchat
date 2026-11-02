@@ -74,6 +74,7 @@ class TaskStateTests(unittest.TestCase):
         report = {
             "spec_sha256": "a" * 64, "plan_sha256": "b" * 64,
             "steps": [{"step_id": "read", "status": "completed",
+                       "task_id": "task-1", "trace": "traces/read.jsonl",
                        "objective": "x" * 1000}],
             "changes": [], "evidence_issues": [],
         }

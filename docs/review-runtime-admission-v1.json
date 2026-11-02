@@ -1,0 +1,98 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/slice-queue.md",
+    "docs/task-spec.md",
+    "docs/task-spec.zh-CN.md",
+    "examples/task-acceptance/demo.py",
+    "examples/task-demo/demo.py",
+    "examples/task-dogfood/demo.py",
+    "pocketchat/agent.py",
+    "pocketchat/cli.py",
+    "pocketchat/config.py",
+    "pocketchat/context_projection.py",
+    "pocketchat/memory.py",
+    "pocketchat/provider.py",
+    "pocketchat/request_admission.py",
+    "pocketchat/schemas/task-spec.schema.json",
+    "pocketchat/session.py",
+    "pocketchat/task_budget.py",
+    "pocketchat/task_exec.py",
+    "pocketchat/task_model_repair.py",
+    "pocketchat/task_plan.py",
+    "pocketchat/task_policy.py",
+    "pocketchat/task_spec.py",
+    "pocketchat/task_state.py",
+    "pocketchat/tool_results.py",
+    "pocketchat/tools.py",
+    "tests/test_compare.py",
+    "tests/test_context_projection.py",
+    "tests/test_cost_budget.py",
+    "tests/test_kernel.py",
+    "tests/test_memory.py",
+    "tests/test_memory_tools.py",
+    "tests/test_profile_admin.py",
+    "tests/test_profiles.py",
+    "tests/test_recovery_policy.py",
+    "tests/test_request.py",
+    "tests/test_request_admission.py",
+    "tests/test_session.py",
+    "tests/test_task_budget.py",
+    "tests/test_task_exec.py",
+    "tests/test_task_model_repair.py",
+    "tests/test_task_plan_generate.py",
+    "tests/test_task_run.py",
+    "tests/test_task_spec.py",
+    "tests/test_task_state.py",
+    "tests/test_tool_calls.py",
+    "tests/test_tool_results.py",
+    "tests/test_tools.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "legacy-context-unit",
+      "detail": "max_context_chars was preserved as text-unit limit; full serialized envelope is separately bounded by max_payload_bytes."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "budget-unknown-usage",
+      "detail": "TaskBudget keeps missing usage as an unknown reservation and fails closed; no zero-refund path."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "tool-result-orphan",
+      "detail": "Session tool results are projected only after the matching tool call and ContextProjection refuses orphan tool exchanges."
+    },
+    {
+      "id": "F4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "memory-lock-loss",
+      "detail": "Memory read-modify-write holds one lock and uses unique temporary files; concurrent tests accept only all-success or explicit busy."
+    },
+    {
+      "id": "F5",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "command-step-none-policy",
+      "detail": "Task-state prompts handle command-only dependency rows without dereferencing a null policy; command evidence remains a separate authority from file evidence."
+    }
+  ]
+}

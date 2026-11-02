@@ -66,7 +66,7 @@ def project_task_state(report: Any, *, step_id: str,
         row = by_id.get(dependency)
         if row is None or row.get("status") != "completed":
             raise TaskStateError(
-                f"dependency {dependency} is not completed",
+                f"dependency {dependency} is not bound to completed evidence",
                 error_type="dependency_not_completed")
         item = {
             "step_id": dependency,
