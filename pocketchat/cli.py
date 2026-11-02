@@ -431,6 +431,9 @@ def _parser() -> argparse.ArgumentParser:
                            help="configuration file (default: ./pocketchat.json)")
     task_exec.add_argument("--profile", default=None,
                            help="profile name (default: config's default profile)")
+    task_exec.add_argument("--repair-model", action="store_true",
+                           dest="repair_model",
+                           help="allow one model-authored guarded repair after a failed command step")
     task_exec.add_argument("--json", action="store_true", dest="as_json",
                            help="print one machine-readable JSON object")
 
@@ -1278,6 +1281,11 @@ def _cmd_task(args: argparse.Namespace) -> int:
             # are read.
             config = load_config(_config_path(args.config))
             selected = profile_config(config, args.profile)
+            api_key = ""
+            if args.repair_model and requires_api_key(selected):
+                api_key = load_api_key(selected)
+                if api_key is None:
+                    raise ConfigError("%s is not set" % selected["api_key_env"])
             template_by_id = {item["id"]: item for item in spec.commands}
 
             def command_runner(template_id, trace_path, run_id):
@@ -1290,6 +1298,8 @@ def _cmd_task(args: argparse.Namespace) -> int:
                 config=selected, trace_dir=Path.cwd() / "traces",
                 session_dir=Path.cwd() / DEFAULT_SESSIONS_DIR,
                 command_runner=command_runner,
+                model_repair="model" if args.repair_model else None,
+                spec=spec, plan=plan, api_key=api_key,
             )
         except (AcceptanceError, TaskError, ConfigError, TaskPolicyError,
                 TaskSpecError, TaskPlanError, TaskExecutionError,

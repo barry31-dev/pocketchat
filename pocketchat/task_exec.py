@@ -25,7 +25,8 @@ from uuid import uuid4
 
 from .task_command import (CommandError, command_evidence_sha256,
                            load_command_evidence)
-from .task_plan import TaskPlan, TaskPlanError, parse_plan, plan_sha256
+from .task_plan import (TaskPlan, TaskPlanError, parse_plan, plan_sha256,
+                        spec_sha256)
 from .task_policy import TaskPolicyError, parse_policy
 from .task_spec import TaskSpec
 
@@ -253,7 +254,28 @@ def _command_summary(evidence: Dict[str, Any]) -> Dict[str, Any]:
         "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256",
         "stdout_truncated", "stderr_truncated", "trace", "task_acceptance",
     )
-    return {key: evidence.get(key) for key in allowed if key in evidence}
+    summary = {key: evidence.get(key) for key in allowed if key in evidence}
+    repair = evidence.get("repair")
+    if isinstance(repair, dict):
+        bounded = {
+            key: repair.get(key) for key in (
+                "schema_version", "repair_mode", "attempted", "attempts",
+                "outcome", "reason", "spec_sha256", "plan_sha256",
+                "template_id", "template_sha256", "failure_fingerprint",
+                "retry_failure_fingerprint", "action", "stop",
+                "task_acceptance_pass", "request_snapshots",
+                "request_snapshot_sha256")
+            if key in repair
+        }
+        commands = repair.get("commands")
+        if isinstance(commands, list):
+            bounded["commands"] = [
+                {key: item.get(key) for key in
+                 ("template_id", "template_sha256", "argv", "exit_code",
+                  "timed_out") if key in item}
+                for item in commands if isinstance(item, dict)]
+        summary["repair"] = bounded
+    return summary
 
 
 def _report_steps(root: Path, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -328,7 +350,8 @@ def _write_execution_report(execution: ExecutionPlan, root: Path,
 
 def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                  trace_dir, session_dir, acceptance=None, command_runner=None,
-                 stop_after=None, resume_report=None, expected_report_sha256=None):
+                 stop_after=None, resume_report=None, expected_report_sha256=None,
+                 model_repair=None, spec=None, plan=None, api_key=None):
     """Execute converted steps serially and persist a bounded report.
 
     Dependency order is validated by TaskPlan parsing, so each step is a
@@ -339,6 +362,16 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
     """
     if not isinstance(execution, ExecutionPlan):
         raise TaskExecutionError("execute_plan needs an authorized ExecutionPlan")
+    if model_repair not in (None, "model"):
+        raise TaskExecutionError("model_repair must be 'model' when supplied")
+    if model_repair == "model":
+        if spec is None or plan is None:
+            raise TaskExecutionError(
+                "model repair needs the authorized TaskSpec and TaskPlan")
+        if (spec_sha256(spec) != execution.spec_sha256
+                or plan_sha256(plan) != execution.plan_sha256):
+            raise TaskExecutionError(
+                "model repair source does not match the authorized execution")
     from .task_recovery import (TaskRecoveryError, bind_step_evidence,
                                 prepare_recovery)
     if (stop_after is not None
@@ -391,6 +424,13 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                 try:
                     command = command_runner(
                         step.command_template_id, path, step.id)
+                    repair_details = None
+                    if model_repair == "model" and not getattr(command, "ok", False):
+                        from .task_model_repair import attempt_model_repair
+                        command, repair_details = attempt_model_repair(
+                            command_runner, step.command_template_id, path,
+                            step.id, failed=command, spec=spec, plan=plan,
+                            config=config, api_key=api_key, root=root)
                 except Exception as exc:
                     results.append({
                         "step_id": step.id, "action": "run_command",
@@ -404,6 +444,8 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                 evidence = dict(evidence)
                 if isinstance(evidence.get("trace"), str):
                     evidence["trace"] = str(path)
+                if repair_details is not None:
+                    evidence["repair"] = repair_details
                 results.append({
                     "step_id": step.id,
                     "action": "run_command",

@@ -35,6 +35,12 @@ JSON 结果包含精确的 spec/plan digest、task id、step 状态和本次调�
 execution report。step 失败返回 1，报告仍可回查。step 完成不等于验收通过；
 命令证据仍保持 `task_acceptance: not_evaluated`。
 
+## 模型修正入口
+
+`task exec --repair-model` 是显式 opt-in。失败的命令 step 可以请求一次模型生成
+受 `overwrite_paths` 约束的文件替换，经既有安全覆盖后只重跑同一模板一次；
+不带该参数不会调用修正 provider。详见 [有界命令修正](task-repair.zh-CN.md)。
+
 ## 顺序执行
 
 `execute_plan()` 显式接收现有 `run_task` callable，测试可传 stub。各 step

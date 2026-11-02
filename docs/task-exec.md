@@ -32,7 +32,10 @@ evidence. The plan's dependency order is checked before execution.
 for an operator who already has both documents. It re-parses the spec, binds the
 plan to that spec, and checks the plan digest before reading the provider
 configuration. It then reuses the same `execute_plan()` path described below;
-the CLI does not generate a plan or widen authority.
+the CLI does not generate a plan or widen authority. `--repair-model` is an
+opt-in extension: after a failed command step it may ask the configured model
+for one guarded file overwrite and retry the identical template once. Without
+the flag no repair provider request is made. See [task repair](task-repair.md).
 
 The JSON result contains the exact spec/plan digests, task ids, step outcomes,
 and the execution report created by this invocation. A failed step returns 1

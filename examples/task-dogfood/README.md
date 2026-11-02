@@ -56,8 +56,9 @@ pocketchat task report TASK_ID --json
 ## Limits
 
 This demonstrates these local deterministic inputs, not general agent quality.
-A stub is not real-provider evidence. Repair is operator-authored, not autonomous
-model repair. Continuation is at a confirmed step boundary, not arbitrary-crash
+A stub is not real-provider evidence. This demo's repair is operator-authored,
+not autonomous model repair; the separate opt-in model repair path is not
+exercised here. Continuation is at a confirmed step boundary, not arbitrary-crash
 or concurrent exactly-once recovery. There is no OS filesystem/network sandbox,
 cross-platform guarantee or release authorization. Keep output private if you
 modify the fixtures to contain your own data.

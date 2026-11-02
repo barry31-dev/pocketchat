@@ -92,6 +92,7 @@ class TaskExecCliTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn("--plan-sha256", result.stdout)
         self.assertIn("--spec", result.stdout)
+        self.assertIn("--repair-model", result.stdout)
 
     def test_bad_config_is_reported_as_json_after_authorization(self):
         self.config_path.write_text("{not-json}\n", encoding="utf-8")
@@ -125,6 +126,65 @@ class TaskExecCliTests(unittest.TestCase):
                              env={"POCKETCHAT_API_KEY": secret})
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertNotIn(secret, result.stdout + result.stderr)
+
+    def test_model_repair_is_opt_in_and_forwards_authorized_sources(self):
+        command = {
+            "id": "check", "argv": ["python3", "-c", "raise SystemExit(1)"],
+            "cwd": ".", "timeout_seconds": 5, "max_output_bytes": 64,
+        }
+        self.spec_payload = minimal(
+            inputs=["answer.txt"],
+            overwrite_paths=["answer.txt"],
+            tools={"write_file": {"allow_paths": ["answer.txt"]}},
+            commands=[command])
+        self.spec = parse_spec(self.spec_payload)
+        self.plan_payload = plan_payload(spec_sha256(self.spec))
+        self.plan_payload["steps"][0].update({
+            "action": "run_command", "inputs": ["check"],
+            "expected_evidence": "command evidence"})
+        self.plan = parse_plan(self.plan_payload, spec=self.spec)
+        self.spec_path.write_text(json.dumps(self.spec_payload), encoding="utf-8")
+        self.plan_path.write_text(json.dumps(self.plan_payload), encoding="utf-8")
+        calls = []
+
+        def fake_execute(execution, **kwargs):
+            calls.append((execution, kwargs))
+            return [{"step_id": "read_input", "action": "run_command",
+                     "status": "completed", "execution_report": "report.json"}]
+
+        with mock.patch.object(cli, "execute_plan", fake_execute):
+            result = run_cli(self._args("--json", "--repair-model"), self.root,
+                             env={"POCKETCHAT_API_KEY": "not-a-real-key"})
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        execution, kwargs = calls[0]
+        self.assertEqual("model", kwargs["model_repair"])
+        self.assertEqual(execution.spec_sha256, spec_sha256(kwargs["spec"]))
+        self.assertEqual(execution.plan_sha256, plan_sha256(kwargs["plan"]))
+        self.assertEqual("not-a-real-key", kwargs["api_key"])
+        self.assertNotIn("script", result.stdout)
+
+    def test_repair_model_missing_credential_fails_before_execution(self):
+        calls = []
+        with mock.patch.object(cli, "execute_plan", side_effect=calls.append):
+            result = run_cli(self._args("--json", "--repair-model"),
+                             self.root, env={})
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertIn("POCKETCHAT_API_KEY", payload["message"])
+        self.assertEqual([], calls)
+
+    def test_model_repair_is_absent_by_default(self):
+        calls = []
+        def fake_execute(execution, **kwargs):
+            calls.append(kwargs)
+            return [{"step_id": "read_input", "action": "read_file",
+                     "status": "completed", "execution_report": "report.json"}]
+        with mock.patch.object(cli, "execute_plan", fake_execute):
+            result = run_cli(self._args("--json"), self.root,
+                             env={"POCKETCHAT_API_KEY": "not-a-real-key"})
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertIsNone(calls[0]["model_repair"])
 
     def test_real_stub_execution_writes_task_trace_and_report(self):
         from tests.test_task_run import FakeTaskAdapter, final_response, model_tool

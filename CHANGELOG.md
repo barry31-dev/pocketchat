@@ -7,6 +7,13 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add opt-in model-authored command repair. `task exec --repair-model`
+  binds one model action to the authorized TaskSpec, TaskPlan and original
+  template; the action may replace only an `overwrite_paths` file through the
+  guarded editor, followed by exactly one identical template retry. The model
+  cannot add argv, shell, cwd, tools or provider authority. Repair receipts
+  keep `task_acceptance_pass: false`; the opt-in request snapshot is bound by
+  digest and never stores the replacement body. See `docs/task-repair.md`.
 - Add `task exec` as the product CLI entry for an explicitly authorized
   TaskSpec and TaskPlan. It validates both documents and the plan digest before
   reading provider configuration, executes steps through the existing bounded

@@ -46,3 +46,6 @@ recovery 行包括旧产物前后 hash/mtime。测试还回读磁盘上的命令
 只有本机固定输入的离线证据，不代表真实模型质量、任意任务成功率、Windows/Linux 支持或公开发布。
 repair 为操作者编写回调，恢复为单写者已确认步骤边界，不是任意崩溃/并发 exactly-once 事务；
 无 OS 级文件系统与网络沙箱。替换 fixture 为私人数据后，输出需按私人证据保管。
+
+> 本 demo 的 repair 仍是 operator callback，不是模型自主修正；独立的
+> `task exec --repair-model` 路径不在本离线 demo 的执行范围内。
