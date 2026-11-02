@@ -26,6 +26,19 @@ Each plan step becomes a one-action task policy:
 The prompt names only the step objective, its action/inputs and expected
 evidence. The plan's dependency order is checked before execution.
 
+## CLI execution
+
+`task exec --spec SPEC --plan PLAN --plan-sha256 DIGEST` is the product entry
+for an operator who already has both documents. It re-parses the spec, binds the
+plan to that spec, and checks the plan digest before reading the provider
+configuration. It then reuses the same `execute_plan()` path described below;
+the CLI does not generate a plan or widen authority.
+
+The JSON result contains the exact spec/plan digests, task ids, step outcomes,
+and the execution report created by this invocation. A failed step returns 1
+and the report remains inspectable. A completed step is not acceptance:
+command evidence keeps `task_acceptance: not_evaluated`.
+
 ## Sequential execution
 
 `execute_plan()` accepts the existing `run_task` callable explicitly, so tests

@@ -24,6 +24,17 @@ digest，都会在任何 provider/工具调用前拒绝。
 Prompt 只包含 step objective、action/inputs 与 expected evidence。执行前还会
 检查计划的依赖顺序。
 
+## CLI 执行
+
+`task exec --spec SPEC --plan PLAN --plan-sha256 DIGEST` 是已经持有两份文档的
+操作者使用的产品入口。它会重新解析 Spec、把 Plan 绑定到该 Spec，并在读取
+provider 配置前校验 plan digest；随后复用下文同一个 `execute_plan()` 路径。
+CLI 不生成计划，也不扩大权限。
+
+JSON 结果包含精确的 spec/plan digest、task id、step 状态和本次调用创建的
+execution report。step 失败返回 1，报告仍可回查。step 完成不等于验收通过；
+命令证据仍保持 `task_acceptance: not_evaluated`。
+
 ## 顺序执行
 
 `execute_plan()` 显式接收现有 `run_task` callable，测试可传 stub。各 step

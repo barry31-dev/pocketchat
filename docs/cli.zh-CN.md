@@ -331,6 +331,23 @@ stderr 为空。
 /usr/bin/python3 examples/task-demo/demo.py
 ```
 
+### 未发布：已授权 TaskPlan 执行
+
+`task exec` 是产品 CLI 的完整执行入口：它接收操作者已审阅的 TaskSpec 与
+TaskPlan，重新解析两份文档，要求调用者给出精确 plan digest，并在读取 provider
+配置前拒绝不匹配或扩大权限的计划：
+
+```bash
+pocketchat task exec --spec spec.json --plan plan.json \
+  --plan-sha256 <digest> --config pocketchat.json --profile local --json
+```
+
+各 step 串行复用同一套有界 task runtime；命令 step 只运行 TaskSpec 声明的 argv
+模板。输出包含 spec/plan digest、step 状态、task id 与 execution report 路径。
+step 失败返回 1 且保留报告。`ok` 只表示尝试的 step 完成，不表示验收通过，
+也不把命令 exit 0 写成任务语义通过；命令证据仍是
+`task_acceptance: not_evaluated`。
+
 ### 未发布：确定性验收
 
 ```bash

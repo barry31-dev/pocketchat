@@ -36,6 +36,7 @@ product slice.
 |---|---|---|---|---|
 | `SLICE-PREP-1` | `in_progress` | — | Package can be maintained from this repository alone: process docs name a product-reachable slice location, package-level rules exist, and no doc or module depends on a private path | this file; `tests/test_package_independence.py`; [package rules](../AGENTS.md) |
 | `SLICE-PREP-2` | `queued` | `SLICE-PREP-1` | Independent build, install and CI evidence recorded for the current candidate | `docs/release-ledger.md` §3 |
+| `TA-CLI-EXEC-1` | `in_progress` | `SLICE-PREP-1` | A product CLI path accepts an operator TaskSpec and an explicitly authorized TaskPlan, executes the plan through the existing task runtime, and emits task/report evidence without a Python wrapper | `tests/test_task_cli_exec.py`; `docs/task-exec.md`; `CHANGELOG.md` |
 
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can

@@ -1,6 +1,7 @@
 """TaskPlan execution conversion: authorize, narrow, then reuse run_task."""
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -157,6 +158,19 @@ class ExecutionTests(unittest.TestCase):
                          calls[0]["trace_path"])
         self.assertEqual(self.root / "sessions" / "read_input.jsonl",
                          calls[0]["session_path"])
+
+    def test_keyboard_interrupt_still_writes_the_execution_report(self):
+        def interrupted(**_kwargs):
+            raise KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            execute_plan(
+                self.execution, run_task=interrupted, workspace=self.root,
+                config={}, trace_dir=self.root / "traces",
+                session_dir=self.root / "sessions")
+        reports = list((self.root / ".pocketchat" / "task-reports").glob("*.json"))
+        self.assertEqual(1, len(reports))
+        self.assertEqual("KeyboardInterrupt",
+                         json.loads(reports[0].read_text())["error"]["type"])
 
     def test_failure_stops_later_steps(self):
         spec = make_spec(tools={

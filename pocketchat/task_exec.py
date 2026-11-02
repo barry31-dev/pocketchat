@@ -36,7 +36,16 @@ _HEX = frozenset("0123456789abcdef")
 
 
 class TaskExecutionError(ValueError):
-    """A plan cannot be converted into a bounded run."""
+    """A plan cannot be converted into a bounded run.
+
+    ``report`` is additive evidence for the CLI: it is set only after a run
+    has started and an execution report was written. The exception class and
+    message remain the existing contract for other callers.
+    """
+
+    def __init__(self, message, *, report=None):
+        super().__init__(message)
+        self.report = report
 
 
 def _digest(data: bytes) -> str:
@@ -423,12 +432,28 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
             issues.extend(problems)
             bind_step_evidence(root, results[-1])
             previous_ids.add(step.id)
-    except Exception as exc:
+    except BaseException as exc:
         error = {"type": type(exc).__name__, "message": str(exc)}
-        raise
-    finally:
-        _write_execution_report(
+        report_path = _write_execution_report(
             execution, root, results, changes, issues, error, recovery)
+        relative_report = report_path.relative_to(root).as_posix()
+        for result in results:
+            result.setdefault("execution_report", relative_report)
+        if isinstance(exc, TaskExecutionError):
+            exc.report = relative_report
+        else:
+            # Preserve the runner's exception type and text for existing
+            # callers. The CLI reads the report path from this note.
+            try:
+                exc.add_note("execution_report=%s" % relative_report)
+            except AttributeError:
+                pass
+        raise
+    report_path = _write_execution_report(
+        execution, root, results, changes, issues, error, recovery)
+    relative_report = report_path.relative_to(root).as_posix()
+    for result in results:
+        result.setdefault("execution_report", relative_report)
     return results
 
 

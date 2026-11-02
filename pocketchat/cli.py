@@ -63,7 +63,8 @@ from .task_checkpoint import (CheckpointError, load_checkpoint,
 from .task_delegate import (TaskDelegateError, authorize_delegation,
                             load_delegation_request)
 from .task_plan import TaskPlanError, load_plan as load_task_plan, plan_sha256
-from .task_exec import authorize
+from .task_exec import TaskExecutionError, authorize, execute_plan
+from .task_command import CommandError as TaskCommandError, run_command_template
 from .task_policy import TaskPolicyError, load_policy
 from .task_spec import TaskSpecError, load_spec
 from .tasking import (TaskError, load_record, policy_digest, task_summary)
@@ -417,6 +418,21 @@ def _parser() -> argparse.ArgumentParser:
                               help="TaskSpec the plan must remain inside")
     plan_preview.add_argument("--json", action="store_true", dest="as_json",
                               help="print one machine-readable JSON object")
+
+    task_exec = task_subparsers.add_parser(
+        "exec", help="execute an explicitly authorized TaskPlan")
+    task_exec.add_argument("--spec", type=Path, required=True,
+                           help="operator-authored TaskSpec JSON")
+    task_exec.add_argument("--plan", type=Path, required=True,
+                           help="TaskPlan JSON bound to the TaskSpec")
+    task_exec.add_argument("--plan-sha256", required=True,
+                           help="expected lowercase SHA-256 of the authorized plan")
+    task_exec.add_argument("--config", type=Path, default=None,
+                           help="configuration file (default: ./pocketchat.json)")
+    task_exec.add_argument("--profile", default=None,
+                           help="profile name (default: config's default profile)")
+    task_exec.add_argument("--json", action="store_true", dest="as_json",
+                           help="print one machine-readable JSON object")
 
     task_checkpoint = task_subparsers.add_parser(
         "checkpoint", help="inspect a plan/command checkpoint without running it")
@@ -1251,6 +1267,81 @@ def _cmd_task(args: argparse.Namespace) -> int:
                   % (result["boundary_index"],
                      ",".join(result["pending_step_ids"]) or "(none)"))
         return EXIT_OK
+
+    if args.task_command == "exec":
+        try:
+            spec = load_spec(args.spec)
+            plan = load_task_plan(args.plan, spec=spec)
+            execution = authorize(plan, spec,
+                                  expected_plan_sha256=args.plan_sha256)
+            # Authorization is complete before configuration or credentials
+            # are read.
+            config = load_config(_config_path(args.config))
+            selected = profile_config(config, args.profile)
+            template_by_id = {item["id"]: item for item in spec.commands}
+
+            def command_runner(template_id, trace_path, run_id):
+                return run_command_template(
+                    Path.cwd(), template_by_id[template_id],
+                    trace_path=trace_path, run_id=run_id)
+
+            results = execute_plan(
+                execution, run_task=run_task, workspace=Path.cwd(),
+                config=selected, trace_dir=Path.cwd() / "traces",
+                session_dir=Path.cwd() / DEFAULT_SESSIONS_DIR,
+                command_runner=command_runner,
+            )
+        except (AcceptanceError, TaskError, ConfigError, TaskPolicyError,
+                TaskSpecError, TaskPlanError, TaskExecutionError,
+                TaskCommandError, SessionError, OSError, ValueError) as exc:
+            report = getattr(exc, "report", None)
+            if report is None:
+                for note in getattr(exc, "__notes__", ()):
+                    if isinstance(note, str) and note.startswith("execution_report="):
+                        report = note.split("=", 1)[1]
+                        break
+            if args.as_json:
+                payload = {
+                    "ok": False, "schema_version": "1",
+                    "error": "task", "message": str(exc),
+                }
+                if report:
+                    payload["reports"] = [report]
+                print(json.dumps(payload, sort_keys=True))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+                if report:
+                    print("execution report %s" % report, file=sys.stderr)
+            if report:
+                return EXIT_RUN_FAILED
+            if isinstance(exc, SessionError):
+                return EXIT_RUN_FAILED
+            return EXIT_USAGE
+        task_ids = sorted({item.get("task_id") for item in results
+                           if isinstance(item.get("task_id"), str)})
+        reports = sorted({
+            item["execution_report"] for item in results
+            if isinstance(item.get("execution_report"), str)
+        })
+        payload = {
+            "ok": all(item.get("status") == "completed" for item in results),
+            "schema_version": "1",
+            "spec_sha256": execution.spec_sha256,
+            "plan_sha256": execution.plan_sha256,
+            "task_ids": task_ids,
+            "steps": results,
+            "reports": reports,
+        }
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("task exec  spec=%s  plan=%s"
+                  % (execution.spec_sha256[:12], execution.plan_sha256[:12]))
+            for item in results:
+                print("%s  %s  %s" % (item.get("step_id"), item.get("action"),
+                                      item.get("status")))
+            print("reports %s" % (", ".join(reports) or "(none)"))
+        return EXIT_OK if payload["ok"] else EXIT_RUN_FAILED
 
     if args.task_command == "run":
         try:

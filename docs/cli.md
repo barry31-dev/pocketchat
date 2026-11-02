@@ -409,6 +409,24 @@ refusal:
 ```
 
 
+### Unreleased: authorized TaskPlan execution
+
+`task exec` is the product CLI entry for an already authorized TaskSpec and
+TaskPlan. It re-parses both documents, requires the caller's exact plan digest,
+and refuses a mismatched or widened plan before reading provider configuration:
+
+```bash
+pocketchat task exec --spec spec.json --plan plan.json \
+  --plan-sha256 <digest> --config pocketchat.json --profile local --json
+```
+
+Steps run serially through the same bounded task runtime; command steps use
+only the argv templates declared by the TaskSpec. The command returns the
+spec/plan digests, step outcomes, task ids and the execution report path. A
+failed step exits 1 with its report preserved. `ok` means the attempted steps
+completed, not that acceptance passed or that a command was a semantic task
+pass; command evidence remains `task_acceptance: not_evaluated`.
+
 ### Unreleased: deterministic acceptance
 
 ```bash

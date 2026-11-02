@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add `task exec` as the product CLI entry for an explicitly authorized
+  TaskSpec and TaskPlan. It validates both documents and the plan digest before
+  reading provider configuration, executes steps through the existing bounded
+  task runtime, preserves an execution report on failure, and never turns a
+  command exit 0 into task acceptance. See `docs/task-exec.md`.
 
 - Add checkpoint-driven resume. `resume_from_checkpoint()` resolves one
   checkpoint into the workspace-relative report and digest to resume from,
