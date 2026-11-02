@@ -221,6 +221,41 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual("not_executed", results[1]["status"])
         self.assertEqual("previous_step_did_not_complete", results[1]["reason"])
 
+    def test_next_step_prompt_contains_only_declared_dependency_state(self):
+        spec = make_spec(inputs=["input.md", "second.md"],
+                         tools={"read_file": {
+                             "allow_paths": ["input.md", "second.md"]}})
+        payload = plan_payload(spec_sha256(spec))
+        payload["steps"].append({
+            "id": "second", "objective": "read second",
+            "action": "read_file", "inputs": ["second.md"],
+            "expected_evidence": "second content",
+            "depends_on": ["read_input"], "retry_limit": 0,
+        })
+        plan = parse_plan(payload, spec=spec)
+        execution = authorize(plan, spec,
+                              expected_plan_sha256=plan_sha256(plan))
+        seen = []
+
+        def fake_run_task(**kwargs):
+            seen.append(kwargs["prompts"][0])
+            return type("Result", (), {
+                "status": "completed", "task_id": "task",
+                "record": None,
+                "trace_path": self.root / "traces" / "task.jsonl",
+                "session_path": self.root / "sessions" / "task.jsonl",
+            })()
+
+        execute_plan(execution, run_task=fake_run_task,
+                     workspace=self.root, config={},
+                     trace_dir=self.root / "traces",
+                     session_dir=self.root / "sessions")
+        self.assertEqual(2, len(seen))
+        self.assertIn("read_input", seen[1])
+        self.assertIn("input.md", seen[1])
+        self.assertEqual(1, seen[1].count("read_input"))
+        self.assertNotIn("traces/other.jsonl", seen[1])
+
     def test_real_run_task_with_stub_adapter_completes_one_step(self):
         class Adapter(FakeTaskAdapter):
             name = "task-exec-stub"

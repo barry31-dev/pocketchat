@@ -348,6 +348,46 @@ def _write_execution_report(execution: ExecutionPlan, root: Path,
     return path
 
 
+def _task_state_prompt(step, results, execution) -> str:
+    """Add bounded evidence from completed dependencies to one step prompt.
+
+    The projector is deliberately given a report-shaped view assembled from the
+    already returned step records. It never includes a model's prose as proof.
+    """
+    if not step.depends_on:
+        return step.prompt
+    from .task_state import TaskStateError, project_task_state
+    rows = []
+    by_id = {item.id: item for item in execution.steps}
+    for result in results:
+        dependency_id = result.get("step_id")
+        if dependency_id not in step.depends_on:
+            continue
+        row = {key: result[key] for key in
+               ("step_id", "action", "status", "task_id", "trace",
+                "session") if key in result}
+        dependency = by_id[dependency_id]
+        row["inputs"] = (list(dependency.policy.read_allow_paths)
+                         + list(dependency.policy.write_allow_paths))
+        rows.append(row)
+    report = {
+        "spec_sha256": execution.spec_sha256,
+        "plan_sha256": execution.plan_sha256,
+        "steps": rows,
+        "changes": [],
+        "evidence_issues": [],
+    }
+    try:
+        state = project_task_state(
+            report, step_id=step.id, depends_on=list(step.depends_on),
+            allowed_paths=list(step.policy.read_allow_paths)
+            + list(step.policy.write_allow_paths))
+    except TaskStateError as exc:
+        raise TaskExecutionError(str(exc)) from exc
+    return step.prompt + "\nDependency evidence:\n" + json.dumps(
+        state, ensure_ascii=False, sort_keys=True)
+
+
 def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                  trace_dir, session_dir, acceptance=None, command_runner=None,
                  stop_after=None, resume_report=None, expected_report_sha256=None,
@@ -465,7 +505,8 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
             result = run_task(
                 policy=step.policy, workspace=root, config=config,
                 trace_path=path, session_path=session_path,
-                prompts=[step.prompt], acceptance=acceptance,
+                prompts=[_task_state_prompt(step, results, execution)],
+                acceptance=acceptance,
                 task_budget=task_budget)
             results.append({"step_id": step.id, "action": step.action,
                             "status": result.status,
