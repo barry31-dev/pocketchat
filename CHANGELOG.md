@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add CLI step-boundary continuation for `task exec`. `--stop-after` records an
+  intentional boundary and exits 0; `--resume-report` plus `--report-sha256`,
+  or `--checkpoint`, re-verifies the completed prefix and executes only the
+  unfinished suffix. Report/plan/checkpoint mismatches are refused before a
+  new provider or command call. See `docs/task-exec.md`.
 - Add `task plan generate` as the product CLI path from one TaskSpec to a
   validated TaskPlan. It uses the configured provider with at most one
   revision, writes exclusive request/plan snapshots, persists a plain plan,

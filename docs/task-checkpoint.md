@@ -45,9 +45,11 @@ pocketchat task checkpoint resume ckpt.json \
   --spec-sha256 <TaskSpec digest> --plan-sha256 <TaskPlan digest> --json
 ```
 
-The preview is read-only. Passing the resolved report and digest to the existing
-`execute_plan(..., resume_report=..., expected_report_sha256=...)` performs the
-resume itself; completed steps are re-verified rather than replayed.
+The preview is read-only. `task exec --checkpoint ckpt.json` resolves the same
+bound report and digest for the existing `execute_plan(..., resume_report=...,
+expected_report_sha256=...)`; completed steps are re-verified rather than
+replayed. A direct `task exec --resume-report ... --report-sha256 ...` is the
+equivalent path when the operator already holds the exact report digest.
 
 ## Boundaries
 

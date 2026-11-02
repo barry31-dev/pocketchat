@@ -37,6 +37,35 @@ opt-in extension: after a failed command step it may ask the configured model
 for one guarded file overwrite and retry the identical template once. Without
 the flag no repair provider request is made. See [task repair](task-repair.md).
 
+`--stop-after N` records an explicit `step_boundary` after N newly attempted
+steps. A boundary is an intentional pause, so the command returns 0 with
+`status: boundary`; it is not a completed task and does not imply acceptance.
+
+Resume either directly from an exact report:
+
+```bash
+pocketchat task exec --spec spec.json --plan plan.json \
+  --plan-sha256 <digest> --resume-report REPORT \
+  --report-sha256 <report-digest> --config pocketchat.json --json
+```
+
+or from a checkpoint whose bound report and digest are verified before the
+provider configuration is read:
+
+```bash
+pocketchat task exec --spec spec.json --plan plan.json \
+  --plan-sha256 <digest> --checkpoint checkpoint.json \
+  --config pocketchat.json --json
+```
+
+Completed steps are re-verified and skipped; only the never-started suffix is
+attempted. A fully completed source is a verified no-op that creates no new
+report. A failed/unknown prior side effect, changed report digest, mismatched
+Spec/Plan, or missing evidence is refused before a new model/command call.
+`--resume-report` and `--checkpoint` are mutually exclusive; a direct report
+requires `--report-sha256`, and neither resume form combines with
+`--stop-after`.
+
 The JSON result contains the exact spec/plan digests, task ids, step outcomes,
 and the execution report created by this invocation. A failed step returns 1
 and the report remains inspectable. A completed step is not acceptance:

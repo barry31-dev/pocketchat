@@ -41,6 +41,33 @@ execution report。step 失败返回 1，报告仍可回查。step 完成不等�
 受 `overwrite_paths` 约束的文件替换，经既有安全覆盖后只重跑同一模板一次；
 不带该参数不会调用修正 provider。详见 [有界命令修正](task-repair.zh-CN.md)。
 
+## 步骤边界与接续
+
+`--stop-after N` 在本次新尝试 N 步后写出明确的 `step_boundary`。这是有意的暂停，
+命令返回 0、`status: boundary`，但它不是任务完成，也不代表验收通过。
+
+可以从精确报告接续：
+
+```bash
+pocketchat task exec --spec spec.json --plan plan.json \
+  --plan-sha256 <digest> --resume-report REPORT \
+  --report-sha256 <report-digest> --config pocketchat.json --json
+```
+
+也可以从 checkpoint 接续；CLI 会在读取 provider 配置前核对 checkpoint 绑定的
+报告路径与 digest：
+
+```bash
+pocketchat task exec --spec spec.json --plan plan.json \
+  --plan-sha256 <digest> --checkpoint checkpoint.json \
+  --config pocketchat.json --json
+```
+
+已完成 step 会重新验证并跳过，只执行从未开始的后缀；完全完成的历史报告是已验证
+no-op，不会生成新报告。失败/未知副作用、报告 digest 改变、Spec/Plan 不匹配或证据
+缺失都会在新的模型/命令调用前拒绝。`--resume-report` 与 `--checkpoint` 互斥；直接
+报告必须同时给出 `--report-sha256`；两种接续都不能与 `--stop-after` 组合。
+
 ## 顺序执行
 
 `execute_plan()` 显式接收现有 `run_task` callable，测试可传 stub。各 step

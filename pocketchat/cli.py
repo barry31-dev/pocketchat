@@ -451,6 +451,14 @@ def _parser() -> argparse.ArgumentParser:
     task_exec.add_argument("--repair-model", action="store_true",
                            dest="repair_model",
                            help="allow one model-authored guarded repair after a failed command step")
+    task_exec.add_argument("--stop-after", type=int, default=None,
+                           help="write a boundary after N newly attempted steps")
+    task_exec.add_argument("--resume-report", type=Path, default=None,
+                           help="existing execution report to resume from")
+    task_exec.add_argument("--report-sha256", default=None,
+                           help="exact SHA-256 of --resume-report")
+    task_exec.add_argument("--checkpoint", type=Path, default=None,
+                           help="checkpoint that resolves the report to resume")
     task_exec.add_argument("--json", action="store_true", dest="as_json",
                            help="print one machine-readable JSON object")
 
@@ -1381,6 +1389,37 @@ def _cmd_task(args: argparse.Namespace) -> int:
             plan = load_task_plan(args.plan, spec=spec)
             execution = authorize(plan, spec,
                                   expected_plan_sha256=args.plan_sha256)
+            uses_report = args.resume_report is not None
+            uses_checkpoint = args.checkpoint is not None
+            if uses_report and uses_checkpoint:
+                raise TaskExecutionError(
+                    "--resume-report and --checkpoint are mutually exclusive")
+            if uses_report != (args.report_sha256 is not None):
+                raise TaskExecutionError(
+                    "--resume-report and --report-sha256 must be used together")
+            if uses_checkpoint and args.report_sha256 is not None:
+                raise TaskExecutionError(
+                    "--report-sha256 belongs to --resume-report, not --checkpoint")
+            if args.stop_after is not None and (uses_report or uses_checkpoint):
+                raise TaskExecutionError(
+                    "--stop-after cannot be combined with a resume source")
+            resume_report = None
+            expected_report_sha256 = None
+            root = Path.cwd().resolve()
+            if uses_report:
+                try:
+                    resume_report = args.resume_report.resolve().relative_to(root)
+                except (OSError, ValueError) as exc:
+                    raise TaskExecutionError(
+                        "resume report escapes the workspace: %s" % exc)
+                expected_report_sha256 = args.report_sha256
+            elif uses_checkpoint:
+                resolution = resume_from_checkpoint(
+                    Path.cwd(), args.checkpoint,
+                    expected_spec_sha256=execution.spec_sha256,
+                    expected_plan_sha256=execution.plan_sha256)
+                resume_report = Path(resolution["report_path"])
+                expected_report_sha256 = resolution["expected_report_sha256"]
             # Authorization is complete before configuration or credentials
             # are read.
             config = load_config(_config_path(args.config))
@@ -1404,6 +1443,9 @@ def _cmd_task(args: argparse.Namespace) -> int:
                 command_runner=command_runner,
                 model_repair="model" if args.repair_model else None,
                 spec=spec, plan=plan, api_key=api_key,
+                stop_after=args.stop_after,
+                resume_report=resume_report,
+                expected_report_sha256=expected_report_sha256,
             )
         except (AcceptanceError, TaskError, ConfigError, TaskPolicyError,
                 TaskSpecError, TaskPlanError, TaskExecutionError,
@@ -1437,8 +1479,19 @@ def _cmd_task(args: argparse.Namespace) -> int:
             item["execution_report"] for item in results
             if isinstance(item.get("execution_report"), str)
         })
+        # A fully completed source is intentionally a no-op: the executor
+        # returns its verified results without creating a successor report.
+        # Name the source as the operative report rather than emitting [].
+        if not reports and (uses_report or uses_checkpoint):
+            reports = [Path(resume_report).as_posix()]
+        boundary = any(item.get("status") == "not_executed"
+                       and item.get("reason") == "step_boundary"
+                       for item in results)
+        failed = any(item.get("status") == "failed" for item in results)
+        status = "failed" if failed else ("boundary" if boundary else "completed")
         payload = {
-            "ok": all(item.get("status") == "completed" for item in results),
+            "ok": not failed,
+            "status": status,
             "schema_version": "1",
             "spec_sha256": execution.spec_sha256,
             "plan_sha256": execution.plan_sha256,
@@ -1446,11 +1499,15 @@ def _cmd_task(args: argparse.Namespace) -> int:
             "steps": results,
             "reports": reports,
         }
+        if uses_report or uses_checkpoint:
+            payload["resumed_from_report"] = Path(resume_report).as_posix()
+            payload["resumed_from_report_sha256"] = expected_report_sha256
         if args.as_json:
             print(json.dumps(payload, sort_keys=True))
         else:
-            print("task exec  spec=%s  plan=%s"
-                  % (execution.spec_sha256[:12], execution.plan_sha256[:12]))
+            print("task exec  spec=%s  plan=%s  status=%s"
+                  % (execution.spec_sha256[:12], execution.plan_sha256[:12],
+                     status))
             for item in results:
                 print("%s  %s  %s" % (item.get("step_id"), item.get("action"),
                                       item.get("status")))
