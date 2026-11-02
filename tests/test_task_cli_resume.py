@@ -12,6 +12,7 @@ from pocketchat import cli
 from pocketchat.task_checkpoint import create_checkpoint
 from pocketchat.task_plan import parse_plan, plan_sha256, spec_sha256
 from pocketchat.task_spec import parse_spec
+from tests import _helpers as hp
 from tests._helpers import run_cli
 from tests.test_task_run import FakeTaskAdapter, final_response, model_tool
 from tests.test_task_spec import minimal
@@ -106,6 +107,8 @@ class TaskExecResumeTests(unittest.TestCase):
         self.assertFalse((self.root / "sessions" / "second.jsonl").exists())
         self.assertEqual(2, len(self.adapter.calls))
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "resume requires secure descriptor-relative reads")
     def test_direct_report_resume_runs_only_the_unfinished_step(self):
         _, report = self.stop()
         report_sha = digest(report)
@@ -126,6 +129,8 @@ class TaskExecResumeTests(unittest.TestCase):
         self.assertEqual(report.relative_to(self.root).as_posix(),
                          data["recovery"]["report"])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "resume requires secure descriptor-relative reads")
     def test_checkpoint_resume_uses_the_bound_report_and_digest(self):
         _, report = self.stop()
         checkpoint = create_checkpoint(
@@ -158,6 +163,8 @@ class TaskExecResumeTests(unittest.TestCase):
         self.assertEqual(2, result.returncode, result.stdout + result.stderr)
         self.assertEqual(calls_before, len(self.adapter.calls))
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "resume requires secure descriptor-relative reads")
     def test_fully_completed_source_is_a_verified_noop_without_a_new_report(self):
         _, report = self.stop()
         report_sha = digest(report)
@@ -182,6 +189,8 @@ class TaskExecResumeTests(unittest.TestCase):
         self.assertEqual([completed_report.relative_to(self.root).as_posix()],
                          payload["reports"])
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "resume requires secure descriptor-relative reads")
     def test_resume_digest_mismatch_refuses_before_provider_or_command(self):
         _, report = self.stop()
         calls_before = len(self.adapter.calls)
