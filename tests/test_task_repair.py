@@ -95,12 +95,13 @@ class RepairTests(unittest.TestCase):
         def runner(template_id, trace_path, run_id):
             seen.append((template_id, str(trace_path), run_id))
             return FakeCommand(1 if len(seen) == 1 else 0)
+        source = "/tmp/traces/check.jsonl"
+        retry = str(Path(source).with_name("check.retry-1.jsonl"))
         _, details = run_bounded_repair(
-            runner, "check", "/tmp/traces/check.jsonl", "step",
+            runner, "check", source, "step",
             repair=lambda evidence: RepairDecision(True, "same template"))
-        self.assertEqual([("check", "/tmp/traces/check.jsonl", "step"),
-                          ("check", "/tmp/traces/check.retry-1.jsonl",
-                           "step.retry-1")], seen)
+        self.assertEqual([("check", source, "step"),
+                          ("check", retry, "step.retry-1")], seen)
         self.assertEqual("repaired", details["outcome"])
 
     def test_bad_repair_callback_and_bad_decision_fail_closed(self):

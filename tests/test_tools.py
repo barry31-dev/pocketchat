@@ -18,7 +18,7 @@ class ReadFileToolTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        (self.root / "notes.txt").write_text("hello\n", encoding="utf-8")
+        (self.root / "notes.txt").write_bytes(b"hello\n")
         (self.root / ".env").write_text("SECRET=value\n", encoding="utf-8")
         (self.root / "binary.bin").write_bytes(b"\x00\x01\x02")
 

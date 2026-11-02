@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests import _helpers as hp
+
 from pocketchat.cli import _task_report_payload
 from pocketchat.tasking import load_record
 from pocketchat.task_command import parse_command_templates, run_command_template
@@ -140,7 +142,9 @@ class ReportEvidenceTests(unittest.TestCase):
         self.assertEqual(3, payload["commands"][0]["exit_code"])
         self.assertEqual("not_evaluated",
                          payload["commands"][0]["task_acceptance"])
-        self.assertEqual("not_recorded", payload["acceptance"]["state"])
+        expected_acceptance = ("not_recorded" if hp.SECURE_DESCRIPTOR_READS
+                               else "unknown")
+        self.assertEqual(expected_acceptance, payload["acceptance"]["state"])
 
     def test_missing_or_tampered_archive_is_an_evidence_issue(self):
         task_record(self.root)
