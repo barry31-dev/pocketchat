@@ -10,6 +10,18 @@ from unittest import mock
 from scripts import release_smoke
 
 
+class WorkflowLintTests(unittest.TestCase):
+    def test_ci_runs_repository_lint_before_tests(self):
+        workflow = (Path(__file__).resolve().parents[1] / ".github" /
+                    "workflows" / "ci.yml").read_text(encoding="utf-8")
+        lint = workflow.find("- name: Run repository lint")
+        tests = workflow.find("- name: Run the suite")
+        self.assertGreaterEqual(lint, 0)
+        self.assertGreater(tests, lint)
+        self.assertIn('python -m pip install "ruff==0.17.3"', workflow)
+        self.assertIn("python -m ruff check --select E9,F pocketchat tests", workflow)
+
+
 class WorkflowTests(unittest.TestCase):
     def test_workflow_runs_and_uploads_the_release_smoke(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github" /

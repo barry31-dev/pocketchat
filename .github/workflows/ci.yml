@@ -45,6 +45,11 @@ jobs:
           echo "python=$(python --version)" >> "$GITHUB_OUTPUT"
           echo "pip=$(python -m pip --version)" >> "$GITHUB_OUTPUT"
 
+      - name: Run repository lint
+        run: |
+          python -m pip install "ruff==0.17.3"
+          python -m ruff check --select E9,F pocketchat tests
+
       - name: Run the suite
         run: python -m unittest discover -s tests -v
 
