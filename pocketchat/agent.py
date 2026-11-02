@@ -122,6 +122,7 @@ class TaskRunResult:
     run_id: str
     trace_path: Path
     session_path: Path
+    acceptance: Optional[Dict[str, Any]] = None
 
 
 class _TaskRunController:
@@ -218,12 +219,15 @@ def _task_config(config: Dict[str, Any], policy, workspace_root: Path) -> Dict[s
 
 def run_task(*, policy, workspace: Path, config: Dict[str, Any],
              trace_path: Path, session_path: Path,
-             prompts: Iterable[str]) -> TaskRunResult:
+             prompts: Iterable[str], acceptance=None) -> TaskRunResult:
     """Run one bounded task through the existing model and tool path."""
     from .session import Session
     from .tasking import (create_record, save_record, task_summary,
                          transition)
 
+    if acceptance is not None:
+        from .acceptance import parse_plan
+        acceptance = parse_plan(acceptance.source)
     workspace = Path(workspace)
     workspace_root = (workspace / policy.workspace_root).resolve()
     try:
@@ -251,6 +255,19 @@ def run_task(*, policy, workspace: Path, config: Dict[str, Any],
         update_record(workspace, record)
         raise
     status = session.run(prompts)
+    receipt = None
+    if acceptance is not None:
+        from .acceptance import AcceptanceError, verify_task
+        from .tasking import TaskError
+        if status != "completed":
+            receipt = {"state": "not_run", "reason": "execution_not_completed"}
+        else:
+            try:
+                receipt = verify_task(workspace, record.task_id, acceptance)
+            except (AcceptanceError, TaskError, OSError):
+                # Execution evidence remains valid even if acceptance storage
+                # cannot be created. Never turn missing proof into a pass.
+                receipt = {"state": "unknown", "reason": "acceptance_unavailable"}
     return TaskRunResult(
         task_id=record.task_id,
         status=status,
@@ -259,4 +276,5 @@ def run_task(*, policy, workspace: Path, config: Dict[str, Any],
         run_id=session.run_id,
         trace_path=session.trace_path,
         session_path=Path(session_path),
+        acceptance=receipt,
     )

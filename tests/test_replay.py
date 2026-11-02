@@ -13,6 +13,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+from tests import _helpers as hp
 from unittest import mock
 
 from pocketchat.request import canonical_bytes, write_request_snapshot
@@ -125,7 +127,7 @@ class ReplayCliTests(unittest.TestCase):
         return subprocess.run(
             [sys.executable, "-m", "pocketchat"] + list(args),
             cwd=str(self.base),
-            env=env,
+            env=hp.subprocess_environment(env),
             capture_output=True,
             text=True,
             timeout=120,

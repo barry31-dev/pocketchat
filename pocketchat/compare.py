@@ -147,10 +147,10 @@ class ComparisonResult:
 
 def _relative(path: Path, workspace: Path) -> str:
     try:
-        return os.path.relpath(str(Path(path)), str(workspace))
+        return Path(os.path.relpath(str(Path(path)), str(workspace))).as_posix()
     except ValueError:
-        # Different drives on Windows. The bare name is still the honest answer.
-        return Path(path).name
+        # Different drives on Windows: keep the actual absolute reference.
+        return Path(path).as_posix()
 
 
 def _parse_timestamp(value: Any) -> Optional[datetime]:

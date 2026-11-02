@@ -17,9 +17,10 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from . import __version__
+from .acceptance import (AcceptanceError, acceptance_history, load_plan, verify_task)
 from .agent import (AgentCommandError, AgentState, apply_command,
                     run_task, DEFAULT_REASONING)
 from .branching import BranchError, create_branch_from
@@ -42,7 +43,7 @@ from .recovery import (RecoveryError, create_checkpoint, rewind_to_checkpoint,
 from .replay import ReplayError, replay_snapshots
 from .selection import SelectionError, record_selection
 from .repl import echo_reply, goodbye, read_lines
-from .tui import run_tui
+from .tui import TUIUnavailable, run_tui
 from .tools import (ToolError, ToolPermissionError, execute_read_file,
                     execute_write_file)
 from .service import (context_preview, export_record, export_session,
@@ -51,7 +52,20 @@ from .sessions import (SessionFileError, read_header, read_messages,
                        resolve_session_argument, resolve_session_path,
                        NOT_RECORDED)
 from .session import Session, SessionError, new_run_id
+from .task_context import (DEFAULT_MAX_DEPTH, DEFAULT_MAX_FILES,
+                           DEFAULT_MAX_PATH_CHARS, TaskContextError, scan_tree)
+from .task_selection import (DEFAULT_MAX_SELECTED_FILES, TaskSelectionError,
+                             load_tree as load_context_tree, select_files)
+from .task_snapshot import (DEFAULT_MAX_SNAPSHOT_BYTES, TaskSnapshotError,
+                            load_selection, snapshot_files)
+from .task_checkpoint import (CheckpointError, load_checkpoint,
+                              parse_checkpoint, resume_from_checkpoint)
+from .task_delegate import (TaskDelegateError, authorize_delegation,
+                            load_delegation_request)
+from .task_plan import TaskPlanError, load_plan as load_task_plan, plan_sha256
+from .task_exec import authorize
 from .task_policy import TaskPolicyError, load_policy
+from .task_spec import TaskSpecError, load_spec
 from .tasking import (TaskError, load_record, policy_digest, task_summary)
 from .workspace import (WorkspaceError, as_dict, collect_workspace,
                         render_lines)
@@ -350,6 +364,103 @@ def _parser() -> argparse.ArgumentParser:
         "task", help="run and inspect one bounded, evidence-backed task")
     task_subparsers = task.add_subparsers(dest="task_command", required=True)
 
+    task_spec = task_subparsers.add_parser(
+        "spec", help="inspect an operator-authored TaskSpec without running it")
+    spec_subparsers = task_spec.add_subparsers(dest="spec_command", required=True)
+    spec_preview = spec_subparsers.add_parser(
+        "preview", help="validate a TaskSpec and print its equivalent task policy")
+    spec_preview.add_argument("spec", type=Path, help="TaskSpec JSON")
+    spec_preview.add_argument("--json", action="store_true", dest="as_json",
+                              help="print one machine-readable JSON object")
+
+    task_context = task_subparsers.add_parser(
+        "context", help="inspect bounded repository context without a model")
+    context_subparsers = task_context.add_subparsers(
+        dest="context_command", required=True)
+    context_scan = context_subparsers.add_parser(
+        "scan", help="list bounded workspace-relative file metadata")
+    context_scan.add_argument("path", type=Path, nargs="?", default=Path("."),
+                              help="workspace directory (default: current directory)")
+    context_scan.add_argument("--include", action="append", dest="includes",
+                              help="workspace-relative file or directory; repeatable")
+    context_scan.add_argument("--max-files", type=int, default=DEFAULT_MAX_FILES)
+    context_scan.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH)
+    context_scan.add_argument("--max-path-chars", type=int,
+                              default=DEFAULT_MAX_PATH_CHARS)
+    context_scan.add_argument("--json", action="store_true", dest="as_json",
+                              help="print one machine-readable JSON object")
+    context_select = context_subparsers.add_parser(
+        "select", help="rank frozen tree paths by exact query tokens")
+    context_select.add_argument("tree", type=Path, help="context-tree JSON")
+    context_select.add_argument("--query", action="append", required=True,
+                                dest="queries", help="query text; repeatable")
+    context_select.add_argument("--max-files", type=int,
+                                default=DEFAULT_MAX_SELECTED_FILES)
+    context_select.add_argument("--json", action="store_true", dest="as_json",
+                                help="print one machine-readable JSON object")
+    context_snapshot = context_subparsers.add_parser(
+        "snapshot", help="read only selected files into a bounded UTF-8 snapshot")
+    context_snapshot.add_argument("tree", type=Path, help="context-tree JSON")
+    context_snapshot.add_argument("selection", type=Path, help="context-selection JSON")
+    context_snapshot.add_argument("--max-bytes", type=int,
+                                  default=DEFAULT_MAX_SNAPSHOT_BYTES)
+    context_snapshot.add_argument("--json", action="store_true", dest="as_json",
+                                  help="print one machine-readable JSON object")
+
+    task_plan = task_subparsers.add_parser(
+        "plan", help="inspect a TaskPlan without running it")
+    plan_subparsers = task_plan.add_subparsers(dest="plan_command", required=True)
+    plan_preview = plan_subparsers.add_parser(
+        "preview", help="validate a TaskPlan against its TaskSpec")
+    plan_preview.add_argument("plan", type=Path, help="TaskPlan JSON")
+    plan_preview.add_argument("--spec", type=Path, required=True,
+                              help="TaskSpec the plan must remain inside")
+    plan_preview.add_argument("--json", action="store_true", dest="as_json",
+                              help="print one machine-readable JSON object")
+
+    task_checkpoint = task_subparsers.add_parser(
+        "checkpoint", help="inspect a plan/command checkpoint without running it")
+    checkpoint_subparsers = task_checkpoint.add_subparsers(
+        dest="checkpoint_command", required=True)
+    checkpoint_preview = checkpoint_subparsers.add_parser(
+        "preview", help="validate a checkpoint and print its step boundary")
+    checkpoint_preview.add_argument("checkpoint", type=Path,
+                                    help="checkpoint JSON")
+    checkpoint_preview.add_argument("--spec-sha256", default=None,
+                                    help="expected TaskSpec digest")
+    checkpoint_preview.add_argument("--plan-sha256", default=None,
+                                    help="expected TaskPlan digest")
+    checkpoint_preview.add_argument("--json", action="store_true",
+                                    dest="as_json",
+                                    help="print one machine-readable JSON object")
+    checkpoint_resume = checkpoint_subparsers.add_parser(
+        "resume", help="resolve a checkpoint into the report to resume from")
+    checkpoint_resume.add_argument("checkpoint", type=Path,
+                                   help="checkpoint JSON")
+    checkpoint_resume.add_argument("--spec-sha256", default=None,
+                                   help="expected TaskSpec digest")
+    checkpoint_resume.add_argument("--plan-sha256", default=None,
+                                   help="expected TaskPlan digest")
+    checkpoint_resume.add_argument("--json", action="store_true",
+                                   dest="as_json",
+                                   help="print one machine-readable JSON object")
+
+    task_delegate = task_subparsers.add_parser(
+        "delegate", help="authorize child delegations from a parent plan")
+    delegate_subparsers = task_delegate.add_subparsers(
+        dest="delegate_command", required=True)
+    delegate_preview = delegate_subparsers.add_parser(
+        "preview", help="validate a delegation against its parent plan")
+    delegate_preview.add_argument("delegation", type=Path,
+                                  help="delegation request JSON")
+    delegate_preview.add_argument("--plan", type=Path, required=True,
+                                  help="parent TaskPlan JSON")
+    delegate_preview.add_argument("--spec", type=Path, required=True,
+                                  help="TaskSpec the plan must remain inside")
+    delegate_preview.add_argument("--json", action="store_true",
+                                  dest="as_json",
+                                  help="print one machine-readable JSON object")
+
     task_run = task_subparsers.add_parser(
         "run", help="create and run one task under an explicit policy")
     add_common(task_run)
@@ -360,6 +471,16 @@ def _parser() -> argparse.ArgumentParser:
                           help="session file to create or continue")
     task_run.add_argument("--json", action="store_true", dest="as_json",
                           help="print one machine-readable JSON object")
+    task_run.add_argument("--acceptance", type=Path,
+                          help="optional operator-declared acceptance plan JSON")
+
+    task_verify = task_subparsers.add_parser(
+        "verify", help="check declared artifacts of a completed task without a model")
+    task_verify.add_argument("task_id")
+    task_verify.add_argument("--acceptance", type=Path, required=True,
+                             help="operator-declared acceptance plan JSON")
+    task_verify.add_argument("--json", action="store_true", dest="as_json",
+                             help="print one machine-readable JSON object")
 
     task_status = task_subparsers.add_parser(
         "status", help="report one task record without running it")
@@ -634,8 +755,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     return EXIT_USAGE
 
 
-def _json_path(value: Path) -> str:
-    return os.path.relpath(str(Path(value)), str(Path.cwd()))
+def _json_path(value: Path, start: Path = None) -> str:
+    value = Path(value)
+    start = Path.cwd() if start is None else Path(start)
+    try:
+        return Path(os.path.relpath(str(value), str(start))).as_posix()
+    except ValueError:
+        return value.as_posix()
 
 
 def _print_json_error(code: str, message: str) -> None:
@@ -808,6 +934,67 @@ def _cmd_rewind(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _task_trace_evidence(
+        root: Path,
+        run_ids: List[str]) -> Tuple[List[str], List[Dict[str, str]]]:
+    """Find trace files by parsing each JSONL line, not by substring.
+
+    A recorded run is linked only when an event's own ``run_id`` matches it.
+    Searching serialized JSON as a substring turns a different run into a
+    link. A malformed or unreadable trace is reported with a state instead of
+    disappearing into an empty result that looks like "there was no trace".
+    """
+    linked: List[str] = []
+    issues: List[Dict[str, str]] = []
+    matched_run_ids = set()
+    traces = root / "traces"
+    for path in sorted(traces.glob("*.jsonl")) if traces.is_dir() else []:
+        relative = _json_path(path, root)
+        file_run_ids = set()
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                for line_number, line in enumerate(handle, 1):
+                    if not line.strip():
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except (TypeError, ValueError):
+                        issues.append({
+                            "path": relative,
+                            "state": "refused",
+                            "reason": "invalid JSON line %d" % line_number,
+                        })
+                        break
+                    if not isinstance(event, dict):
+                        issues.append({
+                            "path": relative,
+                            "state": "refused",
+                            "reason": "event line %d is not an object"
+                                      % line_number,
+                        })
+                        break
+                    if event.get("run_id") in run_ids:
+                        file_run_ids.add(event["run_id"])
+                        matched_run_ids.add(event["run_id"])
+        except OSError as exc:
+            issues.append({
+                "path": relative,
+                "state": "unknown",
+                "reason": "cannot read trace: %s" % exc,
+            })
+            continue
+        if file_run_ids:
+            linked.append(relative)
+    for run_id in run_ids:
+        if run_id not in matched_run_ids:
+            issues.append({
+                "path": "traces",
+                "state": "unknown",
+                "reason": "no trace file for recorded run %s" % run_id,
+            })
+    return linked, issues
+
+
 def _task_report_payload(root: Path, record, policy=None) -> Dict[str, Any]:
     """Aggregate only evidence already present in the workspace."""
     summary = task_summary(record)
@@ -836,21 +1023,27 @@ def _task_report_payload(root: Path, record, policy=None) -> Dict[str, Any]:
             "max_turn_tokens": policy.max_turn_tokens,
             "max_session_tokens": policy.max_session_tokens,
         })
-    trace_paths = []
-    traces = root / "traces"
-    for path in sorted(traces.glob("*.jsonl")) if traces.is_dir() else []:
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        if any('"run_id": "%s"' % run_id in text
-               for run_id in summary["runs"]):
-            trace_paths.append(_json_path(path))
+    trace_paths, evidence_issues = _task_trace_evidence(
+        root, summary["runs"])
+    from .task_exec import load_task_execution
+    execution = load_task_execution(root, record.task_id)
+    evidence_issues.extend(execution["evidence_issues"])
     artifacts = [{
-        "tool": step.get("name"),
+        "tool": step.get("tool"),
         "path": step.get("detail"),
         "run_id": step.get("run_id"),
-    } for step in tools if step.get("detail")]
+    } for step in tools
+        if step.get("state") == "completed"
+        and step.get("tool") in ("read_file", "write_file")
+        and step.get("detail")]
+    try:
+        acceptance = acceptance_history(root, record.task_id)
+    except AcceptanceError:
+        # An unavailable optional verifier must not remove the legacy execution
+        # report (for example on a platform without no-follow dir-fd APIs).
+        acceptance = {"state": "unknown", "records": [], "evidence_issues": [{
+            "record": ".pocketchat/acceptance/%s" % record.task_id,
+            "state": "unknown", "reason": "acceptance_unavailable"}]}
     return {
         "ok": True,
         "schema_version": "1",
@@ -864,13 +1057,204 @@ def _task_report_payload(root: Path, record, policy=None) -> Dict[str, Any]:
         "checkpoints": checkpoints,
         "runs": summary["runs"],
         "trace": trace_paths,
+        "evidence_issues": evidence_issues,
         "artifacts": artifacts,
+        "execution_steps": execution["execution_steps"],
+        "commands": execution["commands"],
+        "changes": execution["changes"],
+        "acceptance": acceptance,
     }
 
 
 def _cmd_task(args: argparse.Namespace) -> int:
+    if args.task_command == "context":
+        try:
+            if args.context_command == "scan":
+                result = scan_tree(
+                    args.path, includes=args.includes, max_files=args.max_files,
+                    max_depth=args.max_depth, max_path_chars=args.max_path_chars)
+            elif args.context_command == "select":
+                result = select_files(
+                    load_context_tree(args.tree), args.queries,
+                    max_files=args.max_files)
+            else:
+                tree = load_context_tree(args.tree)
+                result = snapshot_files(
+                    Path("."), tree, load_selection(args.selection, tree),
+                    max_bytes=args.max_bytes)
+        except (TaskContextError, TaskSelectionError, TaskSnapshotError) as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        if args.as_json:
+            print(json.dumps({"ok": True, **result}, sort_keys=True))
+            return EXIT_OK
+        if args.context_command == "scan":
+            usage = result["usage"]
+            print("context tree %s  files=%d omitted=%d path_chars=%d"
+                  % (result["workspace"], usage["files"], usage["omitted"],
+                     usage["path_chars"]))
+            for item in result["files"]:
+                print("%8d  %s" % (item["bytes"], item["path"]))
+            for item in result["omitted"]:
+                print("omitted  %s  %s" % (item["path"], item["reason"]))
+        elif args.context_command == "select":
+            print("context selection %d/%d  truncated=%s  tree=%s"
+                  % (len(result["matches"]), result["total_matches"],
+                     "yes" if result["truncated"] else "no",
+                     result["tree_sha256"][:12]))
+            for item in result["matches"]:
+                print("score=%d  bytes=%d  %s  [%s]"
+                      % (item["score"], item["bytes"], item["path"],
+                         ",".join(item["matched_terms"])))
+            if result["unmatched_terms"]:
+                print("unmatched %s" % ",".join(result["unmatched_terms"]))
+        else:
+            print("context snapshot %d files  bytes=%d  size_changed=%d  sha256=%s"
+                  % (result["selected_files"], result["total_bytes"],
+                     result["selection_size_changed_files"],
+                     result["snapshot_sha256"][:12]))
+            for item in result["files"]:
+                print("%8d  %s  sha256=%s"
+                      % (item["bytes"], item["path"], item["sha256"][:12]))
+        return EXIT_OK
+
+    if args.task_command == "spec":
+        try:
+            spec = load_spec(args.spec)
+            policy = spec.to_policy()
+        except (TaskSpecError, TaskPolicyError, OSError) as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        payload = {
+            "ok": True,
+            "schema_version": "1",
+            "spec_schema": spec.source["schema_version"],
+            "acceptance": spec.acceptance_path,
+            "policy": policy.source,
+        }
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("TaskSpec %s" % spec.source["schema_version"])
+            print("policy %s" % policy.schema_version)
+            print("objective %s" % policy.objective)
+        return EXIT_OK
+
+    if args.task_command == "plan":
+        try:
+            spec = load_spec(args.spec)
+            plan = load_task_plan(args.plan, spec=spec)
+        except (TaskPlanError, TaskSpecError, TaskPolicyError, OSError) as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        payload = {
+            "ok": True,
+            "schema_version": "1",
+            "plan": plan.source,
+            "spec_sha256": plan.spec_sha256,
+        }
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("TaskPlan %s" % plan.source["schema_version"])
+            print("spec_sha256 %s" % plan.spec_sha256)
+            print("steps %d" % len(plan.steps))
+        return EXIT_OK
+
+    if args.task_command == "checkpoint" and args.checkpoint_command == "preview":
+        try:
+            result = load_checkpoint(args.checkpoint)
+            result = parse_checkpoint(
+                result,
+                expected_spec_sha256=args.spec_sha256,
+                expected_plan_sha256=args.plan_sha256)
+        except CheckpointError as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        payload = {
+            "ok": True,
+            "schema_version": "1",
+            "checkpoint": result,
+        }
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("checkpoint %s  report=%s" % (
+                result["checkpoint_id"], result["report_id"]))
+            print("boundary %d/%d" % (result["boundary_index"],
+                                      len(result["completed_step_ids"])
+                                      + len(result["pending_step_ids"])))
+            print("completed %s" % ",".join(result["completed_step_ids"]))
+            print("pending %s" % ",".join(result["pending_step_ids"]))
+            print("files %d  commands %d" % (len(result["file_effects"]),
+                                             len(result["command_effects"])))
+        return EXIT_OK
+
+    if args.task_command == "delegate":
+        try:
+            spec = load_spec(args.spec)
+            plan = load_task_plan(args.plan, spec=spec)
+            execution = authorize(plan, spec,
+                                  expected_plan_sha256=plan_sha256(plan))
+            result = authorize_delegation(
+                load_delegation_request(args.delegation), execution, spec)
+        except (TaskSpecError, TaskPlanError, TaskPolicyError, TaskDelegateError,
+                OSError) as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        payload = {"ok": True, "schema_version": "1", **result}
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("delegation %s  step=%s  children=%d"
+                  % (result["delegation_id"], result["parent_step_id"],
+                     len(result["children"])))
+            for row in result["children"]:
+                print("%s  %s  %s" % (row["child_id"], row["action"],
+                                      ",".join(row["inputs"])))
+        return EXIT_OK
+
+    if args.task_command == "checkpoint" and args.checkpoint_command == "resume":
+        try:
+            result = resume_from_checkpoint(
+                Path.cwd(), args.checkpoint,
+                expected_spec_sha256=args.spec_sha256,
+                expected_plan_sha256=args.plan_sha256)
+        except CheckpointError as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        payload = {"ok": True, "schema_version": "1", **result}
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("resume %s  report=%s" % (result["checkpoint_id"],
+                                            result["report_path"]))
+            print("boundary %d  pending=%s"
+                  % (result["boundary_index"],
+                     ",".join(result["pending_step_ids"]) or "(none)"))
+        return EXIT_OK
+
     if args.task_command == "run":
         try:
+            acceptance = load_plan(args.acceptance) if args.acceptance else None
             policy = load_policy(args.policy)
             config = load_config(_config_path(args.config))
             selected = profile_config(config, args.profile)
@@ -880,16 +1264,18 @@ def _cmd_task(args: argparse.Namespace) -> int:
                 ("%s.jsonl" % args.session.stem),
                 session_path=resolve_session_path(
                     args.session, DEFAULT_SESSIONS_DIR),
-                prompts=args.prompts)
-        except (ConfigError, TaskPolicyError, RecoveryError,
+                prompts=args.prompts, acceptance=acceptance)
+        except (AcceptanceError, TaskError, ConfigError, TaskPolicyError, RecoveryError,
                 SessionError, OSError) as exc:
             if args.as_json:
                 _print_json_error("task", str(exc))
             else:
                 print("pocketchat: %s" % exc, file=sys.stderr)
             return EXIT_USAGE if not isinstance(exc, SessionError) else EXIT_RUN_FAILED
+        accepted = result.acceptance is None or result.acceptance["state"] == "passed"
+        ok = result.status == "completed" and accepted
         payload = {
-            "ok": result.status == "completed",
+            "ok": ok,
             "schema_version": "1",
             "task_id": result.task_id,
             "status": result.status,
@@ -900,12 +1286,38 @@ def _cmd_task(args: argparse.Namespace) -> int:
             "session": _json_path(result.session_path),
             "trace": _json_path(result.trace_path),
         }
+        if result.acceptance is not None:
+            payload["acceptance"] = result.acceptance
         if args.as_json:
             print(json.dumps(payload, sort_keys=True))
         else:
             print("task %s  %s" % (result.task_id, result.status))
             print("record %s" % payload["record"])
-        return EXIT_OK if result.status == "completed" else EXIT_RUN_FAILED
+            if result.acceptance is not None:
+                print("acceptance %s" % result.acceptance["state"])
+                if result.acceptance.get("record"):
+                    print("acceptance record %s" % result.acceptance["record"])
+        return EXIT_OK if ok else EXIT_RUN_FAILED
+
+    if args.task_command == "verify":
+        try:
+            plan = load_plan(args.acceptance)
+            receipt = verify_task(Path.cwd(), args.task_id, plan)
+        except (AcceptanceError, TaskError, OSError) as exc:
+            if args.as_json:
+                _print_json_error("task", str(exc))
+            else:
+                print("pocketchat: %s" % exc, file=sys.stderr)
+            return EXIT_USAGE
+        ok = receipt["state"] == "passed"
+        payload = {"ok": ok, "schema_version": "1", "task_id": args.task_id,
+                   "acceptance": receipt}
+        if args.as_json:
+            print(json.dumps(payload, sort_keys=True))
+        else:
+            print("task %s  acceptance %s" % (args.task_id, receipt["state"]))
+            print("acceptance record %s" % receipt["record"])
+        return EXIT_OK if ok else EXIT_RUN_FAILED
 
     if args.task_command == "status":
         try:
@@ -930,6 +1342,7 @@ def _cmd_task(args: argparse.Namespace) -> int:
         try:
             policy = load_policy(args.policy)
             result = resume_task(Path.cwd(), args.checkpoint, policy,
+                                 task_id=args.task_id,
                                  name=args.name)
         except (TaskError, TaskPolicyError, RecoveryError, SessionFileError,
                 OSError) as exc:
@@ -962,7 +1375,7 @@ def _cmd_task(args: argparse.Namespace) -> int:
                 != record.policy_sha256):
             raise TaskError("report policy does not match task policy_sha256")
         payload = _task_report_payload(Path.cwd(), record, policy)
-    except (TaskError, TaskPolicyError) as exc:
+    except (AcceptanceError, TaskError, TaskPolicyError) as exc:
         if args.as_json:
             _print_json_error("task", str(exc))
         else:
@@ -975,6 +1388,11 @@ def _cmd_task(args: argparse.Namespace) -> int:
         print("steps %d  tools %d  checkpoints %d"
               % (len(record.steps), len(payload["tools"]),
                  len(payload["checkpoints"])))
+        print("commands %d  changes %d"
+              % (len(payload["commands"]), len(payload["changes"])))
+        if payload["evidence_issues"]:
+            print("evidence_issues %d" % len(payload["evidence_issues"]))
+        print("acceptance %s" % payload["acceptance"]["state"])
     return EXIT_OK
 
 
@@ -1680,14 +2098,20 @@ def _cmd_agent(args: argparse.Namespace) -> int:
 
     interactive = bool(getattr(sys.stdin, "isatty", lambda: False)())
     if interactive:
-        return run_tui(
-            state,
-            profiles,
-            models,
-            config=root_config,
-            workspace=Path.cwd(),
-            verbose=args.verbose,
-        )
+        try:
+            return run_tui(
+                state,
+                profiles,
+                models,
+                config=root_config,
+                workspace=Path.cwd(),
+                verbose=args.verbose,
+            )
+        except TUIUnavailable:
+            # Windows' standard library does not ship curses. Keep the agent
+            # usable and explicit by falling back to the same line interface
+            # used for piped input, rather than crashing during import.
+            pass
 
     print("PocketChat agent. Commands: /model /session /reasoning /context /status /exit")
     print(state.status_line())

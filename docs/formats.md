@@ -168,7 +168,11 @@ Owner: `pocketchat.tasking`. Schema version: **`pocketchat-task.v1`**
 One record per task, holding what no other artifact owns: how many steps the
 task took, which state it is in, and why it stopped. It is created exclusively
 and appended to through an atomic replace, so a crash leaves either the old
-record or the new one and never half of either.
+record or the new one and never half of either. Readers validate the closed
+record and step shapes before reporting: the file's `task_id` must match its
+name, step indexes must be contiguous and within the declared budgets, and a
+terminal state must carry a non-empty `terminal_reason` while an active state
+must not carry one.
 
 | key | meaning |
 |---|---|
@@ -204,6 +208,8 @@ the model and tool evidence, and names the `checkpoint_id` whose manifest holds
 the recovery boundary. It duplicates no trace fact, so it cannot disagree with
 one. `policy_sha256` is what makes a resume honest — a resume under a policy
 that digests differently is a different task and is refused.
+The checkpoint's `task_id` is likewise checked against the task named by the
+resume command before any recovery target is written.
 
 ## Selection records — `comparisons/<comparison-id>.selection.json`
 
@@ -251,3 +257,16 @@ field's meaning requires a new major version.
   which stays untouched.
 - A reader that meets a version it does not understand refuses with the
   version named, rather than guessing at fields it has never seen.
+
+## Unreleased: acceptance plan and historical receipt
+
+`pocketchat-acceptance-plan.v1` is a separate closed operator input, not an
+extension of `pocketchat-task-policy.v1`. `pocketchat-acceptance.v1` receipts are
+exclusively appended in `.pocketchat/acceptance/<task-id>/<acceptance-id>.json`.
+They bind canonical task-record/policy/plan identity, recorded time, execution
+state and per-check file bytes/SHA-256. Task/step/checkpoint/trace v1 formats
+remain unchanged. `schemas/acceptance.schema.json` declares the shapes; runtime
+also checks unique ids, hashes, state/reason compatibility and aggregate state.
+The receipt embeds the operator plan but public JSON omits it and artifact
+bodies. Full field semantics, bounds, historical reporting and unsupported
+platform behavior are in [task-acceptance.md](task-acceptance.md).

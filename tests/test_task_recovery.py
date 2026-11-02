@@ -145,8 +145,21 @@ class TaskRecoveryTests(unittest.TestCase):
         other = parse_policy({**POLICY, "objective": "different objective"})
         with self.assertRaises(RecoveryError) as caught:
             resume_task(self.root, checkpoint["checkpoint_id"], other,
+                        task_id=self.record.task_id,
                         name="resumed")
         self.assertIn("policy", str(caught.exception))
+        self.assertFalse((self.root / "sessions" / "resumed.jsonl").exists())
+
+    def test_resume_rejects_a_checkpoint_for_another_task_before_write(self):
+        checkpoint = create_task_checkpoint(
+            self.root, self.session,
+            task_id=self.record.task_id, step_id=2,
+            policy_sha256=self.record.policy_sha256,
+            turn_id="turn_000002", checkpoint_id="cp_task")
+        with self.assertRaises(RecoveryError) as caught:
+            resume_task(self.root, checkpoint["checkpoint_id"], self.policy,
+                        task_id="task_0000000000000000", name="resumed")
+        self.assertIn("task", str(caught.exception))
         self.assertFalse((self.root / "sessions" / "resumed.jsonl").exists())
 
     def test_resume_restores_ordered_tool_context(self):
@@ -156,7 +169,8 @@ class TaskRecoveryTests(unittest.TestCase):
             policy_sha256=self.record.policy_sha256,
             turn_id="turn_000002", checkpoint_id="cp_task")
         result = resume_task(self.root, checkpoint["checkpoint_id"],
-                             self.policy, name="resumed")
+                             self.policy, task_id=self.record.task_id,
+                             name="resumed")
         self.assertTrue(result["ok"])
         self.assertEqual(
             ["user", "assistant", "tool", "assistant"],
@@ -176,9 +190,11 @@ class TaskRecoveryTests(unittest.TestCase):
                 side_effect=OSError("simulated crash before target")):
             with self.assertRaises(OSError):
                 resume_task(self.root, checkpoint["checkpoint_id"],
-                            self.policy, name="resumed")
+                            self.policy, task_id=self.record.task_id,
+                            name="resumed")
         result = resume_task(self.root, checkpoint["checkpoint_id"],
-                             self.policy, name="resumed")
+                             self.policy, task_id=self.record.task_id,
+                             name="resumed")
         self.assertTrue(result["ok"])
         self.assertTrue(result["recovered"])
         self.assertTrue((self.root / result["session"]).is_file())
@@ -194,7 +210,8 @@ class TaskRecoveryTests(unittest.TestCase):
         update_record(self.root, current)
         with self.assertRaises(RecoveryError) as caught:
             resume_task(self.root, checkpoint["checkpoint_id"],
-                        self.policy, name="resumed")
+                        self.policy, task_id=self.record.task_id,
+                        name="resumed")
         self.assertIn("recovery step", str(caught.exception))
         self.assertFalse((self.root / "sessions" / "resumed.jsonl").exists())
 
@@ -211,7 +228,8 @@ class TaskRecoveryTests(unittest.TestCase):
         path.write_text(json.dumps(payload), encoding="utf-8")
         with self.assertRaises(RecoveryError) as caught:
             resume_task(self.root, checkpoint["checkpoint_id"],
-                        self.policy, name="resumed")
+                        self.policy, task_id=self.record.task_id,
+                        name="resumed")
         self.assertIn("task record", str(caught.exception))
         self.assertFalse((self.root / "sessions" / "resumed.jsonl").exists())
 

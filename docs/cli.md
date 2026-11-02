@@ -377,20 +377,29 @@ pocketchat task report <task-id> --policy examples/task-policy.json --json
 
 `task run` requires an explicit policy and session. It creates
 `.pocketchat/tasks/<task-id>.json`, then routes model/tool work through the
-existing request snapshot, trace, session and tool events. A completed run
+existing request snapshot, trace, session and tool events. Without `--acceptance`, a completed run
 exits 0; failed or cancelled runs exit 1. Preparation/refusal errors exit 2.
 
 `task status` distinguishes active, interrupted, failed and terminal states
 without running anything. `task resume` refuses legacy, partial or conflicting
-task checkpoints before writing, restores the ordered tool context into the
-resumed branch and reports the appended recovery step. It does not send a
-provider request.
+task checkpoints before writing, including a checkpoint bound to a different
+task id, restores the ordered tool context into the resumed branch and reports
+the appended recovery step. It does not send a provider request.
 
 `task report` lists recorded step objects, tool calls, checkpoint bindings,
-run ids, trace files and tool artifacts. It never infers missing facts. Without
-a matching `--policy`, context/turn/session token budgets are `unknown`; the
-record's own step/tool budgets remain available. JSON paths are workspace
-relative and error output is one JSON object on stdout with stderr empty.
+run ids, trace files and completed `read_file` / `write_file` artifacts. It
+matches a run only against a parsed event's own `run_id`, never against raw
+JSON text. A malformed, unreadable or missing trace appears in the additive
+`evidence_issues` list with `refused` or `unknown` state instead of disappearing
+from the report. Without a matching `--policy`, context/turn/session token
+budgets are `unknown`; the record's own step/tool budgets remain available.
+When a `TaskPlan` was executed through `execute_plan()`, the same report also
+lists `execution_steps`, verified `commands` and file `changes` read from
+`.pocketchat/task-reports/`. This path only reads existing evidence: it does not
+rerun a command or regenerate a provider request. A missing, malformed, foreign
+or tampered command archive appears in `evidence_issues`; command success still
+never implies acceptance. JSON paths are workspace relative and error output is
+one JSON object on stdout with stderr empty.
 
 The deterministic stub demo covers success, checkpoint resume and permission
 refusal:
@@ -398,6 +407,25 @@ refusal:
 ```bash
 /usr/bin/python3 examples/task-demo/demo.py
 ```
+
+
+### Unreleased: deterministic acceptance
+
+```bash
+pocketchat task run "Write the report" --policy policy.json --session audit --acceptance acceptance.json --json
+pocketchat task verify TASK_ID --acceptance acceptance.json --json
+pocketchat task report TASK_ID --json
+```
+
+`--acceptance` is opt-in. Execution `status: completed` remains separate from
+`acceptance.state: passed`; with the flag, `ok`/exit 0 requires both. Missing or
+mismatched artifacts, permission refusals and unknown observations return 1.
+Invalid input is refused before the model call with exit 2. Without the flag,
+existing `task run` output and exits are unchanged. `task verify` does no model
+work and appends a receipt; `task report` only reads historical receipts and
+never rechecks current files. It keeps its report-read exit 0 semantics.
+See [task-acceptance.md](task-acceptance.md) for plan/check kinds, 0/1/2 JSON
+contracts, evidence validation, limits and platform support.
 
 ## Context preview
 

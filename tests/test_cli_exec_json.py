@@ -379,6 +379,51 @@ class TaskCliTests(unittest.TestCase):
         self.assertEqual(payload["report"]["steps"], 4)
         self.assertEqual(payload["report"]["checkpoints"], 1)
 
+    def test_task_resume_refuses_a_checkpoint_for_another_task_before_writing(self):
+        policy_path, policy = self.policy()
+        record = create_record(policy)
+        transition(record, "start", "started")
+        record_step(record, "model", state="completed", run_id="run_task")
+        record_step(record, "tool", state="completed", tool="read_file",
+                    run_id="run_task", detail="facts.txt")
+        save_record(self.base, record)
+        session = self.base / "sessions" / "source.jsonl"
+        trace = self.base / "traces" / "run_task.jsonl"
+        session.parent.mkdir(parents=True)
+        trace.parent.mkdir(parents=True)
+        session.write_text("\n".join([
+            json.dumps({"session": "run_task", "schema_version": "1",
+                        "created": "2026-10-30T00:00:00.000Z",
+                        "pocketchat_version": "test",
+                        "trace": "../traces/run_task.jsonl",
+                        "conversation_id": "conv", "branch_id": "branch"}),
+            json.dumps({"role": "user", "content": "hello",
+                        "turn_id": "turn_000001"}),
+            json.dumps({"role": "assistant", "content": "done",
+                        "turn_id": "turn_000002"}),
+        ]) + "\n", encoding="utf-8")
+        trace.write_text("\n".join([
+            json.dumps({"schema_version": "1", "event_id": "evt_000001",
+                        "run_id": "run_task", "type": "run.started"}),
+            json.dumps({"schema_version": "1", "event_id": "evt_000002",
+                        "run_id": "run_task", "type": "run.finished"}),
+        ]) + "\n", encoding="utf-8")
+        checkpoint = create_task_checkpoint(
+            self.base, session, task_id=record.task_id, step_id=2,
+            policy_sha256=record.policy_sha256, turn_id="turn_000002",
+            checkpoint_id="cp_task")
+        result = run_cli(
+            ("task", "resume", "task_0000000000000000",
+             "--checkpoint", checkpoint["checkpoint_id"],
+             "--policy", str(policy_path), "--name", "resumed", "--json"),
+            self.base)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertEqual(result.stderr, "")
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertIn("task", payload["message"])
+        self.assertFalse((self.base / "sessions" / "resumed.jsonl").exists())
+
     def test_task_report_json_lists_existing_evidence_only(self):
         result = self.run_task()
         payload = json.loads(result.stdout)
@@ -399,6 +444,88 @@ class TaskCliTests(unittest.TestCase):
         self.assertEqual(body["runs"], [payload["run_id"]])
         self.assertEqual(body["trace"], ["traces/task.jsonl"])
         self.assertEqual(body["artifacts"], [])
+
+    def test_task_report_does_not_mistake_a_substring_for_a_run_link(self):
+        result = self.run_task()
+        payload = json.loads(result.stdout)
+        trace = self.base / "traces" / "task.jsonl"
+        trace.write_text(
+            '{"run_id": "prefix-%s-suffix"}\n' % payload["run_id"],
+            encoding="utf-8")
+        report = run_cli(("task", "report", payload["task_id"], "--json"),
+                         self.base)
+        self.assertEqual(report.returncode, 0, report.stdout + report.stderr)
+        body = json.loads(report.stdout)
+        self.assertEqual([], body["trace"])
+        self.assertEqual([{
+            "path": "traces",
+            "state": "unknown",
+            "reason": "no trace file for recorded run %s" % payload["run_id"],
+        }], body["evidence_issues"])
+
+    def test_task_report_names_a_malformed_trace_instead_of_skipping_it(self):
+        result = self.run_task()
+        payload = json.loads(result.stdout)
+        trace = self.base / "traces" / "task.jsonl"
+        trace.write_text("not json\n", encoding="utf-8")
+        report = run_cli(("task", "report", payload["task_id"], "--json"),
+                         self.base)
+        self.assertEqual(report.returncode, 0, report.stdout + report.stderr)
+        body = json.loads(report.stdout)
+        self.assertEqual([], body["trace"])
+        self.assertEqual([{
+            "path": "traces/task.jsonl",
+            "state": "refused",
+            "reason": "invalid JSON line 1",
+        }, {
+            "path": "traces",
+            "state": "unknown",
+            "reason": "no trace file for recorded run %s" % payload["run_id"],
+        }], body["evidence_issues"])
+
+    def test_task_report_names_a_missing_trace_after_the_record_links_it(self):
+        result = self.run_task()
+        payload = json.loads(result.stdout)
+        (self.base / "traces" / "task.jsonl").unlink()
+        report = run_cli(("task", "report", payload["task_id"], "--json"),
+                         self.base)
+        self.assertEqual(report.returncode, 0, report.stdout + report.stderr)
+        body = json.loads(report.stdout)
+        self.assertEqual([], body["trace"])
+        self.assertEqual([{
+            "path": "traces",
+            "state": "unknown",
+            "reason": "no trace file for recorded run %s" % payload["run_id"],
+        }], body["evidence_issues"])
+
+    def test_task_report_keeps_a_valid_trace_when_another_trace_is_malformed(self):
+        result = self.run_task()
+        payload = json.loads(result.stdout)
+        broken = self.base / "traces" / "unrelated.jsonl"
+        broken.write_text("not json\n", encoding="utf-8")
+        report = run_cli(("task", "report", payload["task_id"], "--json"),
+                         self.base)
+        self.assertEqual(report.returncode, 0, report.stdout + report.stderr)
+        body = json.loads(report.stdout)
+        self.assertEqual(["traces/task.jsonl"], body["trace"])
+        self.assertEqual([{
+            "path": "traces/unrelated.jsonl",
+            "state": "refused",
+            "reason": "invalid JSON line 1",
+        }], body["evidence_issues"])
+
+    def test_task_report_does_not_call_a_query_a_file_artifact(self):
+        _policy_path, policy = self.policy()
+        record = create_record(policy)
+        transition(record, "start", "started")
+        record_step(record, "tool", state="completed",
+                    tool="memory_search", detail="find the launch note")
+        save_record(self.base, record)
+        report = run_cli(("task", "report", record.task_id, "--json"),
+                         self.base)
+        self.assertEqual(report.returncode, 0, report.stdout + report.stderr)
+        body = json.loads(report.stdout)
+        self.assertEqual([], body["artifacts"])
 
     def test_task_report_rejects_a_different_policy(self):
         result = self.run_task()

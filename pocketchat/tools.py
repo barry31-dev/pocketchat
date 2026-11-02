@@ -250,17 +250,18 @@ def execute_write_file(root: Path, path: str, content: str, *,
             "args_summary": "write %s" % normalized,
         })
     temporary = candidate.with_name(candidate.name + ".tmp")
+    data = content.encode("utf-8")
     try:
         if overwrite:
-            with temporary.open("w", encoding="utf-8") as handle:
-                handle.write(content)
+            with temporary.open("wb") as handle:
+                handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(str(temporary), str(candidate))
         else:
             descriptor = os.open(str(candidate), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                handle.write(content)
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(data)
                 handle.flush()
                 os.fsync(handle.fileno())
     except (OSError, FileExistsError) as exc:

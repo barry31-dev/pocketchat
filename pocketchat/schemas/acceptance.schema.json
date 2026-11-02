@@ -1,0 +1,390 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PocketChat task acceptance",
+  "description": "Separate operator plan and historical receipt; runtime also validates uniqueness, hashes and aggregate state.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/plan"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    }
+  ],
+  "$defs": {
+    "file_exists": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "kind"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?!\\s)(?!.*[\\\\:\\u0000-\\u001f])(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!/)(?!.*[. ](?:/|$)).*[^/ .]$"
+        },
+        "kind": {
+          "const": "file_exists"
+        }
+      }
+    },
+    "text_contains": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "kind",
+        "text"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?!\\s)(?!.*[\\\\:\\u0000-\\u001f])(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!/)(?!.*[. ](?:/|$)).*[^/ .]$"
+        },
+        "kind": {
+          "const": "text_contains"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      }
+    },
+    "json_equals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "kind",
+        "pointer",
+        "expected"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?!\\s)(?!.*[\\\\:\\u0000-\\u001f])(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!/)(?!.*[. ](?:/|$)).*[^/ .]$"
+        },
+        "kind": {
+          "const": "json_equals"
+        },
+        "pointer": {
+          "type": "string",
+          "maxLength": 4096,
+          "pattern": "^(?:|/(?:[^~]|~[01])*)$"
+        },
+        "expected": {}
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "checks"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "pocketchat-acceptance-plan.v1"
+        },
+        "max_file_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576,
+          "default": 65536
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/file_exists"
+              },
+              {
+                "$ref": "#/$defs/text_contains"
+              },
+              {
+                "$ref": "#/$defs/json_equals"
+              },
+              {
+                "$ref": "#/$defs/command_succeeded"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bytes",
+        "sha256"
+      ],
+      "properties": {
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1048576
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "state",
+        "reason"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "kind": {
+          "enum": [
+            "file_exists",
+            "text_contains",
+            "json_equals",
+            "command_succeeded"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?!\\s)(?!.*[\\\\:\\u0000-\\u001f])(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!/)(?!.*[. ](?:/|$)).*[^/ .]$"
+        },
+        "state": {
+          "enum": [
+            "passed",
+            "failed",
+            "unknown",
+            "refused"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "matched",
+            "missing_file",
+            "text_mismatch",
+            "invalid_utf8",
+            "invalid_json",
+            "pointer_missing",
+            "json_mismatch",
+            "protected_path",
+            "symlink",
+            "not_regular_file",
+            "file_too_large",
+            "unsupported_platform",
+            "unreadable_file",
+            "file_changed",
+            "command_failed",
+            "command_timed_out",
+            "command_evidence_missing",
+            "command_evidence_unreadable",
+            "command_evidence_refused"
+          ]
+        },
+        "file": {
+          "$ref": "#/$defs/file"
+        },
+        "step_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "passed"
+              },
+              "kind": {
+                "not": {
+                  "const": "command_succeeded"
+                }
+              }
+            },
+            "required": [
+              "state",
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "file"
+            ],
+            "properties": {
+              "reason": {
+                "const": "matched"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "command_succeeded"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "step_id"
+            ],
+            "not": {
+              "required": [
+                "path",
+                "file"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ]
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "acceptance_id",
+        "task_id",
+        "task_record_sha256",
+        "policy_sha256",
+        "workspace_root",
+        "execution_state",
+        "recorded",
+        "plan",
+        "plan_sha256",
+        "state",
+        "checks"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "pocketchat-acceptance.v1"
+        },
+        "acceptance_id": {
+          "type": "string",
+          "pattern": "^accept_[0-9a-f]{32}$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^task_[A-Za-z0-9_-]{1,59}$"
+        },
+        "task_record_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "policy_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "workspace_root": {
+          "oneOf": [
+            {
+              "const": "."
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^(?!\\s)(?!.*[\\\\:\\u0000-\\u001f])(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)(?!/)(?!.*[. ](?:/|$)).*[^/ .]$"
+            }
+          ]
+        },
+        "execution_state": {
+          "const": "completed"
+        },
+        "recorded": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "plan": {
+          "$ref": "#/$defs/plan"
+        },
+        "plan_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "state": {
+          "enum": [
+            "passed",
+            "failed",
+            "unknown",
+            "refused"
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/result"
+          }
+        }
+      }
+    },
+    "command_succeeded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "step_id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "kind": {
+          "const": "command_succeeded"
+        },
+        "step_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        }
+      }
+    }
+  }
+}

@@ -116,7 +116,7 @@ class ReplTests(unittest.TestCase):
         environ = {"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin",
                    "POCKETCHAT_API_KEY": "test-key-not-real"}
         cmd = [sys.executable, "-m", "pocketchat", "chat", "--config", str(config)]
-        proc = subprocess.Popen(cmd, cwd=str(self.base), env=environ,
+        proc = subprocess.Popen(cmd, cwd=str(self.base), env=hp.subprocess_environment(environ),
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True)
         if send_signal is not None:
@@ -152,7 +152,7 @@ class ReplTests(unittest.TestCase):
                    "TERM": "dumb", "POCKETCHAT_API_KEY": "test-key-not-real"}
         cmd = [sys.executable, "-m", "pocketchat", "chat", "--config", str(config)]
         primary, secondary = pty.openpty()
-        proc = subprocess.Popen(cmd, cwd=str(self.base), env=environ,
+        proc = subprocess.Popen(cmd, cwd=str(self.base), env=hp.subprocess_environment(environ),
                                 stdin=secondary, stdout=secondary, stderr=secondary,
                                 close_fds=True)
         os.close(secondary)
@@ -280,7 +280,7 @@ class ReplTests(unittest.TestCase):
 
     # --- the interruption paths ----------------------------------------
 
-    @unittest.skipIf(pty is None, "requires a POSIX pty")
+    @unittest.skipUnless(os.name == "posix" and pty is not None, "requires a POSIX pty")
     def test_ctrl_c_while_a_line_is_being_read_ends_the_run(self):
         # Nothing is in flight: the interrupt lands while the REPL waits for
         # input. The conversation still ends as cancelled, because an
@@ -301,6 +301,7 @@ class ReplTests(unittest.TestCase):
         self.assertEqual(
             self._types(events).count("run.cancelled"), 1)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX signal delivery")
     def test_ctrl_c_during_an_in_flight_request_ends_the_run_as_cancelled(self):
         # The case the W7 brief names: an interrupt during a turn must leave
         # run.cancelled, and the request it interrupted must be recorded as

@@ -121,7 +121,7 @@ class QueryTestBase(unittest.TestCase):
         return subprocess.run(
             [sys.executable, "-m", "pocketchat"] + list(args),
             cwd=str(self.base),
-            env={"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin"},
+            env=hp.subprocess_environment({"PYTHONPATH": str(ROOT), "PATH": "/usr/bin:/bin"}),
             capture_output=True, text=True, timeout=60,
         )
 
@@ -370,7 +370,7 @@ class RealWorkspaceTests(QueryTestBase):
         command = [sys.executable, "-m", "pocketchat"] + list(args)
         if config is not None:
             command += ["--config", str(config)]
-        return subprocess.run(command, cwd=str(self.base), env=environ,
+        return subprocess.run(command, cwd=str(self.base), env=hp.subprocess_environment(environ),
                               capture_output=True, text=True, timeout=120)
 
     def _build(self):

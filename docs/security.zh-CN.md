@@ -72,3 +72,12 @@ overwrite 或 delete，目标必须显式 allowlist；已有文件在写入前 f
 
 PocketChat 只做 CLI。没有计划中的单 profile chat 发送路由、远程访问模式、TLS、
 账号体系、分析服务、telemetry、打包桌面端、Windows 桌面支持或桌面端钥匙串。
+
+## 未发布验收边界
+
+操作者 plan 只授权有限只读产物检查，不扩大模型工具。验收器拒绝敏感/内部路径、
+符号链接、特殊文件和超大内容；缺少 no-follow API 不退回普通路径读。
+逐项 JSON 只含 bytes/hash，不复制产物正文、needle 或 expected。
+独立记录含操作者 plan，因此不要往输入放凭据或秘密比较值。
+记录是本地可编辑观察，不是签名、对抗性防篡改、创作归属证据或安全沙箱。
+准确上限和状态只见 [task-acceptance.zh-CN.md](task-acceptance.zh-CN.md)。

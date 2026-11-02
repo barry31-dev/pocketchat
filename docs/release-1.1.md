@@ -1,13 +1,13 @@
-# PocketChat v1.1.0 release candidate
+# PocketChat v1.1.0 release record
 
-> **Version-specific candidate record, not a publication authorization.** The
-> general process is [development-and-release.md](development-and-release.md).
-> This file records the local evidence for one v1.1.0 candidate. The user
-> authorized tag, GitHub Release and package-index publication for this version
-> on 2026-10-30. This pre-publication record does not itself execute those
-> actions; post-publication facts are read back and recorded outside it.
+> **Version-specific release record, not the general process.** The general
+> process is [development-and-release.md](development-and-release.md). This
+> file records the local evidence for v1.1.0. The user authorized tag, GitHub
+> Release and package-index publication on 2026-10-30; the GitHub tag and
+> Release were published, while package-index publication remained blocked on
+> credentials. Publication facts are owned by the publication ledger.
 
-## Candidate record
+## Release record
 
 ```text
 version: 1.1.0
@@ -52,7 +52,7 @@ retries; this is an environment/network gap, not a successful isolated build.
 - [ ] A real provider task run is recorded for this candidate.
 - [x] Tag, GitHub Release and package-index publication are explicitly
       authorized for v1.1.0.
-- [ ] Post-publication tag, Release, identity and artifact readback is recorded
+- [x] Post-publication tag, Release, identity and artifact readback is recorded
       in the publication ledger (outside this pre-publication record).
 
 ## Demo evidence
@@ -87,8 +87,8 @@ for custom trace names is not.
 ## Scope not established
 
 This candidate does not establish real-provider behavior, billing, Linux or
-Windows behavior, isolated build reproducibility, external Trace Doctor
-consumers, or post-publication state. The demo uses an in-process stub and fake
-credential. Cancellation remains terminal; recovery evidence uses a real
-`checkpointed -> running` boundary. No tag, Release or package-index upload was
-created.
+Windows behavior, isolated build reproducibility, or external Trace Doctor
+consumers. The demo uses an in-process stub and fake credential. Cancellation
+remains terminal; recovery evidence uses a real `checkpointed -> running`
+boundary. The GitHub tag and Release were published on 2026-10-30; no
+package-index upload succeeded because the local machine had no credentials.

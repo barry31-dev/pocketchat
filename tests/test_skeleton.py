@@ -30,7 +30,7 @@ def _run(module_args, cwd, env=None):
         environ.update(env)
     return subprocess.run(
         [sys.executable, "-m", "pocketchat"] + module_args,
-        cwd=str(cwd), env=environ, capture_output=True, text=True, timeout=120,
+        cwd=str(cwd), env=hp.subprocess_environment(environ), capture_output=True, text=True, timeout=120,
     )
 
 
@@ -116,6 +116,7 @@ class SkeletonTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("modle", result.stderr)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX signal delivery")
     def test_interrupted_turn_ends_the_run_as_cancelled(self):
         # Ctrl-C during an in-flight turn: the run ends as cancelled, not
         # silently. The turn is stubbed to sleep, because this slice has no
@@ -133,12 +134,11 @@ class SkeletonTests(unittest.TestCase):
             "session._turn = lambda prompt: time.sleep(5);"
             "print(session.run(['hello']))" % (str(ROOT), str(config), str(trace_path))
         )
-        env = dict(os.environ)
-        env["PYTHONPATH"] = str(ROOT)
-        env["POCKETCHAT_API_KEY"] = "test-key"
+        env = {"PYTHONPATH": str(ROOT),
+               "POCKETCHAT_API_KEY": "test-key"}
         proc = subprocess.Popen(
             [sys.executable, "-c", script],
-            cwd=str(self.base), env=env,
+            cwd=str(self.base), env=hp.subprocess_environment(env),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         for _ in range(50):
@@ -245,6 +245,7 @@ class StableV1ContractTests(unittest.TestCase):
                      "provider-adapters.md", "provider-adapters.zh-CN.md"):
             self.assertTrue((docs / name).is_file(), name)
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("v1.1.0", readme)
         self.assertIn("v1.0.0", readme)
         self.assertIn("Python 3.9", readme)
         self.assertIn("OpenAI-compatible", readme)

@@ -669,6 +669,7 @@ class KernelTests(unittest.TestCase):
         self.assertEqual(events[-1]["payload"]["error"]["type"], "context_too_large")
         self.assertIn("budget", events[-1]["payload"]["error"]["message"])
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX signal delivery")
     def test_interrupted_in_flight_request_writes_a_failure_event(self):
         STATE.mode = "ok"
         STATE.delay = 3.0
@@ -684,10 +685,9 @@ class KernelTests(unittest.TestCase):
             " api_key='test-key');"
             "print(session.run(['hello']))" % (str(ROOT), str(config), str(trace_path))
         )
-        env = dict(os.environ)
-        env["PYTHONPATH"] = str(ROOT)
+        env = {"PYTHONPATH": str(ROOT)}
         proc = subprocess.Popen([sys.executable, "-c", script], cwd=str(self.base),
-                                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                env=hp.subprocess_environment(env), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True)
         threading.Timer(1.0, lambda: proc.send_signal(signal.SIGINT)).start()
         proc.communicate(timeout=60)

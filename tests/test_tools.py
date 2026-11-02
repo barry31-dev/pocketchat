@@ -110,7 +110,7 @@ class ReadFileToolTests(unittest.TestCase):
     def test_backslash_paths_are_normalized_to_workspace_relative_form(self):
         nested = self.root / "nested"
         nested.mkdir()
-        (nested / "note.txt").write_text("backslash\n", encoding="utf-8")
+        (nested / "note.txt").write_bytes(b"backslash\n")
         result = execute_read_file(
             self.root, "nested\\note.txt",
             allowed_paths=["nested\\note.txt"], max_bytes=100,

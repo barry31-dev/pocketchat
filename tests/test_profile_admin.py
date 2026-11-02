@@ -242,7 +242,8 @@ class ProfileWriteCliTests(unittest.TestCase):
             "set", "new", "--base-url", "https://new.invalid/v1",
             "--model", "new", "--api-key-env", "NEW_KEY")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o640)
+        if os.name != "nt":
+            self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o640)
         self.assertEqual(sorted(path.name for path in self.base.iterdir()),
                          ["pocketchat.json"])
 
@@ -266,7 +267,7 @@ class ProfileWriteCliTests(unittest.TestCase):
         ):
             result = subprocess.run(
                 [sys.executable, "-m", "pocketchat"] + args,
-                cwd=str(self.base), env=environ, capture_output=True, text=True,
+                cwd=str(self.base), env=hp.subprocess_environment(environ), capture_output=True, text=True,
                 timeout=120,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

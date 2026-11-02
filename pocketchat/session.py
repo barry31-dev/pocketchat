@@ -844,7 +844,7 @@ class Session:
         )
         self.request_digests.append(digest)
         self.request_snapshots.append(path)
-        return os.path.relpath(path, self.trace_path.parent)
+        return Path(os.path.relpath(path, self.trace_path.parent)).as_posix()
 
     def _record_turn(self, prompt: str, reply: str,
                      tool_context: Optional[List[Dict[str, Any]]] = None) -> None:

@@ -13,6 +13,7 @@ The stub is a real local socket. Nothing here reaches a provider.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -119,7 +120,7 @@ class SessionTests(unittest.TestCase):
             environ.update(env)
         return subprocess.run(
             [sys.executable, "-m", "pocketchat"] + list(args),
-            cwd=str(self.base), env=environ, capture_output=True, text=True,
+            cwd=str(self.base), env=hp.subprocess_environment(environ), capture_output=True, text=True,
             timeout=120,
         )
 
@@ -694,6 +695,7 @@ class SessionIdentityTests(SessionTests):
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("is a directory, not a session file", result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "requires POSIX permission bits")
     def test_an_unreadable_session_file_is_refused(self):
         config = self._config()
         blocked = self.base / "blocked.jsonl"
@@ -710,6 +712,7 @@ class SessionIdentityTests(SessionTests):
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("cannot read", result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "requires POSIX permission bits")
     def test_an_unwritable_session_directory_is_refused(self):
         config = self._config()
         locked = self.base / "locked"

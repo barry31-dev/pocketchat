@@ -264,6 +264,26 @@ class PersistenceTests(unittest.TestCase):
                     self.assertIn(missing, str(caught.exception))
                     path.unlink()
 
+    def test_a_record_with_malformed_root_evidence_is_refused(self):
+        """A report must not stringify a forged objective or digest."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for field, value in (
+                    ("created", 123),
+                    ("objective", ["not", "text"]),
+                    ("policy_sha256", "not-a-digest"),
+                    ("workspace_root", 7)):
+                with self.subTest(field=field):
+                    record = create_record(parse_policy(POLICY))
+                    path = save_record(root, record)
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                    payload[field] = value
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    with self.assertRaises(TaskError) as caught:
+                        load_record(root, record.task_id)
+                    self.assertIn(field, str(caught.exception))
+                    path.unlink()
+
     def test_a_record_with_a_non_integer_budget_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:
             for bad in ("8", None, [8]):
@@ -287,6 +307,103 @@ class PersistenceTests(unittest.TestCase):
             with self.assertRaises(TaskError) as caught:
                 load_record(Path(directory), "task_badsteps")
             self.assertIn("steps", str(caught.exception))
+
+    def test_a_terminal_record_must_name_its_terminal_reason(self):
+        """A terminal record without a reason cannot answer why it stopped."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = create_record(parse_policy(POLICY))
+            transition(record, "start", "task run started")
+            transition(record, "fail", "provider failed")
+            path = save_record(root, record)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload.pop("terminal_reason")
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(TaskError) as caught:
+                load_record(root, record.task_id)
+            self.assertIn("terminal_reason", str(caught.exception))
+
+    def test_an_active_record_cannot_carry_a_terminal_reason(self):
+        """An active record must not look terminal to a status reader."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = create_record(parse_policy(POLICY))
+            path = save_record(root, record)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["terminal_reason"] = "forged"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(TaskError) as caught:
+                load_record(root, record.task_id)
+            self.assertIn("terminal_reason", str(caught.exception))
+
+    def test_a_record_task_id_must_match_its_filename(self):
+        """The file's name and the record's identity must be one fact."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = create_record(parse_policy(POLICY))
+            path = save_record(root, record)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["task_id"] = "task_someone_else"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(TaskError) as caught:
+                load_record(root, record.task_id)
+            self.assertIn("task_id", str(caught.exception))
+
+    def test_a_record_with_unknown_fields_is_refused(self):
+        """An unknown field cannot become a fact a report silently displays."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = create_record(parse_policy(POLICY))
+            path = save_record(root, record)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["forged_state"] = "completed"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(TaskError) as caught:
+                load_record(root, record.task_id)
+            self.assertIn("forged_state", str(caught.exception))
+
+    def test_a_record_step_must_match_the_schema_shape(self):
+        """A step with a bad kind or missing state is not reportable."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = create_record(parse_policy(POLICY))
+            record_step(record, "model", state="completed")
+            path = save_record(root, record)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["steps"][0]["kind"] = "shell"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(TaskError) as caught:
+                load_record(root, record.task_id)
+            self.assertIn("kind", str(caught.exception))
+
+    def test_a_record_cannot_exceed_its_tool_call_budget(self):
+        """A forged over-budget record is a refusal, not a valid report."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = create_record(parse_policy(POLICY))
+            record_step(record, "tool", state="completed", tool="read_file")
+            record_step(record, "tool", state="completed", tool="read_file")
+            path = save_record(root, record)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["max_tool_calls"] = 1
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(TaskError) as caught:
+                load_record(root, record.task_id)
+            self.assertIn("max_tool_calls", str(caught.exception))
+
+    def test_a_record_step_sequence_must_be_contiguous_and_within_budget(self):
+        """A malformed step list must not become reportable evidence."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = create_record(parse_policy(POLICY))
+            record_step(record, "model", state="completed")
+            path = save_record(root, record)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["steps"][0]["index"] = 2
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(TaskError) as caught:
+                load_record(root, record.task_id)
+            self.assertIn("index", str(caught.exception))
 
     def test_a_record_is_written_once_and_a_second_save_is_refused(self):
         """An exclusive create is what makes the record evidence."""

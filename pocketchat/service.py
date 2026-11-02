@@ -35,12 +35,13 @@ from .workspace import (WorkspaceError, as_dict, collect_workspace,  # noqa: F40
                         render_lines)
 
 def _relative(path: Path, workspace: Path) -> str:
-    """Return a workspace-relative path without leaking the absolute root."""
+    """Return a stable workspace-relative path, or the honest absolute path."""
+    path = Path(path).resolve()
+    workspace = Path(workspace).resolve()
     try:
-        return os.path.relpath(str(Path(path).resolve()),
-                               str(Path(workspace).resolve()))
+        return Path(os.path.relpath(str(path), str(workspace))).as_posix()
     except ValueError:
-        return Path(path).name
+        return path.as_posix()
 
 
 __all__ = [

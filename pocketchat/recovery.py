@@ -39,7 +39,12 @@ class RecoveryError(ValueError):
 
 
 def _relative(path: Path, root: Path) -> str:
-    return os.path.relpath(str(Path(path).resolve()), str(Path(root).resolve()))
+    path = Path(path).resolve()
+    root = Path(root).resolve()
+    try:
+        return Path(os.path.relpath(str(path), str(root))).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _absolute(value: str, root: Path) -> Path:
@@ -399,7 +404,7 @@ def create_task_checkpoint(root: Path, session: Path, *,
     return {**checkpoint, "task_state": record.state}
 
 
-def resume_task(root: Path, checkpoint_id: str, policy, *,
+def resume_task(root: Path, checkpoint_id: str, policy, *, task_id: str,
                 name: str) -> Dict[str, Any]:
     """Validate task evidence before the first write, then recover the branch."""
     root = Path(root).resolve()
@@ -407,6 +412,10 @@ def resume_task(root: Path, checkpoint_id: str, policy, *,
     if not all(key in checkpoint for key in (
             "task_id", "step_id", "policy_sha256")):
         raise RecoveryError("checkpoint has no task resume boundary")
+    if checkpoint["task_id"] != task_id:
+        raise RecoveryError(
+            "checkpoint belongs to task %s, not %s"
+            % (checkpoint["task_id"], task_id))
     _verify_checkpoint(root, checkpoint)
     expected_policy = policy_digest(getattr(policy, "source", None) or policy)
     if checkpoint["policy_sha256"] != expected_policy:

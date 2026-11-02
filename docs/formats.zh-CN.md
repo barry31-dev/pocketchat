@@ -141,7 +141,9 @@ allowlist 路径是 workspace 相对路径。绝对路径、空段、`.` 段与�
 
 一个任务一条记录，承载没有其他工件拥有的事实：任务走了多少步、当前处于什么状态、
 为什么停下。记录独占创建，之后通过原子替换追加，所以崩溃只会留下旧记录或新记录，
-不会留下半份。
+不会留下半份。读取方在报告前校验封闭的记录与 step 形状：文件里的 `task_id` 必须与
+文件名一致，step 序号必须连续且不超过声明的预算；终态必须带非空的 `terminal_reason`，
+活动态不得带终态原因。
 
 | 键 | 含义 |
 |---|---|
@@ -175,6 +177,8 @@ running|checkpointed|interrupted --cancel--> cancelled
 `checkpoint_id`（其 manifest 持有恢复边界），不复制任何 trace 事实，因此不可能与
 trace 说法不一致。`policy_sha256` 让 resume 诚实 —— 在摘要不同的 policy 下 resume，
 是另一个任务，会被拒绝。
+checkpoint 的 `task_id` 同样要在写任何恢复目标之前，与 resume 命令点名的 task
+核对一致。
 
 ## 选择记录 — `comparisons/<comparison-id>.selection.json`
 
@@ -212,3 +216,15 @@ v1.0 的稳定兼容承诺、运行矩阵与弃用规则见
 - 旧文件照常读取，绝不回填。
 - 迁移到新格式 = 在旧文件旁边写新文件，原件不动。
 - 读到不认识的版本就拒绝并报出版本号，而不是对没见过的字段瞎猜。
+
+## 未发布：验收计划与历史记录
+
+`pocketchat-acceptance-plan.v1` 是独立封闭操作者输入，不扩展
+`pocketchat-task-policy.v1`。`pocketchat-acceptance.v1` 记录独占追加在
+`.pocketchat/acceptance/<task-id>/<acceptance-id>.json`，绑定 canonical
+task-record/policy/plan 身份、时间、执行状态及逐项 bytes/SHA-256。
+原 task/step/checkpoint/trace v1 格式不变；`schemas/acceptance.schema.json`
+声明形状，运行时还校验唯一 id、hash、状态/原因匹配和聚合结果。
+落盘记录内含操作者 plan；公开 JSON 不复制 plan 或产物正文。
+字段语义、预算、历史报告与平台边界只见
+[task-acceptance.zh-CN.md](task-acceptance.zh-CN.md)。

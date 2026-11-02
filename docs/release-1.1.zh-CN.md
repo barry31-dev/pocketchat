@@ -1,11 +1,11 @@
-# PocketChat v1.1.0 发布候选
+# PocketChat v1.1.0 发布记录
 
-> **版本专属候选记录，不是发布授权。** 通用流程见
-> [开发与发布流程](development-and-release.zh-CN.md)。本页只记录一个 v1.1.0
-> 候选的本机证据。用户已于 2026-10-30 授权该版本的 tag、GitHub Release 与
-> 包索引发布；本预发布记录本身不执行这些动作，发布后事实由外部台账回读。
+> **版本专属发布记录，不是通用流程。** 通用流程见
+> [开发与发布流程](development-and-release.zh-CN.md)。本页记录 v1.1.0 的本机
+> 证据。用户已于 2026-10-30 授权 tag、GitHub Release 与包索引发布；GitHub tag
+> 与 Release 已发布，包索引因缺少凭据未成功上传。发布事实以发布台账为准。
 
-## 候选记录
+## 发布记录
 
 ```text
 版本：1.1.0
@@ -47,7 +47,7 @@ wheel sha256：a9f873f037112bd87474e21cc98d5e42c31d3567eb0563b2adb7cfa25e19834d
 - [ ] Linux/Windows runner 结果已记录。
 - [ ] 本候选已有真实 provider 任务运行记录。
 - [x] tag、GitHub Release 与包索引发布已明确授权给 v1.1.0。
-- [ ] 发布后的 tag、Release、身份与工件回读已记入发布台账（不在本预发布记录内）。
+- [x] 发布后的 tag、Release、身份与工件回读已记入发布台账（不在本预发布记录内）。
 
 ## Demo 证据
 
@@ -80,7 +80,7 @@ snapshot 选择，未验证自定义 trace 名的 run-id 发现。
 
 ## 不由本候选证明
 
-本候选不证明真实 provider、计费、Linux/Windows、隔离构建可复现性、外部
-Trace Doctor 消费者或发布后状态。demo 使用 in-process stub 与假凭据。取消仍是
-终态；恢复证据使用真实 `checkpointed -> running` 边界。未创建 tag、Release
-或包索引上传。
+本候选不证明真实 provider、计费、Linux/Windows、隔离构建可复现性或外部
+Trace Doctor 消费者。demo 使用 in-process stub 与假凭据。取消仍是终态；
+恢复证据使用真实 `checkpointed -> running` 边界。GitHub tag 与 Release 已于
+2026-10-30 发布；包索引未成功上传，因为本机没有凭据。

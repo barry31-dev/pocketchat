@@ -2,7 +2,7 @@
 
 > **文档性质**：pc CLI-only 能力的证据登记与实现缺口表，不是产品范围授权。
 > **维护范围**：`开源/pocketchat/` 中 trace、usage、TTFT、失败分类、上下文压缩等证据字段。
-> **维护日期**：2026-10-28
+> **维护日期**：2026-11-01
 
 ## 1. 证据编号
 
@@ -28,7 +28,7 @@
 | `model.response.failed.retryable` | `provider.py` `_http_error`；`session.py` `_complete_attempt`/`_turn`；trace schema | C provider/session/schema；V `test_failed_response_records_whether_the_error_is_retryable`；R R-07 | 已交付 | 408/425/429/5xx=true，其余 4xx/畸形/中断=false；字段是 retry/fallback 状态机输入，不是恢复成功。 |
 | `retry.attempt` / `fallback.activated` | `session.py` `_turn`；trace schema | C session/schema；V `tests/test_recovery_policy.py` | 已交付（RECOVERY-2） | 默认 `retry_max_attempts=1` 不重试；只有 retryable 失败消耗预算；fallback 一跳、独立预算，事件不代表成功。 |
 | `context.compacted` payload | `context.py` `apply_budget`；`session.py` `_context_with_budget`；trace schema | C context/session/schema；V `test_every_context_compacted_field_is_declared_by_the_schema` 与压缩用例；R R-06/R-118 | 已交付 | `estimated_tokens_*` 是本地估算，不是 provider 实报；不含 trigger/phase/attempt 二分。 |
-| session `tool_context` | `sessions.py` additive assistant field / `read_context_messages`；`session.py` resume；`branching.py` copy；`service.py` context preview；`tests/test_session.py` | 已交付（CONTEXT-2） | schema 1 additive；保存已完成 tool loop 的 assistant `tool_calls` 与配对 tool results；同进程、进程续跑、branch/rewind 派生和 context preview 使用同一重建顺序；旧文件不补写，未配对/畸形上下文拒绝。 |
+| session `tool_context` | `sessions.py` additive assistant field / `read_context_messages`；`session.py` resume；`branching.py` copy；`service.py` context preview；`tests/test_session.py` | C sessions/session/branching/service；V `tests/test_session.py` | 已交付（CONTEXT-2） | schema 1 additive；保存已完成 tool loop 的 assistant `tool_calls` 与配对 tool results；同进程、进程续跑、branch/rewind 派生和 context preview 使用同一重建顺序；旧文件不补写，未配对/畸形上下文拒绝。 |
 | `attempt_index` / `attempt_scope` | `session.py` request/completed/failed payloads；`schemas/trace.schema.json` | C session/schema；R `119` §4/§7（四种计数不可互推）；V `test_attempt_index_*`；本机 newnewrouter trace `trace-doctor validate` | 已交付（PC-BASE-1） | 只表示一个 turn 内的物理请求序号，从 1 起算；不表示 retry_count，也不证明执行过重试或 fallback。旧 trace 缺字段仍可读。 |
 | `show` 压缩摘要 | `service.py` `session_overview`/`show_record`；`cli.py` `_cmd_show` | C service/cli；V `test_show_surfaces_a_context_compaction_summary`、`test_show_json_carries_the_context_compaction_payload` | 已交付 | 人类与 JSON 均只投影压缩事件 payload；其他事件不投影正文。 |
 | TUI 状态规则事实 | `tui.py` `trace_status_facts`/`_status_bar` | C trace/tui；V `test_trace_status_facts_*`、`test_tui_status_bar_shows_trace_facts_and_unknown_markers` | 已交付（TUI-1） | 只聚合 trace 中 usage/TTFT/attempt/compaction；`cost~` 是配置价格估算，不是账单；缺 usage、价格或 TTFT 显示 `?`，`req` 不是 retry count。 |
@@ -41,9 +41,9 @@
 | `usage` 的 provider 实报 token 与账单核对 | CAND-7 用户 2026-10-29 明确跳过；只有本地 stub/newnewrouter 证据 | 不再等待托管 profile、凭据或官方价格/账单；不把本机路由证据外推为托管 Provider 证据 |
 | TTFT 的 provider 首包定义 | PocketChat 自有 delta 语义已交付；托管 Provider 官方定义未核 | CAND-7 真实凭据与官方流式语义到位后逐 provider 核对，不外推 |
 | retry/fallback 的真实 provider 行为 | 本地 stub 覆盖状态机，真实 provider 预算/延迟/取消未核 | CAND-7 真实凭据与端点验证后再登记 |
-| newnewrouter 当前模型真实 run | `local verification artifact (not shipped)`；V `run_20261029t060056_2227ec2b` | 已验证（CAND-6R，本机路由范围） | `configured-profile-a` completed；usage input 18/output 2，非流式无 TTFT，attempt 1，snapshot replay 匹配、凭据值零命中。回复为 `OK.` 不满足 exactly `OK`；配置价格 0.0 无官方依据，成本未核。不是托管 Provider 直连。 |
-| checkpoint/rewind 跨平台语义 | 本地状态机与崩溃恢复 fixture 已交付 | 真实 Windows/APFS 文件系统中断与原子替换需 CAND-7/发布矩阵另验 |
-| 查询/索引一致性 | `queries.py` `_require_consistent_graph`；`indexing.py` `index_status`；`tests/test_queries.py`、`tests/test_index.py` | 已交付（CLI-10） | 损坏/冲突/未解析 workspace fail-closed 并点名路径；并发追加立即被查询看到并使 index stale；索引摘要相同但行不同报告 `inconsistent`。 |
+| newnewrouter 当前模型真实 run | `local verification artifact (not shipped)`；`run_20261029t060056_2227ec2b` | V `run_20261029t060056_2227ec2b` | 已验证（CAND-6R，本机路由范围） | `configured-profile-a` completed；usage input 18/output 2，非流式无 TTFT，attempt 1，snapshot replay 匹配、凭据值零命中。回复为 `OK.` 不满足 exactly `OK`；配置价格 0.0 无官方依据，成本未核。不是托管 Provider 直连。 |
+| checkpoint/rewind 跨平台语义 | 本地状态机与崩溃恢复 fixture 已交付 | 真实 Windows/APFS 文件系统中断与原子替换需发布矩阵另验 |
+| 查询/索引一致性 | `queries.py` `_require_consistent_graph`；`indexing.py` `index_status`；`tests/test_queries.py`、`tests/test_index.py` | C queries/indexing；V `tests/test_queries.py`、`tests/test_index.py` | 已交付（CLI-10） | 损坏/冲突/未解析 workspace fail-closed 并点名路径；并发追加立即被查询看到并使 index stale；索引摘要相同但行不同报告 `inconsistent`。 |
 | 上下文预览/干跑压缩 | `context.py` `preview_budget`；`service.py` `context_preview`；`tests/test_context.py` | 已交付（CONTEXT-1） | 只读输出索引/角色/字符、估算 token 和 kept/dropped；按完整 exchange 裁剪，保留最近边界与 pinned prompt；不复制正文、不写文件、不发请求。 |
 | token 预算护栏 | `config.py` profile 预算；`session.py` 请求前/响应后检查；`tests/test_cost_budget.py` | 已交付（COST-1） | `max_turn_tokens` / `max_session_tokens` 是 token 预算；超预算不进入上下文，session 预算遇 usage 未知 fail-closed；不是货币上限或真实账单。 |
 | 只读文件工具/权限 | `tools.py`；CLI `tool read`；trace `permission.*`/`tool.call.*`；`tests/test_tools.py` | 已交付（TOOLS-1） | 仅显式 allowlist、工作区内 UTF-8 文件；拒绝敏感/二进制/逃逸；有界输出；不写、不执行、不联网；未实现自动 tool calling。 |
@@ -63,7 +63,45 @@
 | 有界 task 执行 | `agent.run_task`、`session.py` task observer；`tests/test_task_run.py` | C 主循环/Session；V 8 条 stub 端到端 | 已交付（TASK-RUN-2） | 模型/工具复用既有 request、trace、session；step/tool/token 预算与 fallback 收窄。stub 不是真实 provider。 |
 | task checkpoint / resume | `recovery.py`、`tasking.py`；`tests/test_task_recovery.py` | C manifest/事务；V 8 条恢复路径 | 已交付（TASK-RUN-3） | 三字段 all-or-none；resume 写前校验并恢复 prepared 事务/有序 tool context。取消仍为终态；resume 后不自动调 provider。 |
 | task CLI / report | `cli.py task`；`tests/test_cli_exec_json.py`、`test_demo.py` | C CLI/JSON；V 8 条 CLI + demo test | 已交付（TASK-RUN-4） | run/status/resume/report、稳定 JSON、workspace-relative 路径；report 不推断。自定义嵌套 trace 发现未验证。 |
-| v1.1.0 候选 | `docs/release-1.1.md`；wheel sha256 `a9f873f037112bd87474e21cc98d5e42c31d3567eb0563b2adb7cfa25e19834d` | V 3.9/3.13 各 691 tests、干净 3.9 安装、3 traces validate、replay hash | 候选已准备（TASK-RUN-5） | 38 成员 wheel、task schema 在、web/server 0；真实 provider、跨平台 runner、隔离构建、ruff、tag/Release/包索引未验证或未授权。 |
+| v1.1.0 发布 | `docs/release-1.1.md`；wheel sha256 `a9f873f037112bd87474e21cc98d5e42c31d3567eb0563b2adb7cfa25e19834d` | V 3.9/3.13 各 691 tests、干净 3.9 安装、3 traces validate、replay hash、GitHub Release 回读 | 已发布（TASK-RUN-5） | GitHub tag/Release 与 wheel 已发布；38 成员 wheel、task schema 在、web/server 0。真实 provider、跨平台 runner、隔离构建、包索引仍未验证或未完成。 |
+
+## 3.5 阶段 3 真实任务证据（2026-11-01）
+
+以下五行是**本机真实 provider 运行**结果，不是 stub，也不是静态推演。
+运行环境：`origin/main` `c7c9bb8c`、CPython 3.9.6、一个本机 router profile
+（`requires_api_key: false`；profile 名不随文档发布，与本文 §2 的
+`configured-profile-a` 同一口径）。
+**这些结果只覆盖本机这一个 profile 与这些具体输入，不外推为托管 provider 证据，
+也不宣称普遍稳定。**
+
+| 任务 | 实际输入 | 实际输出 | 验收状态 | 未验证范围 |
+|---|---|---|---|---|
+| 读+写报告 | `input.md` 三行中文；policy 只授 `read_file:[input.md]` 与 create-only `write_file:[report.md]` | 真实读取后写入 `report.md`（256 B，`## Findings` 开头）；exit 0 | 2/2 `passed`（`file_exists` + `text_contains`） | 内容质量——`text_contains` 只查子串，不是质量评分 |
+| 命令进证据 | 本地 `tests/` 两个用例；TaskSpec 声明 argv 模板 `run_tests` | `unittest discover` 真实执行 exit 0、2 tests OK；模型按授权写 `results.md`；`task_acceptance: not_evaluated` | 2/2 `passed`（`file_exists` + `command_succeeded`，**未重跑命令**） | 真实测试套件规模、超时与输出上限边界 |
+| 失败后修正 | 故意错误的 committed fixture `counter.py`（只 +1），命令要求 count≥3 | 第一次 exit 1 → operator callback 修正（+3/-3 行，hash 变）→ 同一模板同一 argv exit 0 | 执行状态 `failed` → `completed` | **修正者是 operator callback，不是模型自主诊断**；要证后者需另设设计 |
+| 恢复 | 两步 plan，`stop_after=1` | `stage1.md` hash **与 mtime 均未变**；`stage2.md` 由恢复生成；新报告经 `recovery` 链接前一份及其 digest | 恢复链完整 | 任意崩溃恢复、并发写者、跨进程原子替换 |
+| 正确拒绝 | spec allow_paths 越界 / delegate 计划 digest 不匹配 / delegate 子任务越权路径 | 三例均 exit 2 且零 task/trace/session/delegation 产物 | 拒绝发生在调用前 | 见下方「被推翻的假证据」 |
+
+### 被推翻的假证据（必须保留）
+
+最初用「让模型读 `secrets/api.key`」构造拒绝用例，返回 `ok:true`、exit 0。
+逐层查证后确认：**模型从未发起那次读取**，只是回复了文本，拒绝路径从未被触发。
+因此该用例不构成拒绝证据，已改用 `task spec preview` 与 `task delegate preview`
+这两条真正走校验的入口。结论：拒绝机制有效，但「模型主动越权」在当前实现里
+不构成拒绝用例。
+
+### checkpoint 接入续跑（同日追加）
+
+`resume_from_checkpoint()` 把 checkpoint 解析成工作区相对报告路径与该报告 digest，
+报告必须位于 `.pocketchat/task-reports/` 下且字节 hash 等于记录值。
+真实集成：`stop_after=1` 后创建 checkpoint，解析后续跑，`stage1.md` hash 与 mtime
+未变、`stage2.md` 由恢复生成。未验证：自动触发恢复、任意崩溃恢复、并发写者。
+
+### 使用门槛（同日记录）
+
+`task run --policy` 只接受 `pocketchat-task-policy.v1`，**不接受 TaskSpec**；
+带命令模板必须走 `task_exec.authorize` + `execute_plan` 的 Python 路径。
+这不是缺陷，但文档未明确说明该组合无法经 CLI 直接运行。
 
 ## 4. 入口规则
 
