@@ -2,6 +2,7 @@
   "schema": "mywork-review-record.v1",
   "paths": [
     "CHANGELOG.md",
+    "docs/review-runtime-admission-v1.json",
     "docs/slice-queue.md",
     "docs/task-spec.md",
     "docs/task-spec.zh-CN.md",
