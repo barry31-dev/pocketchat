@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add a deterministic layered context projector. It keeps fixed
+  instructions and task state ahead of recent complete exchanges and declared
+  evidence, deduplicates evidence sources, refuses orphan tool exchanges and
+  fails closed when the fixed layers cannot fit. Session wiring is not changed
+  by this slice. See `pocketchat/context_projection.py`.
 - Add a pure task-state projector for cross-step context. It includes only
   completed, explicitly depended-on steps and declared file evidence, excludes
   unrelated steps, and refuses missing digests, unresolved evidence, malformed

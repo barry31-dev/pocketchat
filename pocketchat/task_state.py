@@ -76,6 +76,10 @@ def project_task_state(report: Any, *, step_id: str,
             value = row.get(key)
             if isinstance(value, str) and value and not value.startswith("/"):
                 item[key] = value
+        inputs = row.get("inputs")
+        if isinstance(inputs, list):
+            item["inputs"] = [value for value in inputs
+                              if isinstance(value, str)]
         evidence.append(item)
 
     declared = set(allowed_paths or [])
