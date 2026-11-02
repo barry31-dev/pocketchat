@@ -89,9 +89,17 @@ does not authorize a tag, GitHub Release or package-index upload.
   completed successfully for `ca3dcfc`. It contains six Linux/macOS/Windows
   matrix jobs for Python 3.9/3.13 plus the `pocketchat-release-smoke` job.
 - Documentation follow-up: [run 41472710840](https://github.com/barry31-dev/pocketchat/actions/runs/41472710840)
-  completed successfully for the final tree
+  completed successfully for
   `74cc2596e0d0efdd78873b1dde7cbccac6c6192e`. All six matrix jobs and
   `pocketchat-release-smoke` passed; artifact id `13156860069` was uploaded.
+- Final documentation commit `be581f1fc1f7b4057856f0a3143ef7b518524296`:
+  [run 41475576711](https://github.com/barry31-dev/pocketchat/actions/runs/41475576711)
+  has six successful jobs, including `pocketchat-release-smoke`, and one
+  Ubuntu Python 3.9 job failed while cleaning up the real-terminal TUI test's
+  temporary directory after that lone test errored. The same test passed
+  locally in 0.019s. The token could not rerun the failed CI job, so this is
+  recorded as **not a full seven-job green run**, not as a pass. Artifact id
+  `13156860069` is from the preceding fully green documentation tree.
 - Release smoke artifact: `pocketchat-release-smoke`, 224986 bytes, artifact
   id `13151077049`. The downloaded archive contains
   `pocketchat-1.1.0-py3-none-any.whl` (228024 bytes) and its JSON evidence.
