@@ -386,5 +386,7 @@ python scripts/release_smoke.py --work-dir /tmp/pocketchat-release --json
 检查要求恰好一个 wheel、5 个随包 schema、task/recovery 模块存在，且不含
 `pocketchat/web/` 或 `pocketchat/server.py`；安装后的 `task ... --help` 命令面必须
 完整。JSON 含稳定的 wheel 文件名、字节数、SHA-256、成员数、schema 与命令族。CI
-运行同一脚本并上传 JSON 与 wheel 为 `pocketchat-release-smoke` artifact。CI artifact
+运行同一脚本并上传 JSON 与 wheel 为 `pocketchat-release-smoke` artifact。默认使用
+PEP 517 隔离构建，干净 runner 不依赖基础解释器预装 setuptools；
+`--no-build-isolation` 只是显式离线/调试回退，仅在构建依赖已存在时使用。CI artifact
 只证明其精确 SHA，不授权 tag、Release 或包索引发布。

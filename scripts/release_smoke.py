@@ -145,14 +145,18 @@ def _run(command, *, cwd=None, env=None) -> subprocess.CompletedProcess:
     return proc
 
 
-def build_wheel(repo: Path, out_dir: Path, *, python: str = sys.executable) -> WheelArtifact:
+def build_wheel(repo: Path, out_dir: Path, *, python: str = sys.executable,
+                isolated: bool = True) -> WheelArtifact:
     repo = Path(repo).resolve()
     out_dir = Path(out_dir).resolve()
     if not (repo / "pyproject.toml").is_file():
         raise ReleaseSmokeError("repository has no pyproject.toml")
     out_dir.mkdir(parents=True, exist_ok=True)
-    _run([python, "-m", "pip", "wheel", str(repo), "--no-deps",
-          "--no-build-isolation", "-w", str(out_dir)], cwd=repo)
+    command = [python, "-m", "pip", "wheel", str(repo), "--no-deps"]
+    if not isolated:
+        command.append("--no-build-isolation")
+    command.extend(["-w", str(out_dir)])
+    _run(command, cwd=repo)
     wheels = sorted(out_dir.glob("*.whl"))
     if len(wheels) != 1:
         raise ReleaseSmokeError("expected exactly one built wheel")
@@ -199,11 +203,13 @@ def install_wheel(artifact: WheelArtifact, venv_dir: Path,
 
 
 def run_release_smoke(repo: Path, work_dir: Path, *, python: str = sys.executable,
-                      build=None, install=None) -> Dict[str, Any]:
+                      isolated: bool = True, build=None,
+                      install=None) -> Dict[str, Any]:
     work_dir = Path(work_dir).resolve()
     build = build or (lambda *a, **k: build_wheel(*a, **k))
     install = install or install_wheel
-    artifact = build(Path(repo), work_dir / "dist", python=python)
+    artifact = build(Path(repo), work_dir / "dist", python=python,
+                     isolated=isolated)
     validate_artifact(artifact)
     installed = install(artifact, work_dir / "venv", python=python)
     validate_installed(installed)
@@ -214,6 +220,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--work-dir", type=Path, default=None)
+    parser.add_argument("--no-build-isolation", action="store_true",
+                        help="use only build dependencies already installed")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     temporary = None
@@ -222,7 +230,8 @@ def main(argv=None) -> int:
         if work is None:
             temporary = tempfile.mkdtemp(prefix="pocketchat-release-")
             work = Path(temporary)
-        result = run_release_smoke(args.repo, work)
+        result = run_release_smoke(args.repo, work,
+                                   isolated=not args.no_build_isolation)
     except (ReleaseSmokeError, OSError) as exc:
         if args.json:
             print(json.dumps({"ok": False, "schema_version": "1",

@@ -194,6 +194,10 @@ modules, no `pocketchat/web/` or `pocketchat/server.py`, and the full installed
 `task ... --help` family. The JSON result contains workspace-independent artifact
 name, byte count, SHA-256, member count, schemas and command families. CI runs the
 same script and uploads the JSON plus wheel as `pocketchat-release-smoke`.
+The default build uses PEP 517 isolation, so a clean runner does not depend on
+its base interpreter having setuptools preinstalled. `--no-build-isolation` is
+an explicit offline/debug fallback and must only be used when those build
+dependencies are already available.
 
 Record the interpreter version, command, actual output and exit code. The CI
 artifact is evidence only for its exact SHA; it does not authorize a tag,

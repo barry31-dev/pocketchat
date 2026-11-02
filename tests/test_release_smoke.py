@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -33,6 +34,7 @@ class ReleaseSmokeTests(unittest.TestCase):
 
         def build(*args, **kwargs):
             calls.append(("build", args, kwargs))
+            self.assertTrue(kwargs["isolated"])
             return artifact
 
         def install(*args, **kwargs):
@@ -61,6 +63,21 @@ class ReleaseSmokeTests(unittest.TestCase):
         with self.assertRaisesRegex(release_smoke.ReleaseSmokeError,
                                     "schema|web"):
             release_smoke.validate_artifact(artifact)
+
+    def test_build_command_uses_isolation_by_default(self):
+        with mock.patch.object(release_smoke, "_run") as run, \
+                mock.patch.object(release_smoke, "read_wheel_members",
+                                  return_value=release_smoke.required_members()), \
+                mock.patch.object(release_smoke, "validate_artifact"):
+            root = Path(tempfile.mkdtemp())
+            (root / "pyproject.toml").write_text("[build-system]\n", encoding="utf-8")
+            out = root / "dist"
+            out.mkdir(parents=True)
+            wheel = out / "pocketchat-1.1.0-py3-none-any.whl"
+            wheel.write_bytes(b"wheel")
+            release_smoke.build_wheel(root, out)
+        command = run.call_args.args[0]
+        self.assertNotIn("--no-build-isolation", command)
 
     def test_installed_cli_must_expose_every_required_task_command(self):
         with self.assertRaisesRegex(release_smoke.ReleaseSmokeError,
