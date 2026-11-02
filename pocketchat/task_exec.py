@@ -366,9 +366,17 @@ def _task_state_prompt(step, results, execution) -> str:
         row = {key: result[key] for key in
                ("step_id", "action", "status", "task_id", "trace",
                 "session") if key in result}
-        dependency = by_id[dependency_id]
-        row["inputs"] = (list(dependency.policy.read_allow_paths)
-                         + list(dependency.policy.write_allow_paths))
+        dependency = by_id.get(dependency_id)
+        if dependency is None:
+            raise TaskExecutionError(
+                "dependency step %r is not in the authorized plan"
+                % dependency_id)
+        if dependency.policy is not None:
+            row["inputs"] = (list(dependency.policy.read_allow_paths)
+                             + list(dependency.policy.write_allow_paths))
+        else:
+            row["inputs"] = ([dependency.command_template_id]
+                             if dependency.command_template_id else [])
         rows.append(row)
     report = {
         "spec_sha256": execution.spec_sha256,
@@ -506,7 +514,7 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                 policy=step.policy, workspace=root, config=config,
                 trace_path=path, session_path=session_path,
                 prompts=[_task_state_prompt(step, results, execution)],
-                acceptance=acceptance,
+                acceptance=None,
                 task_budget=task_budget)
             results.append({"step_id": step.id, "action": step.action,
                             "status": result.status,
