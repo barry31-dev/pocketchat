@@ -7,6 +7,10 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Mark package independence delivered. Public docs stay inside the package,
+  the product queue and contributor rules are reachable, no source module
+  reads the control repository, and the CI workflow declares Bash for its
+  output-file steps. Evidence: `tests/test_package_independence.py`.
 - Add read-only `task exec --check-acceptance`. It validates the operator plan
   before provider configuration and evaluates it against the exact execution
   report from that invocation, while keeping execution status separate from
