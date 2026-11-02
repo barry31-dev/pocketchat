@@ -180,18 +180,24 @@ python -m unittest discover -s tests -v
 ruff check pocketchat tests
 ```
 
-Then build and install in a clean environment:
+Then build and install in a clean environment. The repository-owned smoke
+entry performs the real wheel build, archive-member checks, clean venv install,
+installed version check and task-command surface check, and emits machine-readable
+evidence:
 
 ```bash
-python -m build
-python -m venv /tmp/pocketchat-release-venv
-/tmp/pocketchat-release-venv/bin/python -m pip install dist/pocketchat-*.whl
-/tmp/pocketchat-release-venv/bin/pocketchat --version
-/tmp/pocketchat-release-venv/bin/pocketchat --help
+python scripts/release_smoke.py --work-dir /tmp/pocketchat-release --json
 ```
 
-Use the platform-specific `Scripts/` or `bin/` path on Windows. Record the
-interpreter version, command, output and exit code.
+It requires exactly one wheel, all five shipped schemas, the task/recovery
+modules, no `pocketchat/web/` or `pocketchat/server.py`, and the full installed
+`task ... --help` family. The JSON result contains workspace-independent artifact
+name, byte count, SHA-256, member count, schemas and command families. CI runs the
+same script and uploads the JSON plus wheel as `pocketchat-release-smoke`.
+
+Record the interpreter version, command, actual output and exit code. The CI
+artifact is evidence only for its exact SHA; it does not authorize a tag,
+Release or package-index upload.
 
 The CI matrix is evidence only for the exact commit and workflow run it
 reports. A push to a different repository, or a workflow that did not run,

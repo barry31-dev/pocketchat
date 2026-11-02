@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add a repository-owned release smoke gate and CI job. It builds one real
+  wheel, validates required package/schema/surface members and removed
+  web/server paths, installs into a clean venv, checks the full installed task
+  command surface, and uploads JSON plus the wheel as an Actions artifact. See
+  `scripts/release_smoke.py` and `docs/development-and-release.md`.
 - Add `task checkpoint create` so a CLI caller can derive a closed checkpoint
   from one exact digest-bound execution report without Python. Creation is
   read/derive/write only: it executes no step or command, calls no provider,
