@@ -110,6 +110,9 @@ authority for the exact excerpts sent. It is created exclusively beside request 
 is never rewritten. If request snapshot or sidecar creation fails on the
 projection path, no request is sent. A sidecar is evidence for the selection
 that produced a request; it is not task acceptance or publication proof.
+`replay --dry-run` validates an adjacent sidecar when present and never searches
+the current memory store. Checkpoint `context_bindings` may bind the request,
+sidecar and recall-set digests so missing artifacts refuse at resume time.
 
 ## Comparison manifests — `comparisons/<comparison-id>.json`
 

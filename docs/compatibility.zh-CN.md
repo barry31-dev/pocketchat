@@ -38,6 +38,8 @@ JSON 字段的含义，都是破坏性变更，必须使用新的大版本。
 | Session | `schema_version: "1"` | 旧文件仍可读；已完成 assistant 行可带 additive `tool_context`；未知新版本拒绝 |
 | Trace | Agent Trace Doctor schema `"1"` | 不静默改写事件形状 |
 | 请求快照 | `schema_version: "1"` | 精确 body、无 header，replay 校验 hash |
+| Context projection sidecar | `schema_version: "pocketchat-context-projection.v1"` | profile 显式启用；只含元数据、独占写在 request snapshot 旁、上限 64 KiB；存在时 replay 校验绑定 |
+| Task checkpoint context binding | optional `context_bindings` + `task_budget_sha256` | 旧 checkpoint 仍可读；新模式对缺失或变化的绑定产物拒绝 |
 | Comparison manifest | `schema_version: "1"` | 独占创建的证据索引 |
 | Selection 记录 | `schema_version: "1"` | 每次对比只记一个选择 |
 | 派生索引 | `schema_version: "1"` | 可删除；过期时要求重建 |

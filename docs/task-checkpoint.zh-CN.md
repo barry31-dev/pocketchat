@@ -16,7 +16,10 @@ pocketchat task checkpoint preview ckpt.json \
 记录包含 spec 与 plan digest、已完成/待执行步骤划分、等于已完成数量的
 `boundary_index`、步骤所属 task id、有界文件副作用摘要（路径、新 SHA-256、
 字节数、基线）与命令副作用摘要（step id、模板 id、退出码、超时标记、
-档案 SHA-256），以及它派生自的报告的 SHA-256。
+档案 SHA-256），以及它派生自的报告的 SHA-256。新版 checkpoint 还可携带
+`task_budget_sha256` 和有界 `context_bindings`，逐项命名续跑投影使用的 request
+snapshot、可选 projection sidecar 与 recall-set digest。没有这些可选字段的旧
+checkpoint 仍可读；新模式缺少匹配绑定时拒绝。
 
 `create_checkpoint()` 会读取报告文件，并在以下情况拒绝：传入对象与磁盘字节
 不一致、声明的报告 digest 不匹配、报告带未决证据问题、已完成步骤出现在未执行
@@ -33,7 +36,10 @@ pocketchat task checkpoint preview ckpt.json \
 调用方无需猜测当前是哪一份报告。返回的 `report_path` 是工作区相对路径，且必须
 直接位于 `.pocketchat/task-reports/` 下——checkpoint 不能把任意文件指为自己的
 证据。报告字节会被哈希，且必须等于记录的 `report_sha256`；可选的 expected
-spec/plan digest 也必须匹配。
+spec/plan digest 也必须匹配。存在绑定时，预算账本 digest 必须与报告一致，每个
+context binding 都必须解析到精确的 request/projection/recall 产物；缺失、变化或
+未绑定的产物在续跑前拒绝。恢复只校验证据并返回 `replayed_side_effects: []`，
+不重跑已完成步骤，也不重新搜索当前 memory。
 
 ```bash
 pocketchat task checkpoint resume ckpt.json \

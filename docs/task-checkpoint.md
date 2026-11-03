@@ -31,7 +31,11 @@ A record carries the spec and plan digests, the completed/pending step
 partition, `boundary_index` equal to the completed count, the task ids the
 steps ran under, a bounded summary of file effects (path, new SHA-256, byte
 count, baseline) and command effects (step id, template id, exit code, timeout
-flag, archive SHA-256), plus the SHA-256 of the report it was derived from.
+flag, archive SHA-256), plus the SHA-256 of the report it was derived from. Newer checkpoints may also
+carry `task_budget_sha256` and a bounded `context_bindings` list that names each
+request snapshot, optional projection sidecar and recall-set digest used by the
+resumed projection. Old checkpoints without these optional fields remain
+readable; a new budgeted/context mode must provide the matching bindings.
 
 `create_checkpoint()` reads the report file and refuses when the object handed
 to it differs from those bytes, when the declared report digest does not match,
@@ -51,7 +55,12 @@ and digest to resume from, so a caller never guesses which report is current.
 The returned `report_path` is workspace-relative and must live directly under
 `.pocketchat/task-reports/`; a checkpoint cannot name an arbitrary file as its
 own evidence. The report's bytes are hashed and must equal the recorded
-`report_sha256`, and the optional expected spec/plan digests must match.
+`report_sha256`, and the optional expected spec/plan digests must match. When
+present, the budget ledger digest must match the report and every context
+binding must resolve to its exact request/projection/recall artifacts. Missing,
+changed or unbound artifacts refuse before a resume. Resume validates evidence
+and returns `replayed_side_effects: []`; it never reruns a completed step or
+re-searches current memory.
 
 ```bash
 pocketchat task checkpoint resume ckpt.json \

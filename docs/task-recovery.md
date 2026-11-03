@@ -75,7 +75,10 @@ beside their traces, including in a caller-selected nondefault directory.
 ## Reports and non-repetition
 
 Completed results keep their original task ids, trace/session paths and
-artifact hashes. Only the never-started suffix is executed, with the same
+artifact hashes. `validate_resume_context` additionally checks checkpoint-bound
+request snapshots, projection sidecars and recall-set digests; a later memory
+store change cannot rewrite the historical request, and missing bound artifacts
+refuse before any new step. Only the never-started suffix is executed, with the same
 one-action policies and declared command runner. A new cumulative report
 contains all results and file changes, plus a `recovery` link holding the
 predecessor report's relative path and exact digest. Old reports and traces

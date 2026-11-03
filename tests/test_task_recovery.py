@@ -150,6 +150,17 @@ class TaskRecoveryTests(unittest.TestCase):
         self.assertIn("policy", str(caught.exception))
         self.assertFalse((self.root / "sessions" / "resumed.jsonl").exists())
 
+    def test_resume_context_validation_refuses_missing_bound_artifact(self):
+        from pocketchat.task_recovery import validate_resume_context
+        with self.assertRaisesRegex(Exception, "context artifact"):
+            validate_resume_context(self.root, [{
+                "request_snapshot": "traces/requests/missing.turn-1.json",
+                "request_sha256": "a" * 64,
+                "projection_sidecar": "",
+                "projection_sha256": "",
+                "recall_sha256": "",
+            }])
+
     def test_resume_rejects_a_checkpoint_for_another_task_before_write(self):
         checkpoint = create_task_checkpoint(
             self.root, self.session,
