@@ -1,0 +1,181 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/formats.md",
+    "docs/pocketchat-evidence-matrix.md",
+    "docs/review-memory-v2-migration-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/memory_migration.py",
+    "tests/test_memory_migration.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "unicode-line-separator-splits-v1-record",
+      "detail": "The v1 reader used str.splitlines(), which treats U+2028 and other Unicode separators inside a valid JSON string as record boundaries. A v1 record accepted by memory add therefore became invalid fragments during migration. The migration now splits JSONL only on LF; a regression test preserves U+2028 content."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "target-parent-replaced-after-resolution",
+      "detail": "Target resolution was checked before target.parent.mkdir and a path-based open, so a concurrent replacement of the target parent could redirect the write outside the workspace. The target parent is now created and traversed descriptor-relative with O_NOFOLLOW, and the final file is created with O_EXCL|O_NOFOLLOW. A regression test replaces the parent during mkdir and confirms no outside write."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "failure-cleanup-unlinked-by-path-not-descriptor",
+      "detail": "After descriptor-relative target creation was added, the failure branch still cleaned up with os.unlink(str(target)) by path name. If the target parent were replaced between creation and write failure, cleanup could delete the entry now occupying that path instead of the file this migration created. Cleanup now unlinks target.name through the same parent descriptor, and tests cover descriptor-relative cleanup and real partial-write removal."
+    },
+    {
+      "id": "F4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "fdopen-failure-leaks-created-target-descriptor",
+      "detail": "If os.fdopen failed after the exclusive target was created, the exception path closed only the parent descriptor and leaked the newly created target descriptor. The target descriptor is now closed only when fdopen did not take ownership; write failures after successful fdopen continue to rely on the context manager. Regression tests assert both descriptors close exactly once and retain source-descriptor closure coverage."
+    },
+    {
+      "id": "F5",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "shared-temp-parent-fixture-collides-across-test-processes",
+      "detail": "Migration tests created external fixture directories with fixed names in the shared system temp parent. Two test processes running concurrently could collide and one failed with FileExistsError before exercising product behavior. External fixture paths now include each test workspace name, and the two-process rerun passed on CPython 3.9.6 and 3.13.9."
+    },
+    {
+      "id": "F6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "updated-by-not-validated",
+      "detail": "The optional updated_by field was deep-copied without validation, so arbitrary structured values entered a format documented as closed. updated_by is now a normalized string and non-string values raise MemoryMigrationError. A regression test covers normalization and rejection."
+    },
+    {
+      "id": "F7",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "timestamp-parser-accepts-non-rfc3339-syntax",
+      "detail": "datetime.fromisoformat accepted loose forms such as a space separator or omitted seconds even though the format contract requires RFC 3339 UTC. The parser now enforces the exact date/T/time/Z shape while accepting fractional seconds beyond datetime microsecond precision. Regression cases reject loose syntax and preserve a nine-digit fraction."
+    },
+    {
+      "id": "F8",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "conflicted-record-with-empty-conflict-list",
+      "detail": "A conflicted record was accepted with conflict_with present but empty, so it identified no conflicting memory. Empty conflict lists are now refused and a regression test confirms a non-empty target remains valid."
+    },
+    {
+      "id": "F9",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "nofollow-fallback-opens-symlinked-source-first",
+      "detail": "When O_NOFOLLOW was unavailable, _read_v1 opened the source before checking is_symlink, so a symlinked v1 store was followed and read before rejection. The fallback now checks the source entry before opening, and the regression test asserts os.open is never called for the symlink."
+    },
+    {
+      "id": "F10",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "submicrosecond-timestamp-order-truncated",
+      "detail": "Accepting sub-microsecond RFC 3339 fractions while comparing truncated datetime values allowed updated to precede created within the same microsecond. Timestamp order now compares the complete fraction digit string after validating the base timestamp. A regression case rejects created=.000000900Z with updated=.000000100Z."
+    },
+    {
+      "id": "F11",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "conflict-target-whitespace-only",
+      "detail": "Rejecting an empty conflict_with list still accepted whitespace-only targets that identify no memory. String lists now normalize entries and reject empty results before duplicate checks. Regression coverage rejects conflict_with=[\" \"] and accepts a real mem_ target."
+    },
+    {
+      "id": "F12",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "nofollow-check-open-race-remains",
+      "detail": "Checking is_symlink before a path-based open still allowed replacement of the source with a symlink between check and open when O_NOFOLLOW was unavailable. The reader now refuses that platform before any open, matching the fail-closed write boundary. A regression test simulates a false symlink check and asserts os.open is never called."
+    }
+  ],
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/formats.md",
+    "docs/pocketchat-evidence-matrix.md",
+    "docs/review-memory-v2-migration-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/memory_migration.py",
+    "tests/test_memory_migration.py"
+  ],
+  "candidate_sha": "self",
+  "reviewed_evidence": [
+    "Final matching surface after new-diff review fixes, CPython 3.9.6: /usr/bin/python3 -m unittest tests.test_memory_migration tests.test_memory tests.test_memory_tools -q; 58 tests OK, exit 0.",
+    "Final matching surface after new-diff review fixes, CPython 3.13.9: /opt/anaconda3/bin/python3.13 -m unittest tests.test_memory_migration tests.test_memory tests.test_memory_tools -q; 58 tests OK, exit 0.",
+    "Document guards, CPython 3.9.6: /usr/bin/python3 -m unittest tests.test_release_process_docs -q; 15 tests OK, exit 0.",
+    "Ruff 0.17.3: ruff check --select E9,F pocketchat tests; All checks passed!, exit 0.",
+    "git diff --check passed.",
+    "Fresh-context review: OpenAI Codex v0.166.0-alpha.5.1 codex exec review --uncommitted --ephemeral, model trae-cn-mimo-v2.6-pro, sandbox read-only; completed and returned F6-F9. Each was reproduced locally before a failing regression test was added and fixed.",
+    "New-diff-only review: OpenAI Codex v0.166.0-alpha.5.1 codex exec --ephemeral --sandbox read-only, model trae-cn-mimo-v2.6-pro; completed and returned F10-F12. Each was reproduced or established statically before a failing regression test was added and fixed.",
+    "Earlier candidate before the final review fixes ran the full discovered suite on CPython 3.9.6 and 3.13.9 with 1146/1146 tests OK on each; it is historical evidence, not a full-suite result for the final tree."
+  ],
+  "unverified": [
+    "The full discovered suite was not rerun after the final F10-F12 fixes; the matching 58-test surface, document guards and Ruff gate were rerun on both interpreters as recorded.",
+    "Real v1 data migration, Windows/no-follow behavior, concurrent production writers and crash recovery were not run.",
+    "Real provider, retrieval, recall, prompt injection and packaging/release behavior are outside this slice and were not run."
+  ],
+  "landing_sign_off": {
+    "status": "required",
+    "scope": "Landing this exact medium-risk slice on main; no tag, Release, package upload or real provider run."
+  },
+  "review_context": {
+    "why": [
+      "This is a medium-risk Python behavior and format slice: it adds a closed v2 parser and a pure v1-to-v2 file migration that crosses filesystem and schema boundaries."
+    ],
+    "not_doing": [
+      "No live CLI migration, accept/retire/forget commands, retrieval, recall, prompt injection, provider call, package build, tag or Release."
+    ],
+    "diff_walk": [
+      "pocketchat/memory_migration.py: validate the closed v2 shape and lifecycle, enforce RFC 3339 syntax, bind source references to digests, read bounded v1 JSONL without rewriting or following source symlinks, convert legacy records to unverified candidates, and create a bounded v2 target exclusively inside the workspace with descriptor-relative cleanup.",
+      "tests/test_memory_migration.py: cover parser closure, lifecycle and size limits, source immutability, unsafe targets, descriptor ownership, partial-write cleanup, Unicode JSONL content, strict timestamps, target-parent replacement and unsupported no-follow platforms.",
+      "docs/formats.md: document the candidate-only format and the pure migration boundary.",
+      "docs/slice-queue.md, docs/pocketchat-evidence-matrix.md and CHANGELOG.md: record the delivered source/offline slice without claiming CLI or provider integration."
+    ],
+    "static_checks": [
+      "V2 records reject unknown or missing fields, malformed digests, duplicate source references, self-supersession and state/metadata mismatches.",
+      "Migration keeps the v1 bytes unchanged and does not infer a verified source for legacy records.",
+      "Target parent traversal is descriptor-relative with O_NOFOLLOW; final creation is exclusive with O_NOFOLLOW.",
+      "Target and parent descriptors close exactly once across create, fdopen, write and cleanup failures.",
+      "The v2 file is bounded by the shared per-line and total-store limits.",
+      "Optional updated_by is a normalized string rather than arbitrary copied metadata.",
+      "Timestamps require RFC 3339 date/T/time/Z syntax and conflict metadata must identify at least one target.",
+      "A source symlink is rejected before open when no-follow open support is unavailable.",
+      "Timestamp ordering compares full fractional-second precision rather than truncated datetime microseconds.",
+      "String-list metadata is normalized and whitespace-only conflict targets are refused.",
+      "Lack of source-open no-follow support refuses before os.open, so the former check/open replacement window is gone."
+    ],
+    "red_green": [
+      "The Unicode separator test failed with a JSON decode error before the reader fix and passed after it.",
+      "The replaced-parent test wrote into the outside directory before the descriptor-relative fix; it raised MemoryMigrationError with no outside file after the fix.",
+      "The fdopen-failure test failed on the old cleanup path because the target descriptor was absent from close calls, then passed after ownership-aware cleanup.",
+      "The concurrent test-process rerun failed on a shared fixed external fixture name, then passed after fixture names were bound to unique workspace names.",
+      "Fresh-review probes accepted arbitrary updated_by values, loose timestamp syntax and empty conflict lists; four regression tests failed before the fixes and passed after them.",
+      "The no-follow fallback test observed os.open on the symlinked source before the fix and asserted no call after it.",
+      "The new-diff review reproduced sub-microsecond reversed timestamps and whitespace-only conflict targets as accepted; both regression cases failed before the fixes and passed after them.",
+      "The no-follow race regression simulated a false is_symlink result and failed when os.open was reached before the fix; it passed with no open after fail-closed platform refusal."
+    ],
+    "review_notes": [
+      "Two earlier fresh-context attempts were interrupted without final findings files; their local candidate findings were reproduced rather than treating channel gaps as clean reviews.",
+      "A completed fresh-context review returned F6-F9; the subsequent new-diff-only review returned F10-F12. All seven were reproduced or established statically and fixed under capped review scope.",
+      "The record uses the three-round cap and does not authorize another full review round."
+    ],
+    "gaps": [
+      "Full-suite coverage, Windows/no-follow behavior, real data migration, production concurrency and crash recovery remain unverified."
+    ]
+  }
+}

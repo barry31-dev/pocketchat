@@ -174,6 +174,41 @@ after rewriting is a path nobody read. `write_file` cannot be widened to
 overwrite. Only these three tools exist; a tool the policy names but the package
 does not implement is a refusal, not a no-op.
 
+## Memory v2 records — `.pocketchat/memory.v2.jsonl` (candidate-only)
+
+Owner: `pocketchat.memory_migration`. Schema version:
+**`pocketchat-memory.v2`**. This is not yet the live CLI store; the current
+`memory` commands still read and write `.pocketchat/memory.jsonl`.
+
+Each non-empty JSONL line is one closed record. Unknown or missing fields are
+refused. The content digest is the lowercase SHA-256 of the UTF-8 content.
+`created`, `updated` and the optional lifecycle timestamps are RFC 3339 UTC
+values with an explicit `Z`; `updated`, `expires_at` and `retired_at` cannot
+precede `created`. Every source reference is a closed
+`{kind, ref, sha256, scope}` object, and references must be unique within a
+record. A `verified` record needs at least one digest-bound source reference.
+
+Admission and fact verification are separate. `accepted` requires a non-empty
+`accepted_by`; a `candidate` cannot claim one. A retired or conflicted record
+may retain the approver that admitted it earlier. `sensitive` is optional and
+defaults to false. Retirement requires `superseded_by` or `retired_at`, and
+conflict requires `conflict_with` with at least one non-empty memory id. A
+record cannot supersede or conflict with itself. An `accepted` record must
+still be `verified` or explicitly
+`not_required`; stale `pending`, `unverified` or `not_run` records are refused.
+
+The pure migration accepts only the exact v1 field set, reads the bounded v1
+store, and exclusively creates a new file inside the workspace. It refuses an
+existing target, a target whose resolution escapes the workspace, and an
+unknown or malformed v1 record. Target-parent traversal is descriptor-relative
+and no-follow; the final file is created with `O_EXCL|O_NOFOLLOW`. Platforms
+without no-follow source-open or directory-descriptor support are refused
+rather than falling back to path-based reads or writes. The v1 source remains
+byte-for-byte unchanged.
+Migrated records are always `source_kind: legacy_explicit`,
+`verification_status: unverified` and `admission_status: candidate`; no source
+fact absent from v1 is invented.
+
 ## Task records — `.pocketchat/tasks/<task-id>.json`
 
 Owner: `pocketchat.tasking`. Schema version: **`pocketchat-task.v1`**

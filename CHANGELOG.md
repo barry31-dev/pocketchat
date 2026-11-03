@@ -7,6 +7,12 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add a closed memory v2 record parser and a pure v1-to-v2 migration. The
+  migration leaves the v1 store unchanged, writes a bounded v2 file
+  exclusively, refuses unknown v1 fields and unsafe targets, and marks legacy
+  records as unverified candidates rather than inventing sources. The v2 file
+  is not yet a live CLI store. See `pocketchat/memory_migration.py` and
+  `docs/formats.md`.
 - Harden the runtime admission candidate after an offline pre-merge review:
   known usage is charged against whole-task headroom rather than just the input
   estimate, missing usage blocks tools/repair/retries, and output reservations
