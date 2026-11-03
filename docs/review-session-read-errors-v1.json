@@ -1,0 +1,57 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-session-read-errors-v1.json",
+    "docs/session-read-errors.md",
+    "docs/session-read-errors.zh-CN.md",
+    "pocketchat/sessions.py",
+    "tests/test_session_read_errors.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "session-utf8-decoder-traceback",
+      "detail": "A malformed UTF-8 session file escaped _read_records as UnicodeDecodeError and crashed show --json. The decoder error is now wrapped in SessionFileError and session probing preserves that concrete read refusal."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "session-probe-overbroad",
+      "detail": "The first probe change also changed malformed JSON from not-a-session to cannot-read. The final code re-raises only read failures, preserving the historical malformed-JSON classification."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-session-read-errors-v1.json",
+    "docs/session-read-errors.md",
+    "docs/session-read-errors.zh-CN.md",
+    "pocketchat/sessions.py",
+    "tests/test_session_read_errors.py"
+  ],
+  "reviewed_evidence": [
+    "Red first: test_show_json_refuses_malformed_utf8_without_touching_input raised UnicodeDecodeError before the implementation.",
+    "After the fix: the same test returns exit 2, one session_file JSON object on stdout, empty stderr, no traceback, and unchanged input bytes.",
+    "Compatibility regression: tests/test_sessions.py ran 77 tests OK, including malformed JSON remaining a not-a-session refusal.",
+    "CLI JSON tests ran 7 tests OK; PocketChat documentation guard ran 16 tests OK; ruff E9/F and git diff --check passed.",
+    "The implementation is limited to the session-record read boundary and the session-file probe; no command surface or format version changed."
+  ],
+  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. Linux/Windows CI for this exact branch, real providers, packaging/install, tag and Release actions were not run. The slice does not claim a release or a new capability level."
+}
