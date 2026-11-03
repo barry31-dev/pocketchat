@@ -527,6 +527,26 @@ Records have a `memory_id`, timestamp, content and tags. Add is bounded to
 16 KiB and 16 tags; search is literal and read-only; corrupt/wrong-schema
 stores are refused. Memory is never injected into model requests automatically.
 
+The v2 memory operations are explicit and require `--store`; they never make
+`.pocketchat/memory.v2.jsonl` the default store:
+
+```bash
+pocketchat memory migrate --workspace-id workspace-1 --store .pocketchat/memory.v2.jsonl --json
+pocketchat memory accept <memory-id> --by operator --verification not_required --store .pocketchat/memory.v2.jsonl --json
+pocketchat memory retire <memory-id> --store .pocketchat/memory.v2.jsonl --json
+pocketchat memory forget <memory-id> --store .pocketchat/memory.v2.jsonl --json
+```
+
+`migrate` creates a new bounded v2 file and leaves the v1 source unchanged.
+Legacy records remain unverified candidates. `accept` requires an explicit
+approver and may only mark a `legacy_explicit` or `user_explicit` preference
+as `not_required`; it does not invent a source. `retire` records a lifecycle
+timestamp, and `--superseded-by` must name another record in the same store.
+`forget` physically removes the selected record from the active v2 store; it
+does not retain a hidden copy of the content. The command does not erase
+content that may already exist in historical traces, sessions or request
+snapshots, and it does not promise secure erasure from backups or storage media.
+
 ## Delegation
 
 `delegate run` executes a finite, serial batch of child prompts:

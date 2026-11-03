@@ -37,6 +37,9 @@ from .context import ContextBudgetExceeded
 from .indexing import IndexingError, build_index, index_status
 from .memory import (MemoryError, add_memory, list_memory, remove_memory,
                      search_memory)
+from .memory_migration import (MemoryMigrationError, accept_v2_record,
+                               forget_v2_record, migrate_v1_to_v2,
+                               read_v2_store, retire_v2_record)
 from .queries import (QueryError, collect_history, diff_sessions,
                       render_diff_lines, render_history_lines,
                       render_search_lines, search_messages)
@@ -302,6 +305,38 @@ def _parser() -> argparse.ArgumentParser:
     memory_remove = memory_sub.add_parser("remove", help="remove one memory")
     memory_remove.add_argument("memory_id", help="memory id")
     memory_remove.add_argument("--json", action="store_true", dest="as_json")
+    memory_migrate = memory_sub.add_parser(
+        "migrate", help="create an explicit v2 store from the v1 store")
+    memory_migrate.add_argument("--workspace-id", required=True,
+                                help="stable workspace identity for v2 records")
+    memory_migrate.add_argument("--store", type=Path, required=True,
+                                help="workspace-relative v2 target")
+    memory_migrate.add_argument("--json", action="store_true", dest="as_json")
+    memory_accept = memory_sub.add_parser(
+        "accept", help="accept one candidate in an explicit v2 store")
+    memory_accept.add_argument("memory_id", help="memory id")
+    memory_accept.add_argument("--by", required=True,
+                               help="explicit human approver identity")
+    memory_accept.add_argument(
+        "--verification", choices=("not_required",), default=None,
+        help="explicitly mark a legacy/user preference as not requiring fact verification")
+    memory_accept.add_argument("--store", type=Path, default=None,
+                               help="workspace-relative v2 store")
+    memory_accept.add_argument("--json", action="store_true", dest="as_json")
+    memory_retire = memory_sub.add_parser(
+        "retire", help="retire one record in an explicit v2 store")
+    memory_retire.add_argument("memory_id", help="memory id")
+    memory_retire.add_argument("--superseded-by", default=None,
+                               help="replacement memory id")
+    memory_retire.add_argument("--store", type=Path, default=None,
+                               help="workspace-relative v2 store")
+    memory_retire.add_argument("--json", action="store_true", dest="as_json")
+    memory_forget = memory_sub.add_parser(
+        "forget", help="physically remove one record from an explicit v2 store")
+    memory_forget.add_argument("memory_id", help="memory id")
+    memory_forget.add_argument("--store", type=Path, default=None,
+                               help="workspace-relative v2 store")
+    memory_forget.add_argument("--json", action="store_true", dest="as_json")
 
     delegate = subparsers.add_parser(
         "delegate", help="run a bounded, serial delegation batch")
@@ -2722,6 +2757,10 @@ def _cmd_tool(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _read_v2_items(root: Path, store: Path) -> List[Dict[str, Any]]:
+    return read_v2_store(root, store)
+
+
 def _cmd_memory(args: argparse.Namespace) -> int:
     root = Path.cwd()
     try:
@@ -2739,9 +2778,38 @@ def _cmd_memory(args: argparse.Namespace) -> int:
             remove_memory(root, args.memory_id)
             result = {"ok": True, "schema_version": "1",
                       "removed": args.memory_id}
+        elif args.memory_command == "migrate":
+            migration = migrate_v1_to_v2(
+                root, workspace_id=args.workspace_id, out=args.store)
+            items = [record for record in _read_v2_items(root, args.store)]
+            result = {"ok": True, "schema_version": "1",
+                      "migrated": migration["migrated"], "items": items}
+        elif args.memory_command == "accept":
+            if args.store is None:
+                raise MemoryMigrationError(
+                    "memory accept requires an explicit --store")
+            item = accept_v2_record(
+                root, args.store, args.memory_id, args.by,
+                verification_status=args.verification)
+            result = {"ok": True, "schema_version": "1", "item": item}
+        elif args.memory_command == "retire":
+            if args.store is None:
+                raise MemoryMigrationError(
+                    "memory retire requires an explicit --store")
+            item = retire_v2_record(
+                root, args.store, args.memory_id,
+                superseded_by=args.superseded_by)
+            result = {"ok": True, "schema_version": "1", "item": item}
+        elif args.memory_command == "forget":
+            if args.store is None:
+                raise MemoryMigrationError(
+                    "memory forget requires an explicit --store")
+            forget_v2_record(root, args.store, args.memory_id)
+            result = {"ok": True, "schema_version": "1",
+                      "forgotten": args.memory_id}
         else:
             raise MemoryError("unknown memory command")
-    except MemoryError as exc:
+    except (MemoryError, MemoryMigrationError) as exc:
         if args.as_json:
             _print_json_error("memory", str(exc))
         else:
@@ -2755,9 +2823,12 @@ def _cmd_memory(args: argparse.Namespace) -> int:
         for item in items:
             print("%s  %s" % (item["memory_id"], item["content"]))
     elif "item" in result:
-        print(result["item"]["memory_id"])
+        print("%s  %s" % (result["item"]["memory_id"],
+                         result["item"]["admission_status"]))
+    elif "migrated" in result:
+        print("migrated %d" % result["migrated"])
     else:
-        print("removed %s" % result["removed"])
+        print("removed %s" % result.get("removed", result.get("forgotten")))
     return EXIT_OK
 
 

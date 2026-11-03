@@ -7,6 +7,11 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add explicit v2 memory CLI operations: `memory migrate` creates a bounded
+  new store without rewriting v1, `accept` requires an approver and never
+  invents verification, `retire` records lifecycle metadata, and `forget`
+  physically removes a record from the active v2 store. The default v1
+  `add/list/search/remove` behavior is unchanged. See `docs/cli.md`.
 - Make explicit memory locking portable across Windows and POSIX. Windows
   uses `msvcrt` byte-range locks while POSIX retains `fcntl`, both are loaded
   only on their supported platform, and a failed lock attempt is not treated
