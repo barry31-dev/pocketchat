@@ -48,7 +48,7 @@ def _path_parameters(extra=None, description="Workspace-relative allowed path"):
     return {
         "type": "object",
         "properties": properties,
-        "required": ["path"],
+        "required": ["path"] + (["content"] if extra else []),
         "additionalProperties": False,
     }
 

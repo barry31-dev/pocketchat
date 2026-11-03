@@ -33,6 +33,8 @@ class ToolContractTests(unittest.TestCase):
         self.assertEqual("read_file", offered["function"]["name"])
         self.assertEqual(CONTRACTS["read_file"].parameters,
                          offered["function"]["parameters"])
+        self.assertEqual(["path", "content"],
+                         CONTRACTS["write_file"].parameters["required"])
 
     def test_parse_arguments_refuses_unknown_or_missing_fields(self):
         self.assertEqual(
@@ -116,7 +118,7 @@ class HostValidationTests(unittest.TestCase):
         return {
             "profile": "contracts", "model": "m",
             "base_url": "http://example.invalid/v1", "api_key_env": "K",
-            "timeout_seconds": 5, "max_context_chars": 1000,
+            "timeout_seconds": 5, "max_context_chars": 4000,
             "summary_prefix_chars": 40, "requires_api_key": False,
             "provider_adapter": adapter,
             "tool_read_enabled": False,
@@ -137,8 +139,13 @@ class HostValidationTests(unittest.TestCase):
 
             def __init__(self):
                 self.responses = [
-                    self.response({"path": "facts.txt", "recursive": True}),
-                    self.response({"query": "anything", "limit": 2}),
+                    self.response("read_file",
+                                  {"path": "facts.txt", "recursive": True}),
+                    self.response("write_file",
+                                  {"path": "new.txt", "content": "text",
+                                   "overwrite": True}),
+                    self.response("memory_search",
+                                  {"query": "anything", "limit": 2}),
                     {"content": "done", "finish_reason": "stop", "model": "m",
                      "usage_reported": True,
                      "usage": {"input_tokens": 1, "output_tokens": 1,
@@ -147,14 +154,14 @@ class HostValidationTests(unittest.TestCase):
                 ]
                 self.calls = []
 
-            def response(self, arguments):
+            def response(self, name, arguments):
                 return {
                     "content": "", "finish_reason": "tool_calls", "model": "m",
                     "usage_reported": True,
                     "usage": {"input_tokens": 1, "output_tokens": 1,
                               "cache_read_tokens": 0, "cache_write_tokens": 0,
                               "reasoning_tokens": 0},
-                    "tool_calls": [{"id": "call_1", "name": "read_file",
+                    "tool_calls": [{"id": "call_1", "name": name,
                                     "arguments": arguments}],
                 }
 
@@ -167,27 +174,30 @@ class HostValidationTests(unittest.TestCase):
                 return self.responses.pop(0)
 
         adapter = Adapter()
-        adapter.responses[1]["tool_calls"][0]["name"] = "memory_search"
         config = self._config(adapter)
         config["tool_read_enabled"] = True
         config["tool_read_allow_paths"] = ["facts.txt"]
+        config["tool_write_enabled"] = True
+        config["tool_write_allow_paths"] = ["new.txt"]
         config["tool_memory_search_enabled"] = True
+        config["tool_call_max_count"] = 4
         session = Session(config, self.root / "traces" / "contracts.jsonl",
                           "run_contracts", api_key="")
         self.assertEqual("completed", session.run(["try"]))
-        self.assertEqual(3, len(adapter.calls))
-        for index in (1, 2):
+        self.assertEqual(4, len(adapter.calls))
+        for index in (1, 2, 3):
             result = json.loads(adapter.calls[index][-1]["content"])
             self.assertEqual("invalid_arguments", result["error"]["type"])
         events = [json.loads(line) for line in
                   (self.root / "traces" / "contracts.jsonl").read_text().splitlines()]
         invalid = [event for event in events
                    if event["type"] == "tool.call.failed"]
-        self.assertEqual(2, len(invalid))
+        self.assertEqual(3, len(invalid))
         for event in invalid:
             self.assertEqual("invalid_arguments",
                              event["payload"]["error"]["type"])
         self.assertNotIn("permission.requested", [event["type"] for event in events])
+        self.assertFalse((self.root / "new.txt").exists())
         self.assertNotIn("secret-file-content",
                          (self.root / "traces" / "contracts.jsonl").read_text())
 
