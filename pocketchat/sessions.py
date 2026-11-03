@@ -102,18 +102,28 @@ def _read_records(path: Path) -> List[Dict[str, Any]]:
                         "%s line %d: expected a JSON object" % (path, number)
                     )
                 records.append(record)
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise SessionFileError("cannot read %s: %s" % (path, exc))
     return records
 
 
 def looks_like_session(path: Path) -> bool:
-    """True when the file's first record is a session header."""
+    """True when the file's first record is a session header.
+
+    Malformed UTF-8 is not classified as "somebody else's JSONL file": it is
+    a session read error with a concrete decoder message. Invalid JSON keeps
+    the historical `False` result so an arbitrary JSONL file stays a clear
+    not-a-session refusal.
+    """
     if not path.is_file():
         return False
     try:
         records = _read_records(path)
-    except (SessionFileError, OSError):
+    except SessionFileError as exc:
+        if "cannot read" in str(exc):
+            raise
+        return False
+    except OSError:
         return False
     return bool(records) and HEADER_KEY in records[0]
 
