@@ -1,0 +1,114 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/formats.md",
+    "docs/slice-queue.md",
+    "pocketchat/cli.py",
+    "pocketchat/memory_migration.py",
+    "tests/test_memory.py",
+    "docs/review-memory-v2-cli-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "v2-store-parent-replacement-followed",
+      "detail": "Path-based temp creation and replace could follow a parent replaced after resolution. The write path now opens the workspace and parent descriptor-relative with O_NOFOLLOW and uses dir_fd for create, replace and cleanup. The regression failed first."
+    },
+    {
+      "id": "R2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "v2-symlink-reported-as-workspace-escape",
+      "detail": "resolve() ran before the symlink check, so a symlinked store was reported as an escape rather than an unsafe entry. The lexical in-workspace check and symlink check now run before resolution; the regression covers no outside read/write."
+    },
+    {
+      "id": "R3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "retirement-target-not-validated",
+      "detail": "retire accepted any --superseded-by string. It now refuses self-supersession and requires another record in the same store. The regression failed before the fix."
+    },
+    {
+      "id": "R4",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "cli-private-reader-dependency",
+      "detail": "The CLI imported a private v2 reader. read_v2_store is now the explicit public reader used by the command path."
+    },
+    {
+      "id": "R5",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "missing-store-argparse-leaks-stderr",
+      "detail": "Missing --store on accept/retire/forget bypassed the JSON error envelope through argparse. The store is optional at parse time and the command layer returns the documented exit-2 JSON error. The regression failed first."
+    },
+    {
+      "id": "R6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "v2-no-follow-platform-fallback",
+      "detail": "The v2 reader fell back to a path open when O_NOFOLLOW was unavailable. It now fails closed before reading. The regression failed with a misleading no-such-memory result before the fix."
+    },
+    {
+      "id": "R7",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "v2-concurrent-forget-lost-update",
+      "detail": "Concurrent v2 mutations used stale snapshots and could resurrect a successfully forgotten record. A v2 lock now covers read-modify-write and returns busy on contention. The two-writer regression failed before the fix."
+    },
+    {
+      "id": "R8",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "v2-lock-symlink-followed",
+      "detail": "The v2 lock was opened by path with a+ and could follow a symlink. It now checks the entry and opens with O_NOFOLLOW. The regression failed before the fix."
+    },
+    {
+      "id": "R9",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "accept-does-not-record-updated-by",
+      "detail": "accept changed the admission and timestamp fields but did not record the actor in the schema-supported updated_by field. It now writes the normalized approver. The regression failed before the fix."
+    }
+  ],
+  "commit_or_candidate_sha": "HEAD",
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/formats.md",
+    "docs/slice-queue.md",
+    "pocketchat/cli.py",
+    "pocketchat/memory_migration.py",
+    "tests/test_memory.py",
+    "docs/review-memory-v2-cli-v1.json"
+  ],
+  "reviewed_evidence": [
+    "CPython 3.13.9: python -m unittest discover -s tests -v => 1174 tests OK (51.043s, exit 0), before the final small fixes.",
+    "CPython 3.9.6: python -m unittest discover -s tests -v => 1174 tests OK (81.732s, exit 0), before the final small fixes.",
+    "CPython 3.13.9: python -m unittest tests.test_memory tests.test_memory_migration -v => 66 tests OK (exit 0), after the final small fixes.",
+    "CPython 3.13.9: python -m unittest tests.test_release_process_docs -v => 15 tests OK (exit 0).",
+    "ruff check --select E9,F pocketchat tests => All checks passed! (exit 0).",
+    "git diff --check => exit 0.",
+    "Subprocess test: python -m pocketchat.cli memory add/migrate/accept --json => exit 0, empty stderr, one JSON document per command."
+  ],
+  "unverified_scope": "Windows no-follow/directory-fd behavior, a directly observed concurrent read-parent replacement, real v1 data migration, crash recovery, provider behavior, packaging and release actions were not run. The v2 reader has no direct descriptor-relative parent traversal yet; a replaced-parent read test only establishes fail-closed behavior before the file open. No recall or prompt injection was added.",
+  "landing_sign_off": {
+    "status": "required",
+    "scope": "Landing this exact medium-risk slice on main; no tag, Release, package upload or real provider run."
+  }
+}

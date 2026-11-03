@@ -177,8 +177,10 @@ does not implement is a refusal, not a no-op.
 ## Memory v2 records — `.pocketchat/memory.v2.jsonl` (candidate-only)
 
 Owner: `pocketchat.memory_migration`. Schema version:
-**`pocketchat-memory.v2`**. This is not yet the live CLI store; the current
-`memory` commands still read and write `.pocketchat/memory.jsonl`.
+**`pocketchat-memory.v2`**. The default `memory` commands still read and write
+`.pocketchat/memory.jsonl`; v2 is available only through the explicit
+`memory migrate/accept/retire/forget --store` operations documented in
+[cli.md](cli.md).
 
 Each non-empty JSONL line is one closed record. Unknown or missing fields are
 refused. The content digest is the lowercase SHA-256 of the UTF-8 content.

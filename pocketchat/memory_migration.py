@@ -17,9 +17,11 @@ import re
 import stat
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
+from uuid import uuid4
 
 from .memory import (MAX_LINE_BYTES, MAX_STORE_BYTES,
-                     SCHEMA_VERSION as V1_SCHEMA_VERSION, memory_path)
+                     SCHEMA_VERSION as V1_SCHEMA_VERSION,
+                     _lock_nonblocking, _unlock, memory_path)
 
 V2_SCHEMA_VERSION = "pocketchat-memory.v2"
 DEFAULT_V2_PATH = Path(".pocketchat") / "memory.v2.jsonl"
@@ -385,6 +387,250 @@ def _legacy_to_v2(record: Dict[str, Any], workspace_id: str) -> Dict[str, Any]:
         "sensitive": False,
         "tags": _string_list(record.get("tags") or [], "tags"),
     })
+
+
+def _resolve_store(root: Path, store: Path) -> Path:
+    workspace = Path(root).resolve()
+    target = Path(store)
+    if not target.is_absolute():
+        target = workspace / target
+    # Check the operator-selected entry before resolving it. resolve() follows
+    # symlinks, so a link that escapes the workspace would otherwise be
+    # reported as an escape instead of the unsafe entry it actually is.
+    try:
+        lexical = target.absolute()
+        lexical.relative_to(workspace)
+    except ValueError:
+        raise MemoryMigrationError("v2 store must stay inside the workspace")
+    if target.is_symlink():
+        raise MemoryMigrationError("v2 memory store must not be a symlink")
+    resolved = target.resolve()
+    try:
+        resolved.relative_to(workspace)
+    except ValueError:
+        raise MemoryMigrationError("v2 store must stay inside the workspace")
+    if resolved == memory_path(workspace).resolve():
+        raise MemoryMigrationError("v2 store must not replace the v1 store")
+    return resolved
+
+
+def _v2_lock_path(target: Path) -> Path:
+    return target.with_name(target.name + ".lock")
+
+
+def _mutate_v2_store(root: Path, store: Path, change) -> Any:
+    """Run one read-modify-write under the v2 store's exclusive lock."""
+    target = _resolve_store(root, store)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    lock = _v2_lock_path(target)
+    if lock.is_symlink():
+        raise MemoryMigrationError("v2 memory store lock must not be a symlink")
+    try:
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
+        if not hasattr(os, "O_NOFOLLOW"):
+            raise MemoryMigrationError(
+                "v2 store requires no-follow lock support")
+        flags |= os.O_NOFOLLOW
+        descriptor = os.open(str(lock), flags, 0o600)
+        lock_file = os.fdopen(descriptor, "a+")
+    except MemoryMigrationError:
+        raise
+    except OSError as exc:
+        raise MemoryMigrationError(f"cannot open v2 memory store lock: {exc}")
+    locked = False
+    try:
+        _lock_nonblocking(lock_file)
+        locked = True
+        records = read_v2_store(root, store)
+        return change(records)
+    finally:
+        try:
+            if locked:
+                _unlock(lock_file)
+        finally:
+            lock_file.close()
+
+
+def read_v2_store(root: Path, store: Path) -> List[Dict[str, Any]]:
+    """Read one bounded v2 JSONL store without following its file entry."""
+    target = _resolve_store(root, store)
+    try:
+        target.lstat()
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        raise MemoryMigrationError(f"cannot inspect v2 memory store: {exc}")
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise MemoryMigrationError("v2 store requires no-follow file support")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | os.O_NOFOLLOW
+    try:
+        if target.is_symlink():
+            raise MemoryMigrationError("v2 memory store must not be a symlink")
+        descriptor = os.open(str(target), flags)
+    except MemoryMigrationError:
+        raise
+    except OSError as exc:
+        raise MemoryMigrationError(f"cannot open v2 memory store: {exc}")
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
+            raise MemoryMigrationError("v2 memory store must be a regular file")
+        if info.st_size > MAX_STORE_BYTES:
+            raise MemoryMigrationError(
+                f"v2 memory store exceeds {MAX_STORE_BYTES} bytes")
+        chunks = []
+        remaining = MAX_STORE_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        if len(raw) > MAX_STORE_BYTES:
+            raise MemoryMigrationError(
+                f"v2 memory store exceeds {MAX_STORE_BYTES} bytes")
+        text = raw.decode("utf-8")
+    except MemoryMigrationError:
+        raise
+    except (OSError, UnicodeError) as exc:
+        raise MemoryMigrationError(f"cannot read v2 memory store: {exc}")
+    finally:
+        os.close(descriptor)
+
+    records = []
+    for number, line in enumerate(text.split("\n"), 1):
+        if not line:
+            continue
+        if len(line.encode("utf-8")) > MAX_LINE_BYTES:
+            raise MemoryMigrationError(
+                f"v2 memory store line {number} exceeds {MAX_LINE_BYTES} bytes")
+        try:
+            record = json.loads(line)
+        except ValueError as exc:
+            raise MemoryMigrationError(
+                f"v2 memory store line {number} is invalid JSON: {exc}")
+        records.append(parse_v2_record(record))
+    return records
+
+
+def _write_store(root: Path, store: Path, records: Iterable[Dict[str, Any]]) -> None:
+    """Atomically replace one v2 store after validating every record."""
+    target = _resolve_store(root, store)
+    validated = [parse_v2_record(record) for record in records]
+    payload = b"".join(
+        (json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+        .encode("utf-8") for record in validated)
+    if len(payload) > MAX_STORE_BYTES:
+        raise MemoryMigrationError(
+            f"v2 memory store would exceed {MAX_STORE_BYTES} bytes")
+    if any(len(line) > MAX_LINE_BYTES for line in payload.splitlines(keepends=True)):
+        raise MemoryMigrationError("v2 memory record would exceed the line budget")
+    parent_descriptor = _open_target_parent(Path(root).resolve(), target.parent)
+    temporary_name = None
+    try:
+        temporary_name = f".{target.name}.{uuid4().hex}.tmp"
+        descriptor = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600, dir_fd=parent_descriptor)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, target.name,
+                   src_dir_fd=parent_descriptor,
+                   dst_dir_fd=parent_descriptor)
+        temporary_name = None
+    except OSError as exc:
+        raise MemoryMigrationError(f"cannot write v2 memory store: {exc}")
+    finally:
+        if temporary_name is not None:
+            try:
+                os.unlink(temporary_name, dir_fd=parent_descriptor)
+            except OSError:
+                pass
+        os.close(parent_descriptor)
+
+
+def _new_timestamp() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(
+        timespec="milliseconds").replace("+00:00", "Z")
+
+
+def accept_v2_record(root: Path, store: Path, memory_id: str,
+                     accepted_by: str, *,
+                     verification_status: str | None = None) -> Dict[str, Any]:
+    if not isinstance(accepted_by, str) or not accepted_by.strip():
+        raise MemoryMigrationError("accepted_by must be a non-empty string")
+
+    def change(records):
+        for index, record in enumerate(records):
+            if record["memory_id"] != memory_id:
+                continue
+            if record["admission_status"] != "candidate":
+                raise MemoryMigrationError("only candidate memory can be accepted")
+            verification = record["verification_status"]
+            if verification_status is not None:
+                if verification_status != "not_required":
+                    raise MemoryMigrationError(
+                        "accept may only explicitly mark not_required verification")
+                if record["source_kind"] not in {"legacy_explicit", "user_explicit"}:
+                    raise MemoryMigrationError(
+                        "only explicit user records may be marked not_required")
+                verification = verification_status
+            if verification not in {"verified", "not_required"}:
+                raise MemoryMigrationError("candidate memory has stale verification")
+            updated = dict(record)
+            updated["verification_status"] = verification
+            updated["admission_status"] = "accepted"
+            updated["accepted_by"] = accepted_by.strip()
+            updated["updated_by"] = accepted_by.strip()
+            updated["updated"] = _new_timestamp()
+            records[index] = parse_v2_record(updated)
+            _write_store(root, store, records)
+            return records[index]
+        raise MemoryMigrationError(f"no such memory: {memory_id}")
+
+    return _mutate_v2_store(root, store, change)
+
+
+def retire_v2_record(root: Path, store: Path, memory_id: str,
+                     *, superseded_by: str | None = None) -> Dict[str, Any]:
+    def change(records):
+        for index, record in enumerate(records):
+            if record["memory_id"] != memory_id:
+                continue
+            if record["admission_status"] == "retired":
+                raise MemoryMigrationError("memory is already retired")
+            updated = dict(record)
+            updated["admission_status"] = "retired"
+            updated["retired_at"] = _new_timestamp()
+            updated["updated"] = updated["retired_at"]
+            if superseded_by is not None:
+                replacement = _text(superseded_by, "superseded_by")
+                if replacement == memory_id:
+                    raise MemoryMigrationError("memory cannot supersede itself")
+                if not any(item["memory_id"] == replacement for item in records):
+                    raise MemoryMigrationError(
+                        f"replacement memory does not exist: {replacement}")
+                updated["superseded_by"] = replacement
+            records[index] = parse_v2_record(updated)
+            _write_store(root, store, records)
+            return records[index]
+        raise MemoryMigrationError(f"no such memory: {memory_id}")
+
+    return _mutate_v2_store(root, store, change)
+
+
+def forget_v2_record(root: Path, store: Path, memory_id: str) -> None:
+    def change(records):
+        kept = [record for record in records if record["memory_id"] != memory_id]
+        if len(kept) == len(records):
+            raise MemoryMigrationError(f"no such memory: {memory_id}")
+        _write_store(root, store, kept)
+
+    _mutate_v2_store(root, store, change)
 
 
 def _open_target_parent(workspace: Path, parent: Path) -> int:

@@ -437,6 +437,22 @@ pocketchat memory remove <memory-id> --json
 search 为字面、只读匹配；损坏或 schema 不匹配的 store 一律拒绝。记忆不会自动
 注入模型请求。
 
+v2 记忆操作必须显式给出 `--store`，不会把 `.pocketchat/memory.v2.jsonl` 变成默认 store：
+
+```bash
+pocketchat memory migrate --workspace-id workspace-1 --store .pocketchat/memory.v2.jsonl --json
+pocketchat memory accept <memory-id> --by operator --verification not_required --store .pocketchat/memory.v2.jsonl --json
+pocketchat memory retire <memory-id> --store .pocketchat/memory.v2.jsonl --json
+pocketchat memory forget <memory-id> --store .pocketchat/memory.v2.jsonl --json
+```
+
+`migrate` 创建新的有界 v2 文件，v1 源文件保持不变；legacy 记录仍是未验证候选。
+`accept` 必须给出明确批准者，只允许把 `legacy_explicit` 或 `user_explicit` 偏好标为
+`not_required`，不会补造来源。`retire` 记录生命周期时间；`--superseded-by` 必须指向同一
+store 中的另一条记录。`forget` 从活动 v2 store 物理删除所选记录，不保留隐藏正文；它不会
+删除历史 trace、session 或 request snapshot 中可能已有的内容，也不承诺从备份或存储介质
+安全擦除。
+
 ## 委派
 
 `delegate run` 执行一个有限、串行的子任务批次：
