@@ -12,6 +12,7 @@ package-index publication.
   invents verification, `retire` records lifecycle metadata, and `forget`
   physically removes a record from the active v2 store. The default v1
   `add/list/search/remove` behavior is unchanged. See `docs/cli.md`.
+- Add a pure deterministic memory-v2 retrieval core. It gates workspace, lifecycle and sensitive records before fixed English/CJK lexical ranking, bounds excerpts by byte and estimated-token quotas, and reports stable selection, omission and stale-cursor behavior without changing legacy search or wiring a CLI. See `pocketchat/memory_retrieval.py`.
 - Make explicit memory locking portable across Windows and POSIX. Windows
   uses `msvcrt` byte-range locks while POSIX retains `fcntl`, both are loaded
   only on their supported platform, and a failed lock attempt is not treated

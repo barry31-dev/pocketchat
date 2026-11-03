@@ -1,0 +1,90 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/memory-retrieval.md",
+    "docs/memory-retrieval.zh-CN.md",
+    "docs/review-memory-retrieval-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/memory_retrieval.py",
+    "tests/test_memory_retrieval.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "retrieval-result-leaked-full-content",
+      "detail": "The first green implementation returned the complete record content beside the bounded excerpt, defeating the dual-budget result boundary. The field was removed and a regression now checks both the absent key and absent full body."
+    }
+  ],
+  "commit_or_candidate_sha": "HEAD",
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/memory-retrieval.md",
+    "docs/memory-retrieval.zh-CN.md",
+    "docs/review-memory-retrieval-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/memory_retrieval.py",
+    "tests/test_memory_retrieval.py"
+  ],
+  "reviewed_evidence": [
+    "CPython 3.9.6: python3 -m unittest discover -s tests -p test_memory_retrieval.py -v => 8 tests OK (exit 0).",
+    "CPython 3.13.9: python3 -m unittest discover -s tests -p test_memory_retrieval.py -v => 8 tests OK (exit 0).",
+    "CPython 3.9.6: test_skeleton.py 16 tests OK, test_package_independence.py 7 tests OK and test_release_process_docs.py 15 tests OK (all exit 0).",
+    "ruff check pocketchat/memory_retrieval.py tests/test_memory_retrieval.py => All checks passed! (exit 0).",
+    "git diff --check => exit 0."
+  ],
+  "unverified_scope": "The retrieval core is not wired to a CLI, Session, memory tool, prompt or checkpoint. Full-suite behavior, real v1/v2 stores, real provider usage, semantic retrieval quality, concurrent readers, Windows/Linux execution, packaging, installation, tag, Release and package-index actions were not run.",
+  "landing_sign_off": {
+    "status": "required",
+    "scope": "Landing this exact medium-risk candidate on main; no tag, Release, package upload, real provider run or retrieval prompt injection."
+  },
+  "review_context": {
+    "why": [
+      "This is a medium-risk Python behavior slice: it adds a closed retrieval result contract with admission, ranking, budget and continuation semantics."
+    ],
+    "not_doing": [
+      "No CLI, Session, tool, prompt or checkpoint wiring; no default search change; no provider call; no vector index; no publication action."
+    ],
+    "diff_walk": [
+      "pocketchat/memory_retrieval.py: validate v2 records, gate workspace/admission/sensitive/expiry state before matching, tokenize English words and CJK bigrams under a fixed version, rank deterministically, bound UTF-8 excerpts by byte and estimated-token quotas, and bind stable cursors to ordered record signatures.",
+      "tests/test_memory_retrieval.py: cover pre-ranking admission, exclusion reasons, bilingual normalization, ordered ranking, independent budgets, full-content omission, stable pagination and stale cursors, and distinct empty versus budget-exhausted outcomes.",
+      "docs/memory-retrieval.md and docs/memory-retrieval.zh-CN.md: fix the normalization, ranking, budget, result and continuation contract without claiming semantic relevance or live integration.",
+      "docs/compatibility.md and docs/compatibility.zh-CN.md: mark the result as an unreleased additive candidate and preserve the legacy search promise.",
+      "docs/slice-queue.md and CHANGELOG.md: record the delivered pure slice and its evidence without claiming a release."
+    ],
+    "static_checks": [
+      "Admission exclusions are decided before query scoring and Top-K selection.",
+      "The result contains a bounded excerpt and digest but no complete memory content.",
+      "The tokenizer version and ordering rules are explicit and input-order independent.",
+      "UTF-8 prefixes never split a code point, and byte/token counters describe only included excerpts.",
+      "Cursor decoding is strict and stale when query or ordered record signatures change.",
+      "The module does not import Session, CLI, provider, filesystem store or tool result wiring."
+    ],
+    "red_green": [
+      "The initial contract run failed all seven cases with NotImplementedError, then the implementation made them pass.",
+      "A subsequent full-content regression failed because item JSON carried the whole body beside the excerpt; removing that field made the regression pass.",
+      "Two fixture expectations were corrected after observing the actual specified behavior: bilingual partial coverage may return both records, and an eight-byte excerpt includes two ASCII x characters."
+    ],
+    "review_notes": [
+      "Author self-review is recorded; a separate fresh-context review was not run in this turn. Landing remains blocked on human sign-off."
+    ],
+    "gaps": [
+      "Full-suite and downstream integration evidence remain absent because the core is intentionally unwired."
+    ]
+  }
+}
