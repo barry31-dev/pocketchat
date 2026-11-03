@@ -11,6 +11,7 @@ from pocketchat.task_exec import (TaskExecutionError, authorize, execute_plan)
 from pocketchat.task_plan import (TaskPlanError, parse_plan, plan_sha256,
                                   spec_sha256)
 from pocketchat.task_spec import parse_spec
+from tests import _helpers as hp
 from tests.test_task_plan import plan_payload
 from tests.test_task_run import FakeTaskAdapter, final_response, model_tool
 from tests.test_task_spec import minimal
@@ -154,6 +155,8 @@ class ExecutionTests(unittest.TestCase):
                      session_dir=self.root / "sessions", task_budget=budget)
         self.assertEqual([budget], seen)
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "budgeted resume requires secure descriptor-relative reads")
     def test_budgeted_resume_refuses_a_report_without_a_ledger_before_work(self):
         import hashlib
         import json

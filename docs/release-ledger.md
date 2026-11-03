@@ -74,7 +74,42 @@ The `main` branch ahead of `v1.1.0` holds unreleased source. It is not a
 published release. The current machine-checked candidate record is below; it
 does not authorize a tag, GitHub Release or package-index upload.
 
-### Candidate `ca3dcfc6c0519427319790eab0eb27645e1e9986`
+### Candidate `1baea8a22bc4d20ab13e76883938fb86c200899f`
+
+- Candidate SHA: `1baea8a22bc4d20ab13e76883938fb86c200899f`; branch
+  `task/release-smoke-evidence` in `barry31-dev/pocketchat`.
+- Identity: commit author and committer are
+  `barry31-dev <329888575+barry31-dev@users.noreply.github.com>`. No tag was
+  created for this candidate.
+- Local machine checks: CPython 3.9.6 and 3.13.9 each ran 1126 tests OK; 48
+  focused memory/task-state/recovery tests, `ruff check --select E9,F` and
+  `git diff --check` passed. The documented offline release smoke built and
+  installed a 245269-byte wheel with SHA-256
+  `709f6b2177ed92c7b5d1a5d1bfc49cbcda60e31c760b2e26385fa06cb606bc3e`.
+- CI: [run 41588006974](https://github.com/barry31-dev/pocketchat/actions/runs/41588006974)
+  completed successfully for `1baea8a`. It contains six Linux/macOS/Windows
+  matrix jobs for Python 3.9/3.13 plus the `pocketchat-release-smoke` job.
+- Release smoke artifact: `pocketchat-release-smoke`, artifact id `13208881597`,
+  241908 bytes. The downloaded archive contains
+  `pocketchat-1.1.0-py3-none-any.whl` (245268 bytes) and JSON evidence. The
+  wheel SHA-256 recomputed from the downloaded asset is
+  `3a6913293938c9334b0f974024981704f3758040dcfe304d2a96f25abcd235b1`,
+  equal to the JSON value. It contains 60 members, all five schemas and the
+  complete installed task command family.
+- Review: `docs/review-release-smoke-evidence-v1.json` closes F1-F3. The first
+  exact-SHA attempt
+  [run 41586196768](https://github.com/barry31-dev/pocketchat/actions/runs/41586196768)
+  for `c34749c` is retained as failure evidence; its Windows failures produced
+  the task-state and test-gating fixes before this candidate.
+- Publication: **not authorized for this candidate and not performed**. No tag,
+  GitHub Release or package-index upload exists for `1baea8a`.
+- Unverified: a local isolated PEP 517 build could not fetch `setuptools>=61`
+  through the proxy, Windows recovery/acceptance remains intentionally
+  `unsupported_platform` and skipped, the unselected full Ruff command retains
+  pre-existing style findings, and real provider behavior/package-index
+  reachability remain outside this slice.
+
+### Prior candidate `ca3dcfc6c0519427319790eab0eb27645e1e9986`
 
 - Candidate SHA: `ca3dcfc6c0519427319790eab0eb27645e1e9986`; branch `main` in
   `barry31-dev/pocketchat`.

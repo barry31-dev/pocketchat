@@ -7,6 +7,7 @@ own words are never completion evidence; the report digests and step state are.
 from __future__ import annotations
 
 import json
+from pathlib import PureWindowsPath
 from typing import Any
 
 MAX_TASK_STATE_CHARS = 12000
@@ -32,6 +33,13 @@ def _path(value: Any) -> str:
             or ".." in value.split("/")):
         raise TaskStateError("file evidence path must be workspace-relative")
     return value
+
+
+def _workspace_reference(value: Any) -> bool:
+    if not isinstance(value, str) or not value or value.startswith("/"):
+        return False
+    windows = PureWindowsPath(value)
+    return not windows.is_absolute() and not windows.drive
 
 
 def project_task_state(report: Any, *, step_id: str,
@@ -74,7 +82,7 @@ def project_task_state(report: Any, *, step_id: str,
         }
         for key in ("task_id", "trace", "session"):
             value = row.get(key)
-            if isinstance(value, str) and value and not value.startswith("/"):
+            if _workspace_reference(value):
                 item[key] = value
         inputs = row.get("inputs")
         if isinstance(inputs, list):

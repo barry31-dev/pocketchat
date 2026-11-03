@@ -32,6 +32,26 @@ class TaskStateTests(unittest.TestCase):
         self.assertEqual("b" * 64, state["plan_sha256"])
         self.assertNotIn("other", str(state))
 
+    def test_windows_absolute_artifact_paths_are_not_projected(self):
+        report = {
+            "spec_sha256": "a" * 64,
+            "plan_sha256": "b" * 64,
+            "steps": [{
+                "step_id": "read_input",
+                "status": "completed",
+                "task_id": "task-1",
+                "trace": r"D:\a\pocketchat\traces\read_input.jsonl",
+                "session": r"D:\a\pocketchat\sessions\read_input.jsonl",
+            }],
+            "changes": [],
+            "evidence_issues": [],
+        }
+        state = project_task_state(
+            report, step_id="next", depends_on=["read_input"])
+        evidence = state["evidence"][0]
+        self.assertNotIn("trace", evidence)
+        self.assertNotIn("session", evidence)
+
     def test_unbound_or_unfinished_dependency_is_refused(self):
         report = {
             "spec_sha256": "a" * 64, "plan_sha256": "b" * 64,

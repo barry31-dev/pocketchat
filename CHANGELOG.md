@@ -7,6 +7,13 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Make explicit memory locking portable across Windows and POSIX. Windows
+  uses `msvcrt` byte-range locks while POSIX retains `fcntl`, both are loaded
+  only on their supported platform, and a failed lock attempt is not treated
+  as held during cleanup.
+- Keep task-state artifact references portable across Windows and POSIX, and
+  gate recovery-resume regressions on the documented secure-reader support
+  instead of treating `unsupported_platform` as a product failure.
 - Add a closed memory v2 record parser and a pure v1-to-v2 migration. The
   migration leaves the v1 store unchanged, writes a bounded v2 file
   exclusively, refuses unknown v1 fields and unsafe targets, and marks legacy

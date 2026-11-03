@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime
 import errno
-import fcntl
 import json
 import os
 import stat
@@ -99,6 +98,34 @@ def _lock_path(root: Path) -> Path:
     return memory_path(root).with_name(memory_path(root).name + ".lock")
 
 
+def _lock_nonblocking(lock_file) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        if exc.errno in (errno.EACCES, errno.EAGAIN):
+            raise MemoryError("memory store is busy")
+        raise MemoryError(f"cannot lock memory store: {exc}")
+
+
+def _unlock(lock_file) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    except OSError as exc:
+        raise MemoryError(f"cannot unlock memory store: {exc}")
+
+
 def _mutate(root: Path, change):
     """Apply one read-modify-write while holding the store lock."""
     path = memory_path(root)
@@ -110,13 +137,10 @@ def _mutate(root: Path, change):
         lock_file = lock.open("a+")
     except OSError as exc:
         raise MemoryError(f"cannot open memory store lock: {exc}")
+    locked = False
     try:
-        try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            if exc.errno in (errno.EACCES, errno.EAGAIN):
-                raise MemoryError("memory store is busy")
-            raise MemoryError(f"cannot lock memory store: {exc}")
+        _lock_nonblocking(lock_file)
+        locked = True
         records = _read(root)
         changed = change(records)
         if changed:
@@ -136,7 +160,8 @@ def _mutate(root: Path, change):
                 raise MemoryError(f"cannot remove memory store: {exc}")
     finally:
         try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            if locked:
+                _unlock(lock_file)
         finally:
             lock_file.close()
 

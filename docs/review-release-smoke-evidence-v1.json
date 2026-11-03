@@ -1,0 +1,114 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/review-release-smoke-evidence-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/memory.py",
+    "pocketchat/task_state.py",
+    "tests/test_memory.py",
+    "tests/test_task_cli_resume.py",
+    "tests/test_task_exec.py",
+    "tests/test_task_state.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "product-change-without-current-slice-update",
+      "detail": "The Windows memory-lock portability change modified product code without updating the current slice record in the first candidate. The SLICE-PREP-2 row now names the code, tests and review record that cover this work before landing."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "unsupported-recovery-resume-tests-not-gated",
+      "detail": "Four budgeted recovery-resume tests expected secure descriptor-relative evidence reads on Windows even though compatibility and task-acceptance documents explicitly return unsupported_platform there. The tests now use the existing SECURE_DESCRIPTOR_READS gate, matching the other resume tests and keeping unsupported behavior as skipped rather than failed."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "windows-absolute-artifact-path-entered-task-state",
+      "detail": "Task-state projection excluded POSIX absolute artifact paths but accepted Windows drive and UNC paths, so read_input appeared in both absolute trace/session references and inflated the dependency prompt. Projection now rejects Windows absolute/drive references as non-workspace evidence, with a regression test for D:\\ paths."
+    }
+  ],
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/review-release-smoke-evidence-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/memory.py",
+    "pocketchat/task_state.py",
+    "tests/test_memory.py",
+    "tests/test_task_cli_resume.py",
+    "tests/test_task_exec.py",
+    "tests/test_task_state.py"
+  ],
+  "candidate_sha": "1baea8a22bc4d20ab13e76883938fb86c200899f",
+  "reviewed_evidence": [
+    "CPython 3.9.6: /usr/bin/python3 -m unittest discover -s tests -q; 1126 tests OK in 80.717 seconds, exit 0.",
+    "CPython 3.13.9: /opt/anaconda3/bin/python3.13 -m unittest discover -s tests -q; 1126 tests OK in 52.254 seconds, exit 0.",
+    "Focused portability/recovery surface: /opt/anaconda3/bin/python3.13 -m unittest tests.test_memory tests.test_task_state tests.test_task_exec tests.test_task_cli_resume tests.test_runtime_portability -q; 48 tests OK, exit 0.",
+    "Ruff 0.17.3: ruff check --select E9,F pocketchat tests; All checks passed!, exit 0.",
+    "Local release smoke with documented offline fallback: /opt/anaconda3/bin/python3.13 scripts/release_smoke.py --work-dir /tmp/pocketchat-release-slprep2-final.kBtxfy --no-build-isolation --json; wheel pocketchat-1.1.0-py3-none-any.whl, 245269 bytes, SHA-256 709f6b2177ed92c7b5d1a5d1bfc49cbcda60e31c760b2e26385fa06cb606bc3e, 60 members, five schemas and eleven task command families, exit 0.",
+    "First exact-SHA CI attempt: https://github.com/barry31-dev/pocketchat/actions/runs/41586196768 for c34749c. release-smoke and four matrix jobs passed; Windows Python 3.9/3.13 each ran 1125 tests with the same five F2/F3 failures. This failure was reproduced from raw job logs and fixed rather than recorded as a pass.",
+    "Fresh-context review: OpenAI Codex v0.166.0-alpha.5.1 codex exec review --uncommitted --ephemeral, model trae-cn-mimo-v2.6-pro, sandbox read-only; completed and returned F1. No functional memory-lock defect was reported.",
+    "git diff --check passed.",
+    "Second exact-SHA CI: https://github.com/barry31-dev/pocketchat/actions/runs/41588006974 for 1baea8a completed successfully with all seven jobs: Linux/macOS/Windows Python 3.9/3.13 plus pocketchat-release-smoke.",
+    "Downloaded CI artifact 13208881597 (241908 bytes): pocketchat-1.1.0-py3-none-any.whl, 245268 bytes, SHA-256 3a6913293938c9334b0f974024981704f3758040dcfe304d2a96f25abcd235b1, equal to pocketchat-release.json; 60 members, five schemas and eleven task command families."
+  ],
+  "unverified": [
+    "A local isolated PEP 517 build was attempted but the proxy timed out while fetching setuptools>=61; it is a network failure, not a product build result. The local wheel/install evidence uses --no-build-isolation with setuptools 80.9.0 and wheel 0.48.0 already available.",
+    "Windows recovery/acceptance resume remains intentionally unsupported and skipped under the documented secure-reader contract; CI does not convert those skips into Windows support evidence.",
+    "The documented unselected ruff check pocketchat tests is not clean at the base or candidate because existing style findings remain; the repository CI gate is the recorded E9,F selection.",
+    "Real provider behavior, package-index reachability, tag, Release and package upload are outside this slice and were not run."
+  ],
+  "landing_sign_off": {
+    "status": "required",
+    "scope": "Landing this exact medium-risk cross-platform lock candidate on main; no tag, Release, package upload or real provider run."
+  },
+  "review_context": {
+    "why": [
+      "Windows CI imports failed because pocketchat.memory imported POSIX fcntl eagerly. After that was fixed, Windows exposed one task-state portability defect and four tests that contradicted the documented unsupported recovery-reader boundary."
+    ],
+    "not_doing": [
+      "No memory format change, CLI/API change, provider call, release publication, package upload or workflow scope expansion."
+    ],
+    "diff_walk": [
+      "pocketchat/memory.py: load lock backends lazily, map lock contention to MemoryError, track acquisition explicitly and unlock only a held lock.",
+      "pocketchat/task_state.py: keep projected trace/session references workspace-relative on both POSIX and Windows.",
+      "tests/test_memory.py, tests/test_task_state.py, tests/test_task_cli_resume.py and tests/test_task_exec.py: cover lock backends, Windows absolute artifact exclusion and the secure-reader skip contract.",
+      "CHANGELOG.md and docs/slice-queue.md: record the delivered portability behavior in the existing SLICE-PREP-2 evidence boundary."
+    ],
+    "static_checks": [
+      "Windows calls msvcrt.locking with LK_NBLCK and LK_UNLCK; POSIX retains non-blocking flock behavior.",
+      "EACCES/EAGAIN lock contention remains the memory_store_is_busy path and failed acquisition is not unlocked.",
+      "Task-state artifact evidence excludes POSIX absolute, Windows drive and UNC paths.",
+      "Recovery resume tests requiring descriptor-relative evidence are skipped where SECURE_DESCRIPTOR_READS is false."
+    ],
+    "red_green": [
+      "The no-fcntl import test failed with ModuleNotFoundError before lazy imports and passed after them.",
+      "The fake Windows lock test failed because the backend helper did not exist, then passed with the expected LK_NBLCK/LK_UNLCK calls.",
+      "The Windows absolute artifact projection test exposed trace/session keys before the fix and passed after portable absolute detection.",
+      "The first exact-SHA CI run reproduced four unsupported recovery failures and one Windows task-state prompt failure before the final fixes."
+    ],
+    "review_notes": [
+      "The completed fresh-context review reported F1; exact-SHA CI then exposed F2 and F3. All three were reproduced and fixed with focused regressions before the second candidate.",
+      "The second exact-SHA workflow_dispatch run 41588006974 passed all seven jobs and its release-smoke artifact was downloaded and hash-checked."
+    ],
+    "gaps": [
+      "Windows recovery/acceptance support remains intentionally unverified and skipped under the secure-reader contract.",
+      "Local isolated PEP 517 build reproducibility remains unverified because the proxy could not fetch setuptools>=61; CI used its isolated build successfully."
+    ]
+  }
+}
