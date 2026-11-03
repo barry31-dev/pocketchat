@@ -14,6 +14,7 @@ from unittest import mock
 from pocketchat import memory
 from pocketchat.memory import MemoryError, add_memory, list_memory, remove_memory, search_memory
 from tests._helpers import run_cli
+from tests import _helpers as hp
 
 
 class MemoryStoreTests(unittest.TestCase):
@@ -173,6 +174,9 @@ class MemoryStoreTests(unittest.TestCase):
                 self.assertFalse(payload["ok"])
                 self.assertIn("--store", payload["message"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_cli_v2_migrate_accept_retire_forget_are_explicit(self):
         added = run_cli(
             ("memory", "add", "legacy preference", "--tag", "style", "--json"),
@@ -254,6 +258,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertIn("no-follow", json.loads(result.stdout)["message"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_read_refuses_a_parent_replaced_before_file_open(self):
         added = run_cli(("memory", "add", "read target", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -306,6 +313,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual("", (outside / "memory.v2.jsonl").read_text(
             encoding="utf-8"))
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_read_does_not_recreate_a_replaced_parent(self):
         added = run_cli(("memory", "add", "read target", "--json"), self.root)
         self.assertEqual(0, added.returncode, added.stdout + added.stderr)
@@ -339,6 +349,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertTrue(replaced)
         self.assertFalse(parent.exists())
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_mutation_does_not_create_lock_through_a_replaced_parent(self):
         added = run_cli(("memory", "add", "lock target", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -386,6 +399,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertFalse((outside / lock_name).exists())
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_mutation_refuses_a_symlinked_lock(self):
         added = run_cli(("memory", "add", "lock target", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -407,6 +423,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertEqual("", outside.read_text(encoding="utf-8"))
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_store_refuses_symlink_and_corrupt_input(self):
         store = self.root / ".pocketchat" / "memory.v2.jsonl"
         store.parent.mkdir(parents=True)
@@ -433,6 +452,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertIn("invalid JSON", json.loads(result.stdout)["message"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_accept_refuses_non_user_source_and_unknown_retirement_target(self):
         added = run_cli(
             ("memory", "add", "legacy preference", "--json"), self.root)
@@ -463,6 +485,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertIn("replacement", json.loads(result.stdout)["message"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_forget_preserves_other_records(self):
         first = run_cli(("memory", "add", "first secret", "--json"), self.root)
         second = run_cli(("memory", "add", "second fact", "--json"), self.root)
@@ -481,6 +506,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual([second_id], [item["memory_id"] for item in records])
         self.assertNotIn("first secret", (self.root / store).read_text(encoding="utf-8"))
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_mutation_failure_leaves_store_unchanged(self):
         added = run_cli(("memory", "add", "keep me", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -500,6 +528,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertEqual(before, (self.root / store).read_bytes())
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_accept_records_the_actor_as_updated_by(self):
         added = run_cli(("memory", "add", "actor fact", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -515,6 +546,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual(0, accepted.returncode, accepted.stdout + accepted.stderr)
         self.assertEqual("operator", json.loads(accepted.stdout)["item"]["updated_by"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_accept_changes_only_admission_fields(self):
         added = run_cli(("memory", "add", "stable content", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -536,6 +570,9 @@ class MemoryStoreTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertEqual(before[field], after[field])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_write_does_not_follow_a_replaced_parent_during_write(self):
         added = run_cli(("memory", "add", "keep me", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -576,6 +613,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertFalse((outside / "memory.v2.jsonl").exists())
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_memory_recall_dry_run_is_read_only_and_bounded(self):
         added = run_cli(("memory", "add", "answer fact", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -597,6 +637,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertIn("answer fact", payload["context_message"]["content"])
         self.assertEqual(before, (self.root / store).read_bytes())
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_memory_recall_excludes_other_workspaces(self):
         added = run_cli(("memory", "add", "answer fact", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -616,6 +659,9 @@ class MemoryStoreTests(unittest.TestCase):
                           for reason in item["reasons"]})
         self.assertNotIn("answer fact", payload["context_message"]["content"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_memory_commands_run_end_to_end_as_subprocesses(self):
         env = {"PYTHONPATH": str(Path(__file__).resolve().parents[1])}
         added = subprocess.run(
@@ -644,6 +690,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual("", accepted.stderr)
         self.assertEqual("accepted", json.loads(accepted.stdout)["item"]["admission_status"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_concurrent_mutations_do_not_silently_lose_an_update(self):
         first = run_cli(("memory", "add", "first fact", "--json"), self.root)
         second = run_cli(("memory", "add", "second fact", "--json"), self.root)

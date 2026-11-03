@@ -15,6 +15,8 @@ from pocketchat.provider import build_payload
 from pocketchat.service import context_preview
 from pocketchat.session import Session
 
+from tests import _helpers as hp
+
 
 class FakeMemoryAdapter:
     name = "memory-tool-test"
@@ -209,6 +211,9 @@ class MemoryToolTests(unittest.TestCase):
             verification_status="not_required")
         return store
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_memory_recall_projection_is_opt_in_and_workspace_bound(self):
         store = self._accepted_v2_store()
         adapter = FakeMemoryAdapter([text_response()])
@@ -225,6 +230,9 @@ class MemoryToolTests(unittest.TestCase):
         self.assertIn("memory_recall", str(adapter.calls[0]))
         self.assertIn("the answer is 42", str(adapter.calls[0]))
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_memory_recall_is_absent_when_disabled(self):
         self._accepted_v2_store()
         adapter = FakeMemoryAdapter([text_response()])
@@ -235,6 +243,9 @@ class MemoryToolTests(unittest.TestCase):
         self.assertEqual("completed", session.run(["answer"]))
         self.assertNotIn("memory_recall", str(adapter.calls[0]))
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_context_preview_matches_enabled_recall_projection(self):
         store = self._accepted_v2_store()
         adapter = FakeMemoryAdapter([text_response()])
@@ -259,6 +270,9 @@ class MemoryToolTests(unittest.TestCase):
         self.assertEqual(1, preview["context_projection"]["memory_recall"]
                          ["evidence_count"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_memory_recall_does_not_cross_workspace_ids(self):
         store = self._accepted_v2_store()
         adapter = FakeMemoryAdapter([text_response()])

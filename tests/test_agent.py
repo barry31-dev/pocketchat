@@ -81,6 +81,19 @@ class AgentCommandTests(unittest.TestCase):
         }), encoding="utf-8")
         return path
 
+    def _wait_for_tui_idle(self, tui, timeout=2.0):
+        import time
+        deadline = time.time() + timeout
+        worker = getattr(tui, "_worker", None)
+        if worker is not None:
+            worker.join(timeout=max(0.0, deadline - time.time()))
+        while getattr(tui, "busy", False) and time.time() < deadline:
+            time.sleep(0.01)
+        self.assertFalse(worker is not None and worker.is_alive(),
+                         "TUI worker thread did not exit before cleanup")
+        self.assertFalse(getattr(tui, "busy", False),
+                         "TUI worker did not settle before cleanup")
+
     def _agent(self, stdin):
         return hp.run_cli(
             ["agent", "--session", "main", "--config", str(self.config)],
@@ -538,6 +551,7 @@ class AgentCommandTests(unittest.TestCase):
         tui.start_send("hello")
         self.assertTrue(started.wait(1))
         tui.close()
+        self._wait_for_tui_idle(tui)
         self.assertFalse(tui.busy)
 
     def test_tui_close_cancels_a_real_provider_request_with_a_terminal_trace(self):
@@ -781,6 +795,7 @@ class AgentCommandTests(unittest.TestCase):
         tui.start_send("first")
         reply = tui.send("second")
         gate.set()
+        self._wait_for_tui_idle(tui)
         self.assertIn("already running", reply)
         self.assertEqual(tui.transcript.count(("you", "second")), 0)
 
@@ -806,6 +821,7 @@ class AgentCommandTests(unittest.TestCase):
         tui.start_send("first")
         reply = tui.send("/model hosted")
         gate.set()
+        self._wait_for_tui_idle(tui)
         self.assertIn("reply is already running", reply)
         self.assertEqual(tui.state.profile, "local")
 
@@ -835,6 +851,7 @@ class AgentCommandTests(unittest.TestCase):
         self.assertIn("thinking", text)
         self.assertIn("partial answer", text)
         gate.set()
+        self._wait_for_tui_idle(tui)
 
     def test_tui_renders_the_provider_error_after_a_failed_run(self):
         import threading
@@ -856,9 +873,7 @@ class AgentCommandTests(unittest.TestCase):
         tui._send_once = failing_send
         tui.start_send("hello")
         gate.set()
-        deadline = __import__("time").time() + 2
-        while tui.busy and __import__("time").time() < deadline:
-            __import__("time").sleep(0.01)
+        self._wait_for_tui_idle(tui)
         lines = compose_screen(tui, input_text="", width=80, height=20)
         text = "\n".join(lines)
         self.assertIn("run failed", text)
@@ -866,7 +881,6 @@ class AgentCommandTests(unittest.TestCase):
 
     def test_tui_renders_a_real_exception_as_an_error_turn(self):
         import threading
-        import time
         from pocketchat.tui import AgentTUI, compose_screen
 
         tui = AgentTUI(
@@ -885,9 +899,7 @@ class AgentCommandTests(unittest.TestCase):
         tui._send_once = failing_send
         tui.start_send("hello")
         gate.set()
-        deadline = time.time() + 2
-        while tui.busy and time.time() < deadline:
-            time.sleep(0.01)
+        self._wait_for_tui_idle(tui)
         lines = compose_screen(tui, input_text="", width=80, height=20)
         text = "\n".join(lines)
         self.assertIn("RuntimeError: provider exploded", text)
@@ -965,7 +977,6 @@ class AgentCommandTests(unittest.TestCase):
 
     def test_tui_does_not_duplicate_a_streamed_final_reply(self):
         import threading
-        import time
         from pocketchat.tui import AgentTUI, compose_screen
 
         tui = AgentTUI(
@@ -985,15 +996,12 @@ class AgentCommandTests(unittest.TestCase):
         tui._send_once = streamed_send
         tui.start_send("hello")
         gate.set()
-        deadline = time.time() + 2
-        while tui.busy and time.time() < deadline:
-            time.sleep(0.01)
+        self._wait_for_tui_idle(tui)
         text = "\n".join(compose_screen(tui, input_text="", width=80, height=20))
         self.assertEqual(text.count("streamed answer"), 1)
 
     def test_tui_keeps_a_reasoning_summary_after_the_turn_completes(self):
         import threading
-        import time
         from pocketchat.tui import AgentTUI, compose_screen
 
         tui = AgentTUI(
@@ -1014,9 +1022,7 @@ class AgentCommandTests(unittest.TestCase):
         tui._send_once = streamed_send
         tui.start_send("hello")
         gate.set()
-        deadline = time.time() + 2
-        while tui.busy and time.time() < deadline:
-            time.sleep(0.01)
+        self._wait_for_tui_idle(tui)
         tui.toggle_reasoning()
         text = "\n".join(compose_screen(tui, input_text="", width=80, height=20))
         self.assertIn("thought through the answer", text)

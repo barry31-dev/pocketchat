@@ -1,0 +1,64 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/review-ci-platform-gates-v1.json",
+    "tests/test_agent.py",
+    "tests/test_memory.py",
+    "tests/test_memory_tools.py",
+    "tests/test_task_checkpoint_resume.py"
+  ],
+  "categories": [
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-ci-platform-gates-v1.json",
+    "tests/test_agent.py",
+    "tests/test_memory.py",
+    "tests/test_memory_tools.py",
+    "tests/test_task_checkpoint_resume.py"
+  ],
+  "reviewed_evidence": [
+    "Root cause from PR run 41648522437: Linux 3.13 failed only in TemporaryDirectory cleanup with ENOTEMPTY after a TUI worker continued writing; Windows 3.9 and 3.13 failed 22 descriptor-relative tests because the platform capability was absent.",
+    "The 22 memory, recall-projection and checkpoint tests now use the existing hp.SECURE_DESCRIPTOR_READS skip contract. The unsupported-platform refusal test remains unskipped and executed.",
+    "A local capability-stub run selected 23 tests: the refusal test passed, all 22 dependent tests skipped, and there were 0 failures and 0 errors.",
+    "The four affected TUI worker tests passed, and two representative asynchronous tests passed 20 repeated runs after the cleanup helper began waiting for both worker exit and busy=false.",
+    "CPython 3.13.9: the full unittest discover suite => 1214 tests OK (47.185s).",
+    "ruff check --select E9,F over the four changed test files passed; git diff --check passed."
+  ],
+  "unverified_scope": "No product implementation changed. The Windows and Linux GitHub Actions runners were not executed locally; CI after push must confirm the 22 skips and the TUI cleanup fix on the exact new candidate. Full-suite discover, packaging, clean install, real providers, release actions and non-target platform combinations were not run for this test-only correction.",
+  "landing_sign_off": {
+    "status": "pending",
+    "scope": "Test-only CI gate correction for the already-open PC-TCONTRACT-1 / PC-MSTORE-PARENT-1 candidate; it does not add approval for a new product slice, merge to main, tag, Release, package upload or real provider run."
+  },
+  "review_context": {
+    "why": [
+      "Close the platform-specific false failures that prevent the existing PocketChat candidate from receiving a clear CI verdict."
+    ],
+    "not_doing": [
+      "No runtime behavior, tool contract, memory format, command surface, version, release or publication change."
+    ],
+    "diff_walk": [
+      "tests/test_memory.py: applies the existing secure-descriptor capability skip to v2 and recall tests that require descriptor-relative no-follow operations.",
+      "tests/test_memory_tools.py and tests/test_task_checkpoint_resume.py: apply the same capability contract to their dependent tests and import the shared helper.",
+      "tests/test_agent.py: waits for the asynchronous TUI worker to exit before TemporaryDirectory cleanup and removes polling/imports made redundant by that helper."
+    ],
+    "static_checks": [
+      "The unsupported-platform refusal test remains executable without descriptor support.",
+      "No production module or approved slice row is changed.",
+      "The helper checks both worker liveness and visible busy state before cleanup."
+    ],
+    "review_notes": [
+      "This is test-only maintenance under the product rules; it does not create a new product slice."
+    ],
+    "gaps": [
+      "Actual Windows runner behavior and CI-wide suite interaction remain pending until the candidate is pushed and the workflow completes."
+    ]
+  }
+}
