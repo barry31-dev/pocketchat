@@ -68,6 +68,16 @@ class ResultProjectionTests(unittest.TestCase):
         self.assertFalse(json.loads(exact.encoded)["truncated"])
         self.assertEqual(0, exact.bytes_omitted)
 
+    def test_memory_whole_record_selection_includes_all_envelope_overhead(self):
+        raw = {"items": [{"id": "a", "text": "x" * 220}]}
+        self.assertLess(len(json.dumps(raw).encode("utf-8")), 300)
+        projected = project_result("call_1", "memory_search", raw, max_bytes=300)
+        result = json.loads(projected.encoded)
+        self.assertLessEqual(len(projected.encoded.encode("utf-8")), 300)
+        self.assertEqual([], result["items"])
+        self.assertEqual(1, result["omitted_items"])
+        self.assertEqual(result["bytes_omitted"], projected.bytes_omitted)
+
     def test_non_object_result_is_refused(self):
         with self.assertRaises(ResultProjectionError) as caught:
             project_result("call_1", "read_file", [], max_bytes=512)

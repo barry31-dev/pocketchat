@@ -100,6 +100,36 @@ class TaskExecResumeTests(unittest.TestCase):
         report = self.root / payload["reports"][0]
         return payload, report
 
+    def test_budgeted_report_and_checkpoint_resume_cannot_reset_the_ledger(self):
+        self.spec_payload["budgets"]["max_task_tokens"] = 100000
+        self.spec = parse_spec(self.spec_payload)
+        self.plan.source["spec_sha256"] = spec_sha256(self.spec)
+        self.plan = parse_plan(self.plan.source, spec=self.spec)
+        self.spec_path.write_text(json.dumps(self.spec_payload), encoding="utf-8")
+        self.plan_path.write_text(json.dumps(self.plan.source), encoding="utf-8")
+        _, report = self.stop()
+        before_calls = len(self.adapter.calls)
+        report_sha = digest(report)
+        report_count = len(list((self.root / "task-reports").glob("*.json")))
+        result = run_cli(self.args(
+            "--resume-report", str(report), "--report-sha256", report_sha,
+            "--json"), self.root, env={})
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("task budget", result.stdout.lower())
+        self.assertEqual(before_calls, len(self.adapter.calls))
+        self.assertEqual(report_count,
+                         len(list((self.root / "task-reports").glob("*.json"))))
+        checkpoint = self.root / "checkpoint.json"
+        checkpoint_record = create_checkpoint(
+            json.loads(report.read_text()), report_path=report,
+            expected_report_sha256=report_sha)
+        checkpoint.write_text(json.dumps(checkpoint_record), encoding="utf-8")
+        result = run_cli(self.args(
+            "--checkpoint", str(checkpoint), "--json"), self.root, env={})
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("task budget", result.stdout.lower())
+        self.assertEqual(before_calls, len(self.adapter.calls))
+
     def test_stop_after_writes_a_boundary_and_exits_zero(self):
         payload, report = self.stop()
         self.assertEqual(1, len(payload["task_ids"]))

@@ -1,9 +1,9 @@
 """A pure task-level token budget ledger.
 
-Requests reserve their local input estimate before a provider call and settle
-after it. A missing provider usage report leaves the reservation in place and
-marks the request ``usage_known=False``; it is never treated as zero usage or
-refunded.
+Input and configured output estimates are reserved before a provider call.
+Known usage replaces that estimate; missing usage preserves the reservation
+and blocks further work. Neither an estimate nor a pending reservation is a
+claim about provider-reported consumption.
 """
 
 from __future__ import annotations
@@ -35,15 +35,47 @@ class TaskBudget:
             raise TaskBudgetError("limit_tokens must be a positive integer",
                                   error_type="invalid_task_budget")
         self.limit_tokens = limit_tokens
-        self._requests = {row["request_id"]: dict(row)
-                          for row in (requests or [])}
-        for row in self._requests.values():
+        if requests is not None and not isinstance(requests, list):
+            raise TaskBudgetError("requests must be a list",
+                                  error_type="invalid_task_budget")
+        self._requests: dict[str, dict[str, Any]] = {}
+        required = {"request_id", "reserved_tokens", "settled_tokens", "usage_known"}
+        for source in requests or []:
+            if not isinstance(source, dict) or not required <= set(source) \
+                    or set(source) - (required | {"state"}):
+                raise TaskBudgetError("invalid task budget request",
+                                      error_type="invalid_task_budget")
+            row = dict(source)
+            request_id = row["request_id"]
+            if not isinstance(request_id, str) or not request_id \
+                    or request_id in self._requests:
+                raise TaskBudgetError("invalid or duplicate request id",
+                                      error_type="invalid_task_budget")
             _nonnegative(row["reserved_tokens"], "reserved_tokens")
+            known = row["usage_known"]
+            if not isinstance(known, bool):
+                raise TaskBudgetError("usage_known must be a boolean",
+                                      error_type="invalid_task_budget")
+            # Old records did not distinguish pending from unknown usage.
+            # Restore that ambiguity conservatively, never as free headroom.
+            state = row.get("state", "settled" if known else "unknown")
+            if state not in ("reserved", "settled", "unknown") \
+                    or known != (state == "settled"):
+                raise TaskBudgetError("invalid request state",
+                                      error_type="invalid_task_budget")
+            if known:
+                _nonnegative(row["settled_tokens"], "settled_tokens")
+            elif row["settled_tokens"] is not None:
+                raise TaskBudgetError("unknown usage cannot have settled tokens",
+                                      error_type="invalid_task_budget")
+            row["state"] = state
+            self._requests[request_id] = row
 
     @property
     def reserved_tokens(self) -> int:
-        return sum(int(row["reserved_tokens"])
-                   for row in self._requests.values())
+        """Total committed usage plus estimates still awaiting known usage."""
+        return sum(row["settled_tokens"] if row["usage_known"]
+                   else row["reserved_tokens"] for row in self._requests.values())
 
     @property
     def remaining_tokens(self) -> int:
@@ -55,9 +87,11 @@ class TaskBudget:
             raise TaskBudgetError("request_id must be non-empty",
                                   error_type="invalid_task_budget")
         if request_id in self._requests:
-            raise TaskBudgetError(
-                f"request id is already recorded: {request_id}",
+            raise TaskBudgetError(f"request id is already recorded: {request_id}",
                                   error_type="duplicate_request")
+        if any(row["state"] == "unknown" for row in self._requests.values()):
+            raise TaskBudgetError("provider usage is unknown; task budget is blocked",
+                                  error_type="task_token_usage_unknown")
         if self.reserved_tokens + tokens > self.limit_tokens:
             raise TaskBudgetError(
                 f"task token budget {self.limit_tokens} would be exceeded")
@@ -66,6 +100,7 @@ class TaskBudget:
             "reserved_tokens": tokens,
             "settled_tokens": None,
             "usage_known": False,
+            "state": "reserved",
         }
         return self.remaining_tokens
 
@@ -75,30 +110,29 @@ class TaskBudget:
         if row is None:
             raise TaskBudgetError(f"unknown request: {request_id}",
                                   error_type="unknown_request")
-        if row["settled_tokens"] is not None or row["usage_known"]:
-            raise TaskBudgetError(
-                f"request already settled: {request_id}",
+        if row["state"] != "reserved":
+            raise TaskBudgetError(f"request already settled: {request_id}",
                                   error_type="request_already_settled")
-        input_tokens = _nonnegative(input_tokens, "input_tokens")
-        output_tokens = _nonnegative(output_tokens, "output_tokens")
-        if not isinstance(reported, bool):
-            raise TaskBudgetError("reported must be a boolean",
-                                  error_type="invalid_task_budget")
-        if not reported:
-            # Keep the conservative reservation. The caller can inspect the
-            # unknown marker rather than treating absent usage as free work.
-            return self.remaining_tokens
+        if reported is not True:
+            row["state"] = "unknown"
+            raise TaskBudgetError("provider did not report usage required by task budget",
+                                  error_type="task_token_usage_unknown")
+        try:
+            input_tokens = _nonnegative(input_tokens, "input_tokens")
+            output_tokens = _nonnegative(output_tokens, "output_tokens")
+        except TaskBudgetError:
+            row["state"] = "unknown"
+            raise
         settled = input_tokens + output_tokens
-        if settled > row["reserved_tokens"]:
-            raise TaskBudgetError(
-                f"settled token usage {settled} exceeds reserved "
-                f"{row['reserved_tokens']}")
-        if self.reserved_tokens - row["reserved_tokens"] + settled > self.limit_tokens:
+        row["settled_tokens"] = settled
+        row["usage_known"] = True
+        row["state"] = "settled"
+        # Record actual consumption even when it exceeds the configured total:
+        # the request already happened, and a failed check cannot refund it.
+        if self.reserved_tokens > self.limit_tokens:
             raise TaskBudgetError(
                 f"settled token usage {settled} would exceed task budget "
                 f"{self.limit_tokens}")
-        row["settled_tokens"] = settled
-        row["usage_known"] = True
         return self.remaining_tokens
 
     def request(self, request_id: str) -> dict[str, Any]:
@@ -124,9 +158,15 @@ class TaskBudget:
                 "schema_version") != SCHEMA_VERSION:
             raise TaskBudgetError("unsupported task budget record",
                                   error_type="unsupported_task_budget")
+        if set(payload) != {"schema_version", "limit_tokens", "reserved_tokens", "requests"}:
+            raise TaskBudgetError("invalid task budget record fields",
+                                  error_type="invalid_task_budget")
         requests = payload.get("requests")
         if not isinstance(requests, list):
             raise TaskBudgetError("task budget requests must be a list",
                                   error_type="invalid_task_budget")
-        return cls(limit_tokens=payload.get("limit_tokens"),
-                   requests=requests)
+        budget = cls(limit_tokens=payload.get("limit_tokens"), requests=requests)
+        if _nonnegative(payload["reserved_tokens"], "reserved_tokens") != budget.reserved_tokens:
+            raise TaskBudgetError("task budget total disagrees with requests",
+                                  error_type="invalid_task_budget")
+        return budget

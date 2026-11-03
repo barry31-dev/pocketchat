@@ -217,7 +217,8 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
         if task_budget is not None:
             try:
                 task_budget.reserve(
-                    admitted["estimated_input_tokens"],
+                    admitted["estimated_input_tokens"]
+                    + int(config.get("output_reserve_tokens") or 0),
                     request_id=f"{run_id}:repair")
             except TaskBudgetError as exc:
                 raise ModelRepairError(str(exc)) from exc
@@ -243,11 +244,22 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
     try:
         response = adapter.complete(messages, config, api_key or "")
     except ProviderError as exc:
+        if task_budget is not None:
+            try:
+                task_budget.settle(f"{run_id}:repair", input_tokens=0,
+                                   output_tokens=0, reported=False)
+            except TaskBudgetError as budget_error:
+                raise ModelRepairError(str(budget_error)) from exc
         raise ModelRepairError("repair provider failed: %s" % exc.error_type)
     except Exception as exc:
+        if task_budget is not None:
+            try:
+                task_budget.settle(f"{run_id}:repair", input_tokens=0,
+                                   output_tokens=0, reported=False)
+            except TaskBudgetError:
+                pass
         raise ModelRepairError(
             "repair provider call failed: %s" % type(exc).__name__) from exc
-    raw = _response_text(response)
     if task_budget is not None:
         usage = response.get("usage") if isinstance(response, dict) else None
         if not isinstance(usage, dict):
@@ -255,12 +267,13 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
         try:
             task_budget.settle(
                 f"{run_id}:repair",
-                input_tokens=int(usage.get("input_tokens", 0)),
-                output_tokens=int(usage.get("output_tokens", 0)),
+                input_tokens=usage.get("input_tokens"),
+                output_tokens=usage.get("output_tokens"),
                 reported=bool(response.get("usage_reported", False))
                 if isinstance(response, dict) else False)
         except TaskBudgetError as exc:
             raise ModelRepairError(str(exc)) from exc
+    raw = _response_text(response)
     if contains_credential(raw.encode("utf-8"), api_key):
         raise ModelRepairError("repair response contains the configured credential")
     try:

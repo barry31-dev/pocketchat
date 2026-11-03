@@ -111,6 +111,73 @@ class MemoryToolTests(unittest.TestCase):
         self.assertGreater(result["bytes_omitted"], 0)
         self.assertGreater(len(result["items"]), 0)
 
+    def test_oversized_memory_record_is_omitted_inside_the_full_envelope(self):
+        add_memory(self.root, "oversized-" + "x" * 600, tags=["fact"])
+        adapter = FakeMemoryAdapter([
+            memory_response("call_m", "oversized"), text_response(),
+        ])
+        config = self.config(adapter)
+        config["tool_result_max_bytes"] = 512
+        config["max_context_chars"] = 4096
+        session = Session(config, self.root / "traces" / "large.jsonl",
+                          "run_large_memory", api_key="secret-tool")
+        self.assertEqual("completed", session.run(["search memory"]))
+        encoded = adapter.calls[1][-1]["content"]
+        result = json.loads(encoded)
+        self.assertLessEqual(len(encoded.encode("utf-8")), 512)
+        self.assertEqual([], result["items"])
+        self.assertEqual(1, result["total_items"])
+        self.assertEqual(1, result["omitted_items"])
+        self.assertTrue(result["truncated"])
+
+    def test_task_budget_missing_usage_stops_before_a_tool_or_second_request(self):
+        from pocketchat.task_budget import TaskBudget
+        response = memory_response("call_m", "answer")
+        response["usage_reported"] = False
+        adapter = FakeMemoryAdapter([response, text_response()])
+        trace = self.root / "traces" / "unknown.jsonl"
+        session = Session(self.config(adapter), trace,
+                          "run_unknown_usage", api_key="secret-tool")
+        session.task_budget = TaskBudget(limit_tokens=10000)
+        self.assertEqual("failed", session.run(["search memory"]))
+        self.assertEqual(1, len(adapter.calls))
+        events = [json.loads(line) for line in trace.read_text().splitlines()]
+        self.assertNotIn("tool.call.started", [event["type"] for event in events])
+        self.assertIn("task_token_usage_unknown", trace.read_text())
+
+    def test_task_reservation_includes_the_configured_output_reserve(self):
+        from pocketchat.task_budget import TaskBudget
+        adapter = FakeMemoryAdapter([text_response()])
+        config = self.config(adapter)
+        config["output_reserve_tokens"] = 1000
+        session = Session(config, self.root / "traces" / "reserve.jsonl",
+                          "run_output_reserve", api_key="secret-tool")
+        session.task_budget = TaskBudget(limit_tokens=1000)
+        self.assertEqual("failed", session.run(["short prompt"]))
+        self.assertEqual([], adapter.calls)
+
+    def test_unknown_transport_usage_stops_budgeted_retry(self):
+        from pocketchat.provider import ProviderError
+        from pocketchat.task_budget import TaskBudget, TaskBudgetError
+
+        class FailingAdapter(FakeMemoryAdapter):
+            def complete(self, messages, config, api_key, on_delta=None,
+                         prepared_payload=None):
+                self.calls.append(list(messages))
+                raise ProviderError("timeout", "fixture timeout", retryable=True)
+
+        adapter = FailingAdapter([])
+        config = self.config(adapter)
+        config["retry_max_attempts"] = 2
+        session = Session(config, self.root / "traces" / "transport.jsonl",
+                          "run_transport_unknown", api_key="secret-tool")
+        session.task_budget = TaskBudget(limit_tokens=10000)
+        self.assertEqual("failed", session.run(["short prompt"]))
+        self.assertEqual(1, len(adapter.calls))
+        with self.assertRaises(TaskBudgetError) as caught:
+            session.task_budget.reserve(1, request_id="after_failure")
+        self.assertEqual("task_token_usage_unknown", caught.exception.error_type)
+
     def test_memory_search_is_disabled_by_default(self):
         config = self.config(FakeMemoryAdapter([]))
         config["tool_memory_search_enabled"] = False

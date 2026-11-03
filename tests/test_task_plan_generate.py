@@ -34,7 +34,7 @@ class StubAdapter:
         response = self.responses.pop(0)
         if isinstance(response, BaseException):
             raise response
-        return {"content": response}
+        return response if isinstance(response, dict) else {"content": response}
 
 
 class PlanGenerateCliTests(unittest.TestCase):
@@ -88,7 +88,10 @@ class PlanGenerateCliTests(unittest.TestCase):
         self.spec_payload = payload
         self.spec = parse_spec(payload)
         self.spec_path.write_text(json.dumps(payload), encoding="utf-8")
-        adapter = StubAdapter([self.valid_plan()])
+        adapter = StubAdapter([{
+            "content": self.valid_plan(), "usage_reported": True,
+            "usage": {"input_tokens": 20, "output_tokens": 10},
+        }])
         self.bind_adapter(adapter)
         result = run_cli(self.args("--json"), self.root,
                          env={"POCKETCHAT_API_KEY": "not-a-real-key"})
@@ -111,6 +114,19 @@ class PlanGenerateCliTests(unittest.TestCase):
         self.assertEqual("task_budget_exceeded", payload["error"])
         self.assertEqual(0, len(adapter.calls))
         self.assertFalse((self.root / "traces/requests").exists())
+
+    def test_unknown_plan_usage_refuses_to_write_a_plan(self):
+        self.spec_payload["budgets"]["max_task_tokens"] = 100000
+        self.spec = parse_spec(self.spec_payload)
+        self.spec_path.write_text(json.dumps(self.spec_payload), encoding="utf-8")
+        adapter = StubAdapter([self.valid_plan()])
+        self.bind_adapter(adapter)
+        result = run_cli(self.args("--json"), self.root,
+                         env={"POCKETCHAT_API_KEY": "not-a-real-key"})
+        self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("task_token_usage_unknown", json.loads(result.stdout)["error"])
+        self.assertEqual(1, len(adapter.calls))
+        self.assertFalse((self.root / "traces" / "plans").exists())
 
     def test_generate_persists_a_plan_and_prints_the_exact_exec_digest(self):
         adapter = StubAdapter([self.valid_plan()])

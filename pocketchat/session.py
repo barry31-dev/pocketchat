@@ -537,7 +537,8 @@ class Session:
                         f"{self.run_id}:request:{self.request_count}")
                     try:
                         self.task_budget.reserve(
-                            admitted["estimated_input_tokens"],
+                            admitted["estimated_input_tokens"]
+                            + int(config.get("output_reserve_tokens") or 0),
                             request_id=self.task_budget_request_id)
                     except TaskBudgetError as exc:
                         raise SessionError(exc.error_type, str(exc)) from exc
@@ -595,6 +596,14 @@ class Session:
                     "attempt_scope": "turn",
                 })
                 self._task_after_step("model", "failed", detail=exc.error_type)
+                if self.task_budget is not None:
+                    try:
+                        self.task_budget.settle(
+                            self.task_budget_request_id, input_tokens=0,
+                            output_tokens=0, reported=False)
+                    except TaskBudgetError as budget_error:
+                        raise SessionError(budget_error.error_type,
+                                           str(budget_error)) from exc
                 raise
             except KeyboardInterrupt:
                 self.recorder.append("model.response.failed", {
@@ -607,6 +616,13 @@ class Session:
                     "attempt_scope": "turn",
                 })
                 self._task_after_step("model", "cancelled", detail="interrupted")
+                if self.task_budget is not None:
+                    try:
+                        self.task_budget.settle(
+                            self.task_budget_request_id, input_tokens=0,
+                            output_tokens=0, reported=False)
+                    except TaskBudgetError:
+                        pass  # Keep the unknown reservation and the interrupt.
                 raise
 
             usage = response["usage"]
@@ -806,34 +822,25 @@ class Session:
                     "tool_call_id": str(call.get("id") or ""),
                     "args_summary": "search memory",
                 })
-                items = search_memory(workspace, query)[
-                    :_bounded_count(config, "tool_memory_search_max_results", 20)]
-                result = {"items": items}
-                encoded = json.dumps(result, ensure_ascii=False, sort_keys=True)
-                if len(encoded.encode("utf-8")) > result_limit:
-                    kept = []
-                    for item in items:
-                        trial = kept + [item]
-                        encoded_trial = json.dumps(
-                            {"items": trial}, ensure_ascii=False, sort_keys=True)
-                        if len(encoded_trial.encode("utf-8")) > result_limit:
-                            break
-                        kept = trial
-                    if not kept and items:
-                        kept = items[:1]
-                    result = {
-                        "items": kept,
-                        "total_items": len(items),
-                        "omitted_items": max(0, len(items) - len(kept)),
-                        "bytes_omitted": max(
-                            0, len(encoded.encode("utf-8"))
-                            - len(json.dumps(
-                                {"items": kept}, ensure_ascii=False,
-                                sort_keys=True).encode("utf-8"))),
-                        "truncated": len(kept) < len(items),
-                    }
-                    encoded = json.dumps(result, ensure_ascii=False,
-                                         sort_keys=True)
+                all_items = search_memory(workspace, query)
+                items = all_items[:_bounded_count(
+                    config, "tool_memory_search_max_results", 20)]
+                def encode_items(value):
+                    return json.dumps(value, ensure_ascii=False, sort_keys=True,
+                                      separators=(",", ":"))
+                result = {
+                    "items": items,
+                    "total_items": len(all_items),
+                    "omitted_items": len(all_items) - len(items),
+                    "bytes_omitted": len(encode_items(all_items).encode("utf-8"))
+                    - len(encode_items(items).encode("utf-8")),
+                    "truncated": len(items) < len(all_items),
+                }
+                bounded_memory = project_result(
+                    str(call.get("id") or ""), "memory_search", result,
+                    max_bytes=result_limit, effect_disposition="none")
+                encoded = bounded_memory.encoded
+                result = json.loads(encoded)
                 self.recorder.append("tool.call.completed", {
                     "tool": "memory_search",
                     "tool_call_id": str(call.get("id") or ""),
@@ -843,6 +850,8 @@ class Session:
                     "result_truncated": bool(result.get("truncated")),
                     "effect_disposition": "none",
                 })
+        except ResultProjectionError as exc:
+            raise SessionError(exc.error_type, str(exc)) from exc
         except ToolPermissionError as exc:
             return self._tool_failure_result(
                 call, exc.error_type, str(exc), result_limit)
@@ -853,9 +862,7 @@ class Session:
             raise SessionError("tool_failed", str(exc))
         try:
             if tool_name == "memory_search":
-                # The memory branch above already bounded the list by whole
-                # records and computed its omission count.
-                pass
+                return bounded_memory.encoded
             elif tool_name == "write_file":
                 result = {
                     "path": result.get("path"),

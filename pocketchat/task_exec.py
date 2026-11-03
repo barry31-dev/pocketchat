@@ -429,6 +429,10 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
         raise TaskExecutionError("stop_after must be a positive bounded step count")
     if resume_report is None and expected_report_sha256 is not None:
         raise TaskRecoveryError("a report digest needs an explicit report")
+    if resume_report is not None and task_budget is not None:
+        raise TaskRecoveryError(
+            "resuming a task budget requires a bound ledger; "
+            "budgeted resume is not supported")
     root = Path(workspace).resolve()
     previous = recovery = None
     if resume_report is not None:

@@ -35,9 +35,17 @@ paths are workspace-relative too; absolute paths, backslashes, empty segments,
 Budgets use the same ceilings and type rules as the existing policy.
 `max_session_tokens` remains the existing per-step Session limit.
 `max_task_tokens` is an optional separate whole-task limit: `task exec` creates
-one ledger for the authorized plan, reserves an estimate before each model
-request, and settles it from reported usage. Missing usage stays unknown and
-fails closed when the task ledger is active. The supported tools are
+one ledger for the authorized plan. It reserves the input estimate plus any
+configured output reserve before each model request. Reported input/output
+usage replaces that reservation against the whole-task total, even when the
+response is larger than the input estimate; actual usage above the task limit
+is recorded and stops further work. Missing or malformed usage keeps the
+reservation unknown and stops before a tool, another request, or a repair edit.
+Transport failures likewise block budgeted retries because usage is unknown.
+These estimates are not a provider hard output cap. A hard output parameter is
+sent only when the profile declares support. Budgeted resume is currently
+refused until the historical ledger can be bound (see [task-exec.md](task-exec.md)).
+The supported tools are
 `read_file`, create-only `write_file` and bounded
 `memory_search`. A read allowlist must stay inside the declared inputs.
 `write_file.create_only` may only be `true`; delete, free-form shell strings

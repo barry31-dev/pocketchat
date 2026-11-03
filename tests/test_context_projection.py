@@ -63,6 +63,26 @@ class ContextProjectionTests(unittest.TestCase):
         self.assertNotIn("tool", roles)
         self.assertIn("current", str(projection["messages"]))
 
+    def test_orphan_tool_results_are_refused(self):
+        payload = self._payload()
+        payload["messages"] = [
+            {"role": "user", "content": "current"},
+            {"role": "tool", "tool_call_id": "missing", "content": "result"},
+        ]
+        with self.assertRaises(ContextProjectionError) as caught:
+            project_context(payload, max_chars=1000)
+        self.assertEqual("incomplete_tool_exchange", caught.exception.error_type)
+
+    def test_tool_results_cannot_precede_their_calls(self):
+        payload = self._payload()
+        payload["messages"] = [
+            {"role": "user", "content": "current"},
+            {"role": "tool", "tool_call_id": "call_1", "content": "result"},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "call_1"}]},
+        ]
+        with self.assertRaises(ContextProjectionError):
+            project_context(payload, max_chars=1000)
+
     def test_projection_is_deterministic(self):
         payload = self._payload()
         first = project_context(payload, max_chars=1000)

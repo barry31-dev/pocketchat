@@ -110,6 +110,33 @@ def project_result(tool_call_id: str, kind: str, result: Any, *,
     if content is not None and not omit_content_echo:
         projection["content"] = content
 
+    if kind == "memory_search" and "items" in projection:
+        items = projection["items"]
+        if not isinstance(items, list):
+            raise ResultProjectionError("memory result items must be a list")
+        total = projection.get("total_items", len(items))
+        if isinstance(total, bool) or not isinstance(total, int) or total < len(items):
+            raise ResultProjectionError("invalid memory item count")
+        prior_omitted = projection.get("bytes_omitted", 0)
+        if isinstance(prior_omitted, bool) or not isinstance(prior_omitted, int) \
+                or prior_omitted < 0:
+            raise ResultProjectionError("invalid memory omission byte count")
+        original_item_bytes = len(_encoded(items).encode("utf-8"))
+        for count in range(len(items), -1, -1):
+            kept = items[:count]
+            candidate = dict(projection, items=kept, total_items=total,
+                             omitted_items=total - count)
+            omitted_item_bytes = original_item_bytes - len(_encoded(kept).encode("utf-8"))
+            candidate["bytes_omitted"] = prior_omitted + omitted_item_bytes
+            candidate["truncated"] = bool(projection["truncated"] or total > count)
+            if len(_encoded(candidate).encode("utf-8")) <= max_bytes:
+                projection = candidate
+                break
+        else:
+            raise ResultProjectionError(
+                "tool result metadata exceeds the configured limit",
+                error_type="result_projection_too_small")
+
     # Reserve room for truncation metadata, then shrink only the content
     # field. Re-encode after every change because JSON escaping changes size.
     base = dict(projection)
@@ -153,4 +180,4 @@ def project_result(tool_call_id: str, kind: str, result: Any, *,
         raise ResultProjectionError(
             "tool result metadata exceeds the configured limit",
             error_type="result_projection_too_small")
-    return ResultProjection(encoded=encoded, bytes_omitted=omitted)
+    return ResultProjection(encoded=encoded, bytes_omitted=projection.get("bytes_omitted", omitted))

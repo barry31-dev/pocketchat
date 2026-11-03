@@ -154,6 +154,21 @@ class ExecutionTests(unittest.TestCase):
                      session_dir=self.root / "sessions", task_budget=budget)
         self.assertEqual([budget], seen)
 
+    def test_budgeted_resume_refuses_an_unbound_fresh_ledger_before_work(self):
+        from pocketchat.task_budget import TaskBudget
+        from pocketchat.task_recovery import TaskRecoveryError
+        calls = []
+        with self.assertRaises(TaskRecoveryError) as caught:
+            execute_plan(
+                self.execution, run_task=lambda **kwargs: calls.append(kwargs),
+                workspace=self.root, config={}, trace_dir=self.root / "traces",
+                session_dir=self.root / "sessions", task_budget=TaskBudget(
+                    limit_tokens=1000), resume_report="missing.json",
+                expected_report_sha256="a" * 64)
+        self.assertIn("task budget", str(caught.exception).lower())
+        self.assertEqual([], calls)
+        self.assertFalse((self.root / "task-reports").exists())
+
     def test_execute_plan_reuses_run_task_in_dependency_order(self):
         calls = []
 

@@ -38,17 +38,28 @@ def _turns(messages: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
 
 
 def _complete_turn(turn: list[dict[str, Any]]) -> bool:
-    calls = set()
-    results = set()
+    seen = set()
+    pending = set()
     for message in turn:
         if message.get("role") == "assistant":
-            for call in message.get("tool_calls") or []:
-                if isinstance(call, dict) and isinstance(call.get("id"), str):
-                    calls.add(call["id"])
-        elif (message.get("role") == "tool"
-              and isinstance(message.get("tool_call_id"), str)):
-            results.add(message["tool_call_id"])
-    return calls <= results
+            if pending:
+                return False
+            calls = message.get("tool_calls") or []
+            if not isinstance(calls, list):
+                return False
+            for call in calls:
+                call_id = call.get("id") if isinstance(call, dict) else None
+                if not isinstance(call_id, str) or not call_id or call_id in seen:
+                    return False
+                seen.add(call_id)
+                pending.add(call_id)
+        elif message.get("role") == "tool":
+            call_id = message.get("tool_call_id")
+            if not isinstance(call_id, str) or call_id not in pending:
+                return False
+            pending.remove(call_id)
+    return not pending
+
 
 
 def project_context(payload: Any, *, max_chars: int,

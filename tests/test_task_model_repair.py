@@ -25,8 +25,9 @@ from tests.test_task_spec import minimal
 class StubAdapter:
     name = "model-repair-stub"
 
-    def __init__(self, content):
+    def __init__(self, content, usage=None):
         self.content = content
+        self.usage = usage
         self.calls = []
         self.payloads = []
 
@@ -37,7 +38,10 @@ class StubAdapter:
 
     def complete(self, messages, config, api_key, on_delta=None):
         self.calls.append(list(messages))
-        return {"content": self.content}
+        result = {"content": self.content}
+        if self.usage is not None:
+            result.update(usage=self.usage, usage_reported=True)
+        return result
 
 
 def make_spec(root):
@@ -138,7 +142,7 @@ class AttemptTests(unittest.TestCase):
     def test_repair_usage_is_settled_into_the_shared_task_budget(self):
         from pocketchat.task_budget import TaskBudget
         first = self.run_first()
-        adapter = StubAdapter(json.dumps(action()))
+        adapter = StubAdapter(json.dumps(action()), usage={"input_tokens": 20, "output_tokens": 10})
         budget = TaskBudget(limit_tokens=1000000)
         result, _ = attempt_model_repair(
             command_runner=lambda template_id, trace, run_id: run_command_template(
@@ -151,7 +155,26 @@ class AttemptTests(unittest.TestCase):
         self.assertTrue(result.ok)
         state = budget.to_dict()
         self.assertEqual("pocketchat-task-budget.v1", state["schema_version"])
-        self.assertTrue(state["requests"])
+        self.assertEqual(30, state["reserved_tokens"])
+        self.assertTrue(state["requests"][0]["usage_known"])
+
+    def test_unknown_repair_usage_never_edits_or_retries(self):
+        from pocketchat.task_budget import TaskBudget, TaskBudgetError
+        first = self.run_first()
+        adapter = StubAdapter(json.dumps(action()))
+        budget = TaskBudget(limit_tokens=1000000)
+        retries = []
+        with self.assertRaises(ModelRepairError):
+            attempt_model_repair(
+                command_runner=lambda *args: retries.append(args),
+                template_id="check", trace_path=self.root / "traces/check.jsonl",
+                run_id="check", failed=first, spec=self.spec, plan=self.plan,
+                config={**self.config, "provider_adapter": adapter}, api_key="",
+                root=self.root, task_budget=budget)
+        self.assertEqual("wrong\n", (self.root / "answer.txt").read_text())
+        self.assertEqual([], retries)
+        with self.assertRaises(TaskBudgetError):
+            budget.reserve(1, request_id="after_unknown_repair")
 
     def test_model_action_is_applied_and_exactly_one_identical_retry_runs(self):
         template = self.spec.commands[0]

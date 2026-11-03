@@ -68,6 +68,11 @@ no-op，不会生成新报告。失败/未知副作用、报告 digest 改变、
 缺失都会在新的模型/命令调用前拒绝。`--resume-report` 与 `--checkpoint` 互斥；直接
 报告必须同时给出 `--report-sha256`；两种接续都不能与 `--stop-after` 组合。
 
+TaskSpec 启用 `max_task_tokens` 时，当前不支持从 report 或 checkpoint 接续。
+旧报告没有绑定整项任务的预算账本，另建空账本会重置已消耗或未知的额度，因此两种
+接续均在任何新模型或命令调用前明确拒绝。未启用总预算的既有接续行为不变。
+带预算的运行仍可停止在步骤边界，但不能据此声称预算保持的接续已可用。
+
 ## 执行内验收检查
 
 `task exec --check-acceptance FILE` 会在读取 provider 配置前先解析操作者验收计划；

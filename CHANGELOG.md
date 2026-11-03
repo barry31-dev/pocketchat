@@ -7,6 +7,16 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Harden the runtime admission candidate after an offline pre-merge review:
+  known usage is charged against whole-task headroom rather than just the input
+  estimate, missing usage blocks tools/repair/retries, and output reservations
+  include the configured allowance. Memory results select whole records against
+  the final JSON envelope instead of forcing one oversized match. The local
+  context projector rejects orphan and out-of-order tool results.
+- Refuse `max_task_tokens` report/checkpoint resume until a historical budget
+  ledger is bound. Unbudgeted resume remains supported; no fresh allowance is
+  invented for an already-started budgeted task. These changes are an unlanded
+  candidate, not a release or a real-provider validation.
 - Add a deterministic layered context projector. It keeps fixed
   instructions and task state ahead of recent complete exchanges and declared
   evidence, deduplicates evidence sources, refuses orphan tool exchanges and

@@ -555,7 +555,8 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
             if task_budget is not None:
                 try:
                     task_budget.reserve(
-                        admitted["estimated_input_tokens"],
+                        admitted["estimated_input_tokens"]
+                        + int(config.get("output_reserve_tokens") or 0),
                         request_id=f"{run_id}:plan:{attempt}")
                 except TaskBudgetError as exc:
                     raise PlanGenerationError(
@@ -582,7 +583,6 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
                 attempts=attempt, error_type="request_evidence_write_failed")
         try:
             response = adapter.complete(messages, config, api_key or "")
-            raw = _response_text(response)
             if task_budget is not None:
                 usage = response.get("usage") if isinstance(response, dict) else None
                 if not isinstance(usage, dict):
@@ -590,15 +590,24 @@ def generate_plan(spec: TaskSpec, adapter, config: Dict[str, Any],
                 try:
                     task_budget.settle(
                         f"{run_id}:plan:{attempt}",
-                        input_tokens=int(usage.get("input_tokens", 0)),
-                        output_tokens=int(usage.get("output_tokens", 0)),
+                        input_tokens=usage.get("input_tokens"),
+                        output_tokens=usage.get("output_tokens"),
                         reported=bool(response.get("usage_reported", False))
                         if isinstance(response, dict) else False)
                 except TaskBudgetError as exc:
                     raise PlanGenerationError(
                         str(exc), attempts=attempt,
                         error_type=exc.error_type)
+            raw = _response_text(response)
         except ProviderError as exc:
+            if task_budget is not None:
+                try:
+                    task_budget.settle(f"{run_id}:plan:{attempt}", input_tokens=0,
+                                       output_tokens=0, reported=False)
+                except TaskBudgetError as budget_error:
+                    raise PlanGenerationError(
+                        str(budget_error), attempts=attempt,
+                        error_type=budget_error.error_type) from exc
             raise PlanGenerationError(
                 "plan provider failed: %s" % exc.error_type, attempts=attempt,
                 error_type="provider_failed")

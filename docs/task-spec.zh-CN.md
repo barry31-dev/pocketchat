@@ -32,8 +32,13 @@ v1.1.0 制品不含这项未发布源码能力。
 
 预算沿用现有 policy 的上限与类型规则。`max_session_tokens` 仍是既有的
 单步骤 Session 限额；`max_task_tokens` 是可选的整项任务限额：`task exec`
-为授权计划建立一份账本，在每次模型请求前预约估算值，并按 provider
-自报 usage 结算；缺 usage 时保持 unknown，并在任务账本启用时失败关闭。工具仅支持 `read_file`、create-only
+为授权计划建立一份账本，在每次模型请求前预约输入估算与已配置的输出预留；
+provider 自报的输入/输出 usage 替代该预约，按任务总余额结算，不能因响应大于
+输入估算就误拒绝。真实 usage 超出任务总限额时也先记录消耗，再停止后续工作。
+缺失或损坏 usage 保持 unknown，在工具、下一请求或修复 edit 之前失败关闭；
+传输失败同样阻断预算模式下的重试，因为消耗未知。估算不等于 provider 硬输出上限，
+只有 profile 明确声明支持才发送硬输出参数。绑定历史账本落地前，带总预算的接续
+明确拒绝（见 [task-exec.zh-CN.md](task-exec.zh-CN.md)）。工具仅支持 `read_file`、create-only
 `write_file` 与有界 `memory_search`；读 allowlist 必须属于已声明 inputs。
 `write_file.create_only` 只能为 `true`，删除、自由 shell 字符串与未知工具均
 拒绝。`commands` 是封闭的 argv 模板列表，每个模板经校验后只能由 TaskPlan
