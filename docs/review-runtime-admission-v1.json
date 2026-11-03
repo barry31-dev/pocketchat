@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "CHANGELOG.md",
     "docs/review-runtime-admission-v1.json",
@@ -95,5 +95,11 @@
       "fingerprint": "command-step-none-policy",
       "detail": "Task-state prompts handle command-only dependency rows without dereferencing a null policy; command evidence remains a separate authority from file evidence."
     }
-  ]
+  ],
+  "candidate_sha": "9f29cf5294d9aefa230ea77c64be082e3fd9ed7e",
+  "human_sign_off": {
+    "date": "2026-11-03",
+    "candidate_sha": "9f29cf5294d9aefa230ea77c64be082e3fd9ed7e",
+    "scope": "Land the runtime candidate on main; no tag, Release, package upload or real provider run."
+  }
 }
