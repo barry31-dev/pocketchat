@@ -288,7 +288,7 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertNotIn("no such memory", payload["message"])
         message = payload["message"].lower()
-        self.assertTrue("symlink" in message or "no-follow" in message)
+        self.assertTrue("symlink" in message or "no-follow" in message, message)
         self.assertEqual("", (outside / "memory.v2.jsonl").read_text(
             encoding="utf-8"))
 
