@@ -339,7 +339,9 @@ class ProfileConfigTests(unittest.TestCase):
                 "tool_call_max_count", "tool_result_max_bytes",
                 "max_payload_bytes", "model_context_window_tokens",
                 "output_reserve_tokens", "safety_margin_tokens",
-                "max_output_tokens_supported", "profile", "system_prompt",
+                "max_output_tokens_supported",
+                "context_projection_enabled", "context_projection_max_bytes",
+                "profile", "system_prompt",
             })
 
 

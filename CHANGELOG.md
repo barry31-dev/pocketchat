@@ -17,11 +17,14 @@ package-index publication.
   restore it for report/checkpoint resume. A missing, malformed or mismatched
   ledger is refused before a new request; no fresh allowance is invented for
   an already-started budgeted task. Unbudgeted resume remains supported.
-- Add a deterministic layered context projector. It keeps fixed
+- Add an opt-in deterministic layered context projector. It keeps fixed
   instructions and task state ahead of recent complete exchanges and declared
   evidence, deduplicates evidence sources, refuses orphan tool exchanges and
-  fails closed when the fixed layers cannot fit. Session wiring is not changed
-  by this slice. See `pocketchat/context_projection.py`.
+  fails closed when the fixed layers cannot fit. Session writes a metadata-only
+  sidecar beside the exact request snapshot, and `context` previews the same
+  history selection. The legacy drop-oldest path remains the default. See
+  `pocketchat/context_projection.py`, `pocketchat/session.py` and
+  `docs/formats.md`.
 - Add a pure task-state projector for cross-step context. It includes only
   completed, explicitly depended-on steps and declared file evidence, excludes
   unrelated steps, and refuses missing digests, unresolved evidence, malformed

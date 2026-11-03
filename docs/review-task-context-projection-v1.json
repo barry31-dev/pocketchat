@@ -1,0 +1,125 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/formats.md",
+    "docs/pocketchat-evidence-matrix.md",
+    "docs/review-task-context-projection-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/cli.py",
+    "pocketchat/config.py",
+    "pocketchat/context_projection.py",
+    "pocketchat/request.py",
+    "pocketchat/schemas/trace.schema.json",
+    "pocketchat/service.py",
+    "pocketchat/session.py",
+    "tests/test_context.py",
+    "tests/test_context_projection.py",
+    "tests/test_profile_admin.py",
+    "tests/test_profiles.py",
+    "tests/test_recovery_policy.py",
+    "tests/test_runtime_portability.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "pending-prompt-collapsed-into-history",
+      "detail": "The first live projection implementation put the pending prompt into the history turn, so keep_recent_turns=1 could drop the previous completed exchange. Pending messages are now a separate projected layer."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "projection-preview-budget-unit",
+      "detail": "Preview now reports the selected history budget and pending messages separately; the legacy max_context_chars budget is not silently reinterpreted as a full-payload byte limit."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "projection-sidecar-not-fail-closed",
+      "detail": "When projection is enabled, request-snapshot or sidecar write failure stops before the provider send; legacy behavior remains for the default path."
+    },
+    {
+      "id": "F4",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "short-fixture-credential-in-snapshot-metadata",
+      "detail": "Credential collision caused by short profile fixture names was isolated in test configuration; the request body check remains fail-closed on the complete snapshot record."
+    }
+  ],
+  "reviewed_evidence": [
+    "CPython 3.9.6: /usr/bin/python3 -m unittest discover -s tests -v; 1123 tests OK in 77.078 seconds, exit 0.",
+    "CPython 3.13.9: python3 -m unittest discover -s tests -v; 1123 tests OK in 77.437 seconds, exit 0.",
+    "Ruff 0.17.3: ruff check --select E9,F pocketchat tests; exit 0.",
+    "Focused: context 9, context_projection 11, profiles 32, profile_admin 17, runtime_portability 6, recovery_policy 9, request 29, kernel 44; all exit 0.",
+    "git diff --check passed."
+  ],
+  "unverified": [
+    "Real provider behavior, token savings and quality impact.",
+    "Cross-platform runs and clean install/build artifacts.",
+    "Live layered context for task-exec steps and checkpoint resume.",
+    "Tag, Release and package-index publication."
+  ],
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/formats.md",
+    "docs/pocketchat-evidence-matrix.md",
+    "docs/review-task-context-projection-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/cli.py",
+    "pocketchat/config.py",
+    "pocketchat/context_projection.py",
+    "pocketchat/request.py",
+    "pocketchat/schemas/trace.schema.json",
+    "pocketchat/service.py",
+    "pocketchat/session.py",
+    "tests/test_context.py",
+    "tests/test_context_projection.py",
+    "tests/test_profile_admin.py",
+    "tests/test_profiles.py",
+    "tests/test_recovery_policy.py",
+    "tests/test_runtime_portability.py"
+  ],
+  "candidate_sha": "self",
+  "review_context": {
+    "why": [
+      "This is a medium Python behavior slice: opt-in layered projection is wired into Session with a metadata sidecar, preview shares the same selection function, and the legacy path remains the default."
+    ],
+    "not_doing": [
+      "No real provider call, model summarization, memory v2 retrieval, live task-step projection, build/install, tag, Release or package-index action."
+    ],
+    "diff_walk": [
+      "context_projection.py: adds canonical source/projection digests, copied messages/evidence, a separate pending-message layer, and the layered manifest.",
+      "session.py: routes opt-in profiles through the projector, bounds the projected messages by context_projection_max_bytes, writes trace metadata and an exclusive sidecar, and fails closed if evidence writing fails.",
+      "service.py: preview uses the same projector arguments and exposes preview_messages plus pending_messages.",
+      "config.py/cli.py: profile fields are additive and default off.",
+      "trace schema/formats/cli docs: document additive metadata and the sidecar contract.",
+      "tests: cover preview/request agreement, sidecar binding and failure, prompt preservation, schema defaults, profile writes, and legacy retry/fallback compatibility."
+    ],
+    "review_notes": [
+      "Round one found the pending prompt collapsing into the history turn; it was fixed by a separate pending layer.",
+      "Round two re-read the changed projection/prompt path and confirmed the previous exchange survives keep_recent_turns=1 while preview and request match."
+    ],
+    "gaps": [
+      "Real provider and cross-platform behavior, task-exec live projection, and measured token/quality benefit remain unverified."
+    ]
+  }
+}

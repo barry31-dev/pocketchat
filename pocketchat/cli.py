@@ -623,6 +623,20 @@ def _parser() -> argparse.ArgumentParser:
                              action="store_true",
                              dest="max_output_tokens_supported", default=None,
                              help="send a max_tokens cap to this endpoint")
+    projection_group = profile_set.add_mutually_exclusive_group()
+    projection_group.add_argument("--context-projection", action="store_true",
+                                  dest="context_projection_enabled",
+                                  default=None,
+                                  help="enable layered context projection")
+    projection_group.add_argument("--no-context-projection",
+                                  action="store_false",
+                                  dest="context_projection_enabled",
+                                  help="use the legacy drop-oldest context path")
+    profile_set.add_argument("--context-projection-max-bytes", type=int,
+                             dest="context_projection_max_bytes",
+                             default=None,
+                             help="byte bound for projected messages "
+                                  "(default: 65536)")
     tool_read_group = profile_set.add_mutually_exclusive_group()
     tool_read_group.add_argument("--tool-read", action="store_true",
                                  dest="tool_read_enabled", default=None,
@@ -1861,6 +1875,8 @@ def _cmd_profile_write(args: argparse.Namespace) -> int:
                 "tool_write_enabled", "tool_write_allow_paths",
                 "tool_memory_search_enabled", "tool_memory_search_max_results",
                 "tool_call_max_count", "tool_result_max_bytes",
+                "context_projection_enabled",
+                "context_projection_max_bytes",
             ):
                 value = getattr(args, key)
                 if value is not None:

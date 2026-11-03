@@ -394,6 +394,12 @@ drops-oldest-turns 策略会保留/丢弃哪些消息。`--keep-recent` 固定�
 预算连 pinned prompt 都放不下时 exit 2。输出不复制消息正文。已持久化的
 `tool_context` 消息按续跑请求的实际顺序显示，字符数包含 tool call/result 元数据。
 
+启用 `context_projection_enabled` 后，`context` 使用与 Session 相同的分层投影：
+固定指令、完整近期 exchange、选入证据与省略原因会写入元数据；结果中的
+`preview_messages` 是实际可发送的历史选择，pending prompt 由调用方最后追加。
+`context_projection_max_bytes` 单独限制完整投影 JSON，不能把旧的文本
+`max_context_chars` 当作对象字节上限。该模式默认关闭。
+
 ## 本地只读工具
 
 `tool read` 是本地、显式 allowlist 的只读操作：

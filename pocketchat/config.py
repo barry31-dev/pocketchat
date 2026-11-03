@@ -141,6 +141,7 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
         "tool_call_max_count", "tool_result_max_bytes", "max_payload_bytes",
         "model_context_window_tokens", "output_reserve_tokens",
         "safety_margin_tokens", "max_output_tokens_supported",
+        "context_projection_enabled", "context_projection_max_bytes",
     }
     unknown = sorted(set(provider) - allowed)
     if unknown:
@@ -231,6 +232,11 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
             0, 10 ** 9, None),
         "max_output_tokens_supported": _optional_bool(
             provider, "max_output_tokens_supported", where, False),
+        "context_projection_enabled": _optional_bool(
+            provider, "context_projection_enabled", where, False),
+        "context_projection_max_bytes": _optional_int(
+            provider, "context_projection_max_bytes", where,
+            1, 10 ** 9, 65536),
     }
 
 
@@ -249,6 +255,7 @@ _PROFILE_FIELDS = {
     "tool_write_enabled", "tool_write_allow_paths",
     "tool_memory_search_enabled", "tool_memory_search_max_results",
     "tool_call_max_count", "tool_result_max_bytes", "max_payload_bytes",
+    "context_projection_enabled", "context_projection_max_bytes",
 }
 
 
@@ -524,6 +531,10 @@ def load_config(path: Path) -> Dict[str, Any]:
         "output_reserve_tokens": selected["output_reserve_tokens"],
         "safety_margin_tokens": selected["safety_margin_tokens"],
         "max_output_tokens_supported": selected["max_output_tokens_supported"],
+        "context_projection_enabled":
+            selected["context_projection_enabled"],
+        "context_projection_max_bytes":
+            selected["context_projection_max_bytes"],
         "system_prompt": system_prompt or "",
     }
 

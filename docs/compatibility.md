@@ -49,6 +49,7 @@ The following formats are versioned and readable across `v1.0.x`:
 | Derived index | `schema_version: "1"` | Disposable; rebuild required when stale |
 | Local memory | `schema_version: "pocketchat-memory.v1"` | Explicit records; corrupt/unknown stores refused; never auto-injected |
 | Delegation manifest | `schema_version: "pocketchat-delegation.v1"` | Serial bounded children; generated exclusively; no recursive delegation |
+| Context projection sidecar | `schema_version: "pocketchat-context-projection.v1"` | Enabled per profile; metadata-only, created exclusively beside request snapshots, bounded to 64 KiB |
 | Tool writes | `write_file` event | Explicit allowlist, UTF-8, atomic, overwrite opt-in; no delete/shell/network |
 | Automatic tool calls | `read_file` / `write_file` / `memory_search` | Disabled by default; explicit allowlists; bounded calls/results; guard/argument failures return bounded tool results, while I/O, size and budget failures end the run |
 | Automatic write tool | `write_file` create-only | Disabled by default; explicit path allowlist; no overwrite/delete |

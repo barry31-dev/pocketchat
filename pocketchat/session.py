@@ -23,6 +23,7 @@ from .config import ConfigError
 from .config import load_api_key
 from .context import ContextBudgetExceeded, apply_budget, build_initial_messages
 from .context import context_chars as _context_chars
+from .context_projection import ContextProjectionError, project_context
 from .provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
 from .provider import estimate_tokens, tool_offer_summary
 from .request_admission import AdmissionError, admit_for_config
@@ -31,9 +32,9 @@ from .tool_results import ResultProjectionError, project_result
 from .memory import search_memory
 from .tools import (ToolError, ToolPermissionError,
                     execute_read_file, execute_write_file)
-from .request import (CredentialInRequestError, next_request_turn,
-                     request_digest, request_snapshot_path,
-                     write_request_snapshot)
+from .request import (CredentialInRequestError, canonical_bytes,
+                     next_request_turn, request_digest,
+                     request_snapshot_path, write_request_snapshot)
 from .sessions import SessionFile, SessionFileError
 from .trace import TraceRecorder, utc_now
 
@@ -244,6 +245,8 @@ class Session:
         self.last_output_summary = ""
         self.last_error: Optional[Dict[str, str]] = None
         self.last_reason = ""
+        self._context_projection: Optional[Dict[str, Any]] = None
+        self._projection_sidecar = ""
 
     def config_summary(self) -> Dict[str, Any]:
         """The run configuration as the recorder sees it.
@@ -273,6 +276,10 @@ class Session:
             "fallback_profile": self.config.get("fallback_profile") or "",
             "max_turn_tokens": self.config.get("max_turn_tokens"),
             "max_session_tokens": self.config.get("max_session_tokens"),
+            "context_projection_enabled": self.config.get(
+                "context_projection_enabled") is True,
+            "context_projection_max_bytes": self.config.get(
+                "context_projection_max_bytes", 65536),
             "tools": tool_offer_summary(self.config),
             "verbose": self.verbose,
             "pocketchat_version": pocketchat.__version__,
@@ -396,6 +403,8 @@ class Session:
         because its failure is not information the model can act on.
         """
         self.turn_attempt_count = 0
+        self._context_projection = None
+        self._projection_sidecar = ""
         if self.config.get("requires_api_key", True) is not False and not self.api_key:
             raise SessionError(
                 "missing_credential",
@@ -549,17 +558,33 @@ class Session:
             except AdmissionError as exc:
                 raise SessionError(exc.error_type, str(exc)) from exc
             except OSError as exc:
+                if self._context_projection is not None:
+                    raise SessionError(
+                        "request_snapshot_unwritable",
+                        "request snapshot not written: %s" % exc)
                 self.recorder.append("error.recorded", {
                     "error": {"type": "snapshot_unwritable",
                               "message": "request snapshot not written: %s" % exc},
                     "fatal": False,
                 })
             except CredentialInRequestError as exc:
+                if self._context_projection is not None:
+                    raise SessionError("credential_in_request", str(exc))
                 self.recorder.append("error.recorded", {
                     "error": {"type": "credential_in_request",
                               "message": str(exc)},
                     "fatal": False,
                 })
+            if self._context_projection is not None:
+                try:
+                    self._write_projection_sidecar(
+                        request_snapshot_path(self.trace_path,
+                                              self.request_count),
+                        self.request_count, payload, snapshot_digest)
+                except OSError as exc:
+                    raise SessionError(
+                        "context_projection_sidecar_unwritable",
+                        "context projection sidecar not written: %s" % exc)
             started_payload = {
                 "model": config["model"],
                 "messages": len(working_context),
@@ -573,6 +598,17 @@ class Session:
             if snapshot_ref:
                 started_payload["request_snapshot"] = snapshot_ref
                 started_payload["request_sha256"] = snapshot_digest
+            if self._context_projection is not None:
+                started_payload["context_projection"] = {
+                    "strategy": self._context_projection["strategy"],
+                    "projection_sha256":
+                        self._context_projection["projection_sha256"],
+                    "source_sha256":
+                        self._context_projection["source_sha256"],
+                }
+                if self._projection_sidecar:
+                    started_payload["context_projection_sidecar"] = (
+                        self._projection_sidecar)
             self._task_before_step("model")
             started = self.recorder.append("model.request.started", started_payload)
             started_at = utc_now()
@@ -965,6 +1001,39 @@ class Session:
         self.request_snapshots.append(path)
         return Path(os.path.relpath(path, self.trace_path.parent)).as_posix()
 
+    def _write_projection_sidecar(self, snapshot: Path, turn: int,
+                                  payload: Dict[str, Any],
+                                  snapshot_digest: str) -> None:
+        """Write a metadata-only sidecar bound to the exact request snapshot."""
+        manifest = dict(self._context_projection)
+        manifest["request_sha256"] = snapshot_digest
+        manifest["request_snapshot"] = Path(
+            os.path.relpath(snapshot, self.trace_path.parent)).as_posix()
+        body = {
+            "schema_version": "pocketchat-context-projection.v1",
+            "run_id": self.run_id,
+            "profile": self.config.get("profile") or "",
+            "turn": turn,
+            "payload_sha256": snapshot_digest,
+            "messages": len(payload.get("messages") or []),
+            "manifest": manifest,
+        }
+        path = snapshot.parent / (
+            "%s.turn-%d.projection.json" % (self.trace_path.stem, turn))
+        data = canonical_bytes(body)
+        if len(data) > 64 * 1024:
+            raise SessionError(
+                "context_projection_sidecar_too_large",
+                "context projection sidecar exceeds 64 KiB")
+        descriptor = os.open(
+            str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        self._projection_sidecar = Path(
+            os.path.relpath(path, self.trace_path.parent)).as_posix()
+
     def _record_turn(self, prompt: str, reply: str,
                      tool_context: Optional[List[Dict[str, Any]]] = None) -> None:
         """Write the exchange into the conversation file, one line per message.
@@ -987,18 +1056,72 @@ class Session:
             self.session_file = None
 
     def _context_with_budget(self, prompt: str) -> List[Dict[str, str]]:
-        """Return the context to send, trimmed to the budget and recorded.
+        """Return the context to send and record the selection it came from.
 
-        The pending prompt is appended first and pinned, so the trim drops
-        older turns rather than the request that is about to go out. Every trim
-        is recorded as a ``context.compacted`` event with real counts.
+        The pending prompt is appended first. The established character budget
+        remains the text-only default. An explicitly enabled layered projection
+        additionally bounds the complete projected JSON envelope; it never
+        silently reinterprets the old character limit as an object-byte limit.
 
-        Only completed turns are ever in the context: a failed turn appended
-        nothing, so "truncation never touches a failed turn" holds by
-        construction rather than by a rule someone has to remember.
+        Layered projection keeps the pending prompt outside the reusable
+        history. It returns the selected history plus the prompt exactly once,
+        which is the same shape the preview reports.
         """
         budget = int(self.config["max_context_chars"])
         context = list(self.messages) + [{"role": "user", "content": prompt}]
+        layered = self.config.get("context_projection_enabled") is True
+        if layered:
+            projection_budget = self.config.get("context_projection_max_bytes")
+            if (isinstance(projection_budget, bool)
+                    or not isinstance(projection_budget, int)
+                    or projection_budget < 1):
+                raise SessionError(
+                    "invalid_context_projection",
+                    "context_projection_max_bytes must be a positive integer")
+            instructions = [message for message in self.messages
+                            if message.get("role") == "system"]
+            history = [message for message in self.messages
+                       if message.get("role") != "system"]
+            pending = [{"role": "user", "content": prompt}]
+            try:
+                projected = project_context(
+                    {"instructions": instructions, "messages": history,
+                     "evidence": []},
+                    max_chars=budget,
+                    keep_recent_turns=1,
+                    pending_messages=pending)
+            except ContextProjectionError as exc:
+                raise SessionError(exc.error_type, str(exc)) from exc
+            projected_bytes = len(canonical_bytes(projected["messages"]))
+            if projected_bytes > projection_budget:
+                raise SessionError(
+                    "context_projection_too_large",
+                    "projected context is %d bytes, above the configured "
+                    "projection budget %d" % (projected_bytes,
+                                               projection_budget))
+            projected_messages = projected["messages"]
+            self._context_projection = projected["manifest"]
+            projected_history = [
+                message for message in projected_messages
+                if message.get("role") != "system"][:-len(pending)]
+            if projected_history != [
+                    message for message in self.messages
+                    if message.get("role") != "system"]:
+                self.messages = projected_history
+                self.compacted_count += 1
+                payload = {"strategy": "layered_v1"}
+                payload.update({
+                    "dropped_messages": len(history) - len(projected_history),
+                    "kept_messages": len(projected_messages),
+                    "kept_chars": projected["manifest"]["kept_chars"],
+                    "budget_chars": budget,
+                    "estimated_tokens_before": estimate_tokens(context),
+                    "estimated_tokens_after": estimate_tokens(projected_messages),
+                    "projection_sha256":
+                        projected["manifest"]["projection_sha256"],
+                })
+                self.recorder.append("context.compacted", payload)
+            return projected_messages
         trimmed, report = apply_budget(context, budget, keep_recent=2)
         if report:
             # The pending prompt is not kept in the persisted context: it is

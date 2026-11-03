@@ -175,8 +175,9 @@ def write_request_snapshot(path: Path, run_id: str, profile: Optional[str],
     }
     record_bytes = canonical_bytes(record)
     if contains_credential(record_bytes, credential):
-        # A body holding the credential fails closed and leaves no file. A
-        # redacted snapshot would be worse than none: it would look like the
+        # The complete snapshot is inspected. Both its metadata and body go to
+        # disk, so both are part of what must not expose the configured key.
+        # A redacted snapshot would be worse than none: it would look like the
         # evidence for a request whose body cannot be read.
         raise CredentialInRequestError(
             "the request body contains the configured credential; "

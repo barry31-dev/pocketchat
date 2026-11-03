@@ -73,6 +73,16 @@ class ContextProjectionTests(unittest.TestCase):
             project_context(payload, max_chars=1000)
         self.assertEqual("incomplete_tool_exchange", caught.exception.error_type)
 
+    def test_source_digest_changes_when_a_file_evidence_value_changes(self):
+        first = project_context(self._payload(), max_chars=1000)
+        payload = self._payload()
+        payload["evidence"][0]["content"] = "different fact"
+        second = project_context(payload, max_chars=1000)
+        self.assertNotEqual(first["manifest"]["source_sha256"],
+                            second["manifest"]["source_sha256"])
+        self.assertNotEqual(first["manifest"]["projection_sha256"],
+                            second["manifest"]["projection_sha256"])
+
     def test_tool_results_cannot_precede_their_calls(self):
         payload = self._payload()
         payload["messages"] = [
@@ -82,6 +92,57 @@ class ContextProjectionTests(unittest.TestCase):
         ]
         with self.assertRaises(ContextProjectionError):
             project_context(payload, max_chars=1000)
+
+    def test_projection_manifest_binds_exact_source_and_selected_messages(self):
+        payload = self._payload()
+        projection = project_context(payload, max_chars=1000)
+        manifest = projection["manifest"]
+        self.assertEqual("layered_v1", manifest["strategy"])
+        self.assertEqual(64, len(manifest["source_sha256"]))
+        self.assertEqual(64, len(manifest["projection_sha256"]))
+        import hashlib
+        import json
+        source = {
+            "instructions": payload["instructions"],
+            "task_state": payload["task_state"],
+            "messages": payload["messages"],
+            "evidence": payload["evidence"],
+            "pending_messages": [],
+        }
+        encoded = json.dumps(
+            source, ensure_ascii=False, sort_keys=True,
+            separators=(",", ":")).encode("utf-8")
+        self.assertEqual(hashlib.sha256(encoded).hexdigest(),
+                         manifest["source_sha256"])
+        body = {"messages": projection["messages"], "manifest": manifest}
+        self.assertEqual(projection, project_context(payload, max_chars=1000))
+        self.assertEqual(body, {"messages": projection["messages"],
+                                "manifest": manifest})
+
+    def test_projection_does_not_share_mutable_messages_with_its_source(self):
+        payload = self._payload()
+        projection = project_context(payload, max_chars=1000)
+        payload["messages"][-1]["content"] = "changed after projection"
+        payload["evidence"][0]["content"] = "changed after projection"
+        self.assertIn("current question", str(projection["messages"]))
+        self.assertEqual("fact", projection["manifest"]["evidence"][0]["content"])
+
+    def test_recent_turns_are_kept_as_complete_exchanges(self):
+        payload = self._payload()
+        payload["messages"] = [
+            {"role": "user", "content": "old"},
+            {"role": "assistant", "content": "old answer"},
+            {"role": "user", "content": "new"},
+            {"role": "assistant", "content": "new answer"},
+        ]
+        projection = project_context(
+            payload, max_chars=1000, keep_recent_turns=1)
+        self.assertEqual(
+            ["system", "system", "user", "assistant"],
+            [item["role"] for item in projection["messages"]])
+        self.assertEqual("new", projection["messages"][2]["content"])
+        self.assertEqual("new answer",
+                         projection["messages"][3]["content"])
 
     def test_projection_is_deterministic(self):
         payload = self._payload()

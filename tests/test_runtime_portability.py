@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import ntpath
 import tempfile
 import unittest
@@ -39,6 +40,42 @@ class RuntimePortabilityTests(unittest.TestCase):
                 patch.object(cli.os.path, 'relpath', ntpath.relpath):
             self.assertEqual(cli._json_path(PureWindowsPath('C:/evidence/trace.jsonl')),
                              'C:/evidence/trace.jsonl')
+
+    def test_projection_sidecar_failure_is_fail_closed(self):
+        from pocketchat.provider import build_payload
+        from pocketchat.session import Session
+
+        class Adapter:
+            name = "projection-portability"
+            def build_payload(self, messages, config):
+                return build_payload(messages, config)
+            def complete(self, messages, config, api_key, on_delta=None,
+                         prepared_payload=None):
+                raise AssertionError("provider must not be called")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = {
+                "profile": "p", "model": "m",
+                "base_url": "http://example.invalid/v1", "api_key_env": "K",
+                "timeout_seconds": 5, "max_context_chars": 1000,
+                "summary_prefix_chars": 40, "requires_api_key": True,
+                "provider_adapter": Adapter(),
+                "context_projection_enabled": True,
+                "context_projection_max_bytes": 1000,
+            }
+            session = Session(
+                config, root / "traces" / "run.jsonl", "run_projection",
+                api_key="k")
+            with patch.object(session, "_write_projection_sidecar",
+                              side_effect=OSError("disk full")):
+                self.assertEqual("failed", session.run(["hello"]))
+            events = [json.loads(line) for line in
+                      (root / "traces" / "run.jsonl").read_text().splitlines()]
+            self.assertEqual("run.failed", events[-1]["type"])
+            self.assertEqual(
+                "context_projection_sidecar_unwritable",
+                events[-1]["payload"]["error"]["type"])
 
     def test_unsupported_safe_reader_is_an_explicit_refusal(self):
         with tempfile.TemporaryDirectory() as tmp:

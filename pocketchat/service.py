@@ -27,6 +27,8 @@ from .queries import (QueryError, collect_history, diff_sessions,  # noqa: F401
                       render_diff_lines, render_history_lines,
                       render_search_lines, search_messages)
 from .context import ContextBudgetExceeded, context_chars, preview_budget
+from .context_projection import ContextProjectionError, project_context
+from .provider import estimate_tokens
 from .sessions import (SessionFileError, looks_like_session,
                        looks_like_trace, read_context_messages,
                        read_export_messages, read_header, read_turns,
@@ -132,35 +134,86 @@ def session_overview(target, sessions_dir: str = "sessions",
     return record
 
 
+def _trace_config_summary(trace: Optional[Path]) -> Dict[str, Any]:
+    if trace is None or not trace.is_file():
+        return {}
+    for line in trace.read_text(encoding="utf-8").splitlines():
+        try:
+            event = json.loads(line)
+        except (TypeError, ValueError):
+            continue
+        payload = event.get("payload") if isinstance(event, dict) else None
+        config = payload.get("config_summary") if isinstance(payload, dict) else None
+        if isinstance(config, dict):
+            return config
+    return {}
+
+
 def context_preview(target, sessions_dir: str = "sessions",
                     workspace=None, budget_chars: Optional[int] = None,
-                    keep_recent: int = 2) -> Dict[str, Any]:
-    """Read one session and describe its context trim without writing."""
+                    keep_recent: int = 2,
+                    pending_prompt: Optional[str] = None) -> Dict[str, Any]:
+    """Read one session and describe its context selection without writing."""
     resolved = resolve_named_path(Path(target), sessions_dir, workspace)
     if resolved is None:
         raise SessionFileError("no such session: %s" % target)
     session, trace = _resolve_pair(resolved)
     messages = read_context_messages(session)
+    pending = []
+    if pending_prompt is not None:
+        if not isinstance(pending_prompt, str) or not pending_prompt:
+            raise SessionFileError("pending prompt must be non-empty")
+        pending = [{"role": "user", "content": pending_prompt}]
+    config = _trace_config_summary(trace)
     if budget_chars is None:
-        budget_chars = 24000
-        if trace is not None and trace.is_file():
-            for line in trace.read_text(encoding="utf-8").splitlines():
-                try:
-                    event = json.loads(line)
-                except (TypeError, ValueError):
-                    continue
-                payload = event.get("payload") if isinstance(event, dict) else None
-                config = payload.get("config_summary") if isinstance(payload, dict) else None
-                value = config.get("max_context_chars") if isinstance(config, dict) else None
-                if isinstance(value, int) and not isinstance(value, bool) and value > 0:
-                    budget_chars = value
-                    break
-    try:
-        preview = preview_budget(messages, budget_chars, keep_recent)
-    except ContextBudgetExceeded:
-        raise
+        value = config.get("max_context_chars")
+        budget_chars = (value if isinstance(value, int)
+                        and not isinstance(value, bool) and value > 0
+                        else 24000)
+    projection = None
+    if config.get("context_projection_enabled") is True:
+        selected = [message for message in messages
+                    if message.get("role") == "system"]
+        turns = [message for message in messages
+                 if message.get("role") != "system"]
+        try:
+            projected = project_context(
+                {"instructions": selected, "messages": turns,
+                 "evidence": []}, max_chars=budget_chars,
+                keep_recent_turns=keep_recent,
+                pending_messages=pending)
+        except ContextProjectionError as exc:
+            raise ContextBudgetExceeded(str(exc)) from exc
+        selected_messages = projected["messages"]
+        projection = projected["manifest"]
+        preview = {
+            "total_chars": context_chars(messages),
+            "budget_chars": int(budget_chars),
+            "estimated_tokens_before": estimate_tokens(messages),
+            "estimated_tokens_after": estimate_tokens(
+                selected_messages[:len(selected_messages) - len(pending)]),
+            "compacted": (len(selected_messages) - len(pending))
+                         != len(messages),
+            "kept_indices": [],
+            "dropped_indices": [],
+            "report": {"strategy": "layered_v1"},
+        }
+        # The actual path sends this exact projected list; preview_messages can
+        # include the pending prompt for a one-to-one comparison with it.
+        preview["kept_indices"] = list(
+            range(len(selected_messages) - len(pending)))
+        preview["dropped_indices"] = []
+    else:
+        try:
+            preview = preview_budget(messages, budget_chars, keep_recent)
+        except ContextBudgetExceeded:
+            raise
+        kept = set(preview["kept_indices"])
+        selected_messages = [
+            message for index, message in enumerate(messages)
+            if index in kept]
     root = Path(workspace) if workspace is not None else Path.cwd()
-    return {
+    result = {
         "ok": True,
         "schema_version": "1",
         "session": _relative(session, root),
@@ -169,10 +222,14 @@ def context_preview(target, sessions_dir: str = "sessions",
             "index": index,
             "role": message["role"],
             "chars": context_chars([message]),
-        } for index, message in enumerate(messages)],
+        } for index, message in enumerate(selected_messages)],
+        "preview_messages": selected_messages,
+        "pending_messages": pending,
         **preview,
     }
-
+    if projection is not None:
+        result["context_projection"] = projection
+    return result
 
 def show_record(target, sessions_dir: str = "sessions",
                 workspace=None) -> Dict[str, Any]:

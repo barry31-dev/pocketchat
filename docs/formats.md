@@ -95,6 +95,20 @@ credential is never written — the writer fails closed. Snapshots are created
 exclusively and never rewritten; `replay --dry-run` recomputes the digest
 and reports a mismatch rather than trusting the stored value.
 
+## Context projection sidecars — `traces/requests/<run-id>.turn-N.projection.json`
+
+Owner: `pocketchat.session` + `pocketchat.context_projection`. Schema version:
+**`pocketchat-context-projection.v1`**. A sidecar exists only when layered
+projection is enabled. It carries metadata, not a second copy of the request
+body: the request snapshot remains the exact body sent.
+
+The sidecar binds the request snapshot digest, selected message count, source
+and projection SHA-256 values, evidence references, omission reasons and the
+64 KiB sidecar limit. It is created exclusively beside request snapshots and
+is never rewritten. If request snapshot or sidecar creation fails on the
+projection path, no request is sent. A sidecar is evidence for the selection
+that produced a request; it is not task acceptance or publication proof.
+
 ## Comparison manifests — `comparisons/<comparison-id>.json`
 
 Owner: `pocketchat.compare`. Schema version: **1**.

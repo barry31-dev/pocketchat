@@ -480,6 +480,14 @@ duplicated into the output. Persisted `tool_context` messages appear in the
 same order a resumed request would use, and their character count includes
 tool call/result metadata.
 
+When `context_projection_enabled` is set, `context` uses the same layered
+projection as Session. The fixed instructions, complete recent exchanges,
+selected evidence and omission reasons are recorded as metadata; the
+`preview_messages` list is the actual history selection, with a pending prompt
+appended by the caller. `context_projection_max_bytes` separately bounds the
+complete projected JSON and does not reinterpret the older text-only
+`max_context_chars` unit. This mode is off by default.
+
 ## Local read tool
 
 `tool read` is a local, explicit-allowlist read-only operation:

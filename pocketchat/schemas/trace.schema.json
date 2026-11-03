@@ -232,6 +232,20 @@
                 "type": "string",
                 "pattern": "^[0-9a-f]{64}$",
                 "description": "SHA-256 of the snapshot's canonical request bytes. A reader recomputes it from the snapshot rather than trusting this value."
+              },
+              "context_projection": {
+                "type": "object",
+                "description": "Additive metadata for an enabled layered context projection; absent on the legacy path.",
+                "required": ["strategy", "projection_sha256", "source_sha256"],
+                "properties": {
+                  "strategy": { "type": "string", "minLength": 1 },
+                  "projection_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                  "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+                }
+              },
+              "context_projection_sidecar": {
+                "type": "string",
+                "description": "Metadata-only sidecar path relative to the run root."
               }
             }
           }

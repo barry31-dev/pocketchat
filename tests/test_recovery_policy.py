@@ -70,13 +70,15 @@ class RecoveryPolicyTests(unittest.TestCase):
             "requires_api_key": True, "retry_max_attempts": retry_attempts,
             "retry_backoff_ms": 0, "fallback_max_attempts": 2,
             "provider_adapter": adapter, "fallback_config": fallback_config,
+            "context_projection_enabled": False,
         }
         previous = dict(os.environ)
-        os.environ["PRIMARY_KEY"] = "primary"
-        os.environ["FALLBACK_KEY"] = "fallback"
+        os.environ["PRIMARY_KEY"] = "test-primary-credential"
+        os.environ["FALLBACK_KEY"] = "test-fallback-credential"
         try:
             session = Session(config, self.root / "traces" / "run.jsonl",
-                              "run_recovery", api_key="primary")
+                              "run_recovery",
+                              api_key="test-primary-credential")
             status = session.run(["hello"])
         finally:
             os.environ.clear()
@@ -131,9 +133,9 @@ class RecoveryPolicyTests(unittest.TestCase):
         ], retry_attempts=2, fallback=True)
         self.assertEqual("completed", status)
         self.assertEqual(
-            [("primary", "primary-model", "primary"),
-             ("primary", "primary-model", "primary"),
-             ("fallback", "fallback-model", "fallback")],
+            [("primary", "primary-model", "test-primary-credential"),
+             ("primary", "primary-model", "test-primary-credential"),
+             ("fallback", "fallback-model", "test-fallback-credential")],
             calls)
         activated = next(event for event in events
                          if event["type"] == "fallback.activated")
@@ -165,11 +167,12 @@ class RecoveryPolicyTests(unittest.TestCase):
             "summary_prefix_chars": 40, "requires_api_key": True,
             "retry_max_attempts": 2, "retry_backoff_ms": 10,
             "provider_adapter": adapter,
+            "context_projection_enabled": False,
         }
         with mock.patch("pocketchat.session.time.sleep",
                         side_effect=KeyboardInterrupt):
             session = Session(config, self.root / "traces" / "cancel.jsonl",
-                              "run_cancel", api_key="primary")
+                              "run_cancel", api_key="test-primary-credential")
             status = session.run(["hello"])
         self.assertEqual("cancelled", status)
         self.assertEqual(1, len(adapter.calls))

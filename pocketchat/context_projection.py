@@ -7,6 +7,8 @@ never emits an assistant tool call without its matching tool result.
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 from typing import Any
 
@@ -18,9 +20,18 @@ class ContextProjectionError(ValueError):
         self.error_type = error_type
 
 
+def _canonical(value: Any) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":")).encode("utf-8")
+
+
 def _chars(value: Any) -> int:
     return len(json.dumps(value, ensure_ascii=False, sort_keys=True,
                           separators=(",", ":")))
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(_canonical(value)).hexdigest()
 
 
 def _turns(messages: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
@@ -61,9 +72,9 @@ def _complete_turn(turn: list[dict[str, Any]]) -> bool:
     return not pending
 
 
-
 def project_context(payload: Any, *, max_chars: int,
-                    keep_recent_turns: int = 1) -> dict[str, Any]:
+                    keep_recent_turns: int = 1,
+                    pending_messages: Any = None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ContextProjectionError("context payload must be an object")
     if isinstance(max_chars, bool) or not isinstance(max_chars, int) or max_chars < 1:
@@ -77,23 +88,34 @@ def project_context(payload: Any, *, max_chars: int,
     task_state = payload.get("task_state") or {}
     messages = payload.get("messages") or []
     evidence = payload.get("evidence") or []
+    if pending_messages is None:
+        pending_messages = []
     if not isinstance(instructions, list) or not isinstance(messages, list) \
-            or not isinstance(evidence, list):
+            or not isinstance(evidence, list) \
+            or not isinstance(pending_messages, list):
         raise ContextProjectionError("context layers have invalid shapes")
+    if any(not isinstance(message, dict) for message in pending_messages):
+        raise ContextProjectionError("pending messages must be objects")
+    pending = copy.deepcopy(pending_messages)
     fixed = list(instructions)
     if task_state:
         fixed.append({"role": "system", "content": json.dumps(
             task_state, ensure_ascii=False, sort_keys=True)})
     fixed_chars = _chars(fixed)
+    pending_chars = _chars(pending)
     if fixed_chars > max_chars:
         raise ContextProjectionError(
             "fixed context exceeds the configured limit",
             error_type="fixed_context_too_large")
+    if fixed_chars + pending_chars > max_chars:
+        raise ContextProjectionError(
+            "pending context exceeds the available limit",
+            error_type="pending_context_too_large")
 
     seen_sources = set()
     kept_evidence = []
     dropped = []
-    used = fixed_chars
+    used = fixed_chars + pending_chars
     for item in evidence:
         if not isinstance(item, dict) or not isinstance(item.get("source"), str):
             raise ContextProjectionError("evidence entries need a source")
@@ -102,27 +124,29 @@ def project_context(payload: Any, *, max_chars: int,
                             "reason": "duplicate_source"})
             continue
         seen_sources.add(item["source"])
-        size = _chars(item)
+        candidate = copy.deepcopy(item)
+        size = _chars(candidate)
         if used + size > max_chars:
             dropped.append({"source": item["source"], "reason": "over_budget"})
             continue
-        kept_evidence.append(item)
+        kept_evidence.append(candidate)
         used += size
 
-    turns = _turns(messages)
+    turns = _turns(copy.deepcopy(messages))
     selected_turns = turns[-keep_recent_turns:] if keep_recent_turns else turns
     if any(not _complete_turn(turn) for turn in selected_turns):
         raise ContextProjectionError("recent tool exchange is incomplete",
                                      error_type="incomplete_tool_exchange")
     kept_turns = []
     for turn in selected_turns:
-        size = _chars(turn)
+        candidate = copy.deepcopy(turn)
+        size = _chars(candidate)
         if used + size > max_chars:
             continue
-        kept_turns.append(turn)
+        kept_turns.append(candidate)
         used += size
-    projected_messages = fixed + [message for turn in kept_turns
-                                  for message in turn]
+    projected_messages = copy.deepcopy(fixed) + [
+        message for turn in kept_turns for message in turn] + pending
     # Any tool result left without its assistant call is a projection bug, not
     # model input. Refuse instead of silently sending an orphan.
     projected_turns = _turns([message for message in projected_messages
@@ -130,14 +154,33 @@ def project_context(payload: Any, *, max_chars: int,
     if any(not _complete_turn(turn) for turn in projected_turns):
         raise ContextProjectionError("projected tool exchange is incomplete",
                                      error_type="incomplete_tool_exchange")
-    return {
-        "messages": projected_messages,
-        "manifest": {
-            "schema_version": "pocketchat-context-projection.v1",
-            "max_chars": max_chars,
-            "kept_chars": used,
-            "kept_turns": len(kept_turns),
-            "evidence": kept_evidence,
-            "dropped": dropped,
-        },
+    manifest = {
+        "schema_version": "pocketchat-context-projection.v1",
+        "strategy": "layered_v1",
+        "max_chars": max_chars,
+        "kept_chars": used,
+        "kept_turns": len(kept_turns),
+        "pending_messages": len(pending),
+        "pending_sha256": _digest(pending),
+        "source_chars": _chars({
+            "instructions": instructions,
+            "task_state": task_state,
+            "messages": messages,
+            "evidence": evidence,
+            "pending_messages": pending,
+        }),
+        "source_sha256": _digest({
+            "instructions": instructions,
+            "task_state": task_state,
+            "messages": messages,
+            "evidence": evidence,
+            "pending_messages": pending,
+        }),
+        "evidence": kept_evidence,
+        "dropped": dropped,
     }
+    manifest["projection_sha256"] = _digest({
+        "messages": projected_messages,
+        "manifest": manifest,
+    })
+    return {"messages": projected_messages, "manifest": manifest}

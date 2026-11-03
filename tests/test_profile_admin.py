@@ -68,7 +68,8 @@ class ProfileWriteCliTests(unittest.TestCase):
                        "--max-turn-tokens", "--max-session-tokens",
                        "--model-context-window-tokens",
                        "--output-reserve-tokens", "--safety-margin-tokens",
-                       "--max-output-tokens-supported"):
+                       "--max-output-tokens-supported", "--context-projection",
+                       "--context-projection-max-bytes"):
             self.assertIn(option, result.stdout)
 
     def test_set_carries_model_window_capacity(self):
@@ -86,6 +87,18 @@ class ProfileWriteCliTests(unittest.TestCase):
         self.assertEqual(4096, profile["output_reserve_tokens"])
         self.assertEqual(1024, profile["safety_margin_tokens"])
         self.assertIs(True, profile["max_output_tokens_supported"])
+
+    def test_set_carries_context_projection_fields(self):
+        result = self._run(
+            "set", "projection", "--base-url", "https://new.invalid/v1",
+            "--model", "projection-model", "--api-key-env", "NEW_KEY",
+            "--context-projection",
+            "--context-projection-max-bytes", "32768", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        raw = json.loads(self.config.read_text(encoding="utf-8"))
+        profile = raw["profiles"]["projection"]
+        self.assertIs(True, profile["context_projection_enabled"])
+        self.assertEqual(32768, profile["context_projection_max_bytes"])
 
     def test_set_carries_token_budget_fields(self):
         result = self._run(
