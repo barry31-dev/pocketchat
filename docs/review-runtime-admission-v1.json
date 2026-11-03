@@ -4,6 +4,8 @@
     "CHANGELOG.md",
     "docs/review-runtime-admission-v1.json",
     "docs/slice-queue.md",
+    "docs/task-exec.md",
+    "docs/task-exec.zh-CN.md",
     "docs/task-spec.md",
     "docs/task-spec.zh-CN.md",
     "examples/task-acceptance/demo.py",
@@ -40,6 +42,7 @@
     "tests/test_request_admission.py",
     "tests/test_session.py",
     "tests/test_task_budget.py",
+    "tests/test_task_cli_resume.py",
     "tests/test_task_exec.py",
     "tests/test_task_model_repair.py",
     "tests/test_task_plan_generate.py",
@@ -56,9 +59,9 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 1,
-  "round_decision": "review",
-  "round_scope": "full",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
   "findings": [
     {
       "id": "F1",
@@ -72,14 +75,14 @@
       "severity": "major",
       "status": "fixed",
       "fingerprint": "budget-unknown-usage",
-      "detail": "TaskBudget keeps missing usage as an unknown reservation and fails closed; no zero-refund path."
+      "detail": "Missing or malformed usage leaves the reservation unknown and blocks tools, retries, repair edits and later requests; it is never treated as zero or refunded."
     },
     {
       "id": "F3",
       "severity": "major",
       "status": "fixed",
       "fingerprint": "tool-result-orphan",
-      "detail": "Session tool results are projected only after the matching tool call and ContextProjection refuses orphan tool exchanges."
+      "detail": "Session tool results follow their matching call, and ContextProjection rejects orphan, duplicate, missing and out-of-order tool results."
     },
     {
       "id": "F4",
@@ -94,12 +97,66 @@
       "status": "fixed",
       "fingerprint": "command-step-none-policy",
       "detail": "Task-state prompts handle command-only dependency rows without dereferencing a null policy; command evidence remains a separate authority from file evidence."
+    },
+    {
+      "id": "F6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "budget-known-usage-headroom",
+      "detail": "Known input/output usage replaces the input/output estimate against whole-task headroom; an actual overrun remains recorded and blocks later work."
+    },
+    {
+      "id": "F7",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "budget-resume-reset",
+      "detail": "Budgeted report/checkpoint resume is refused before work until a historical ledger can be bound; unbudgeted resume remains available."
+    },
+    {
+      "id": "F8",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "memory-envelope-force-first",
+      "detail": "Memory result selection budgets whole records against the final JSON envelope and can omit every unfit record instead of forcing one oversized match."
+    },
+    {
+      "id": "F9",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "budget-transport-unknown",
+      "detail": "A budgeted provider transport failure marks usage unknown and cannot consume a fresh retry or fallback allowance."
+    },
+    {
+      "id": "F10",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "malformed-usage-reserved-state",
+      "detail": "Malformed provider usage is validated before arithmetic, marks the shared ledger unknown, and refuses subsequent reservations."
     }
   ],
-  "candidate_sha": "9f29cf5294d9aefa230ea77c64be082e3fd9ed7e",
-  "human_sign_off": {
+  "reviewed_source_sha": "fad7a96ff85f3317d99961caf4ab981a00e234d5",
+  "original_human_sign_off": {
     "date": "2026-11-03",
     "candidate_sha": "9f29cf5294d9aefa230ea77c64be082e3fd9ed7e",
-    "scope": "Land the runtime candidate on main; no tag, Release, package upload or real provider run."
-  }
+    "scope": "Land the runtime candidate on main; no tag, Release, package upload or real provider run.",
+    "status": "superseded_by_code_change",
+    "reason": "The hardening commits changed product behavior after the original candidate sign-off."
+  },
+  "landing_sign_off": {
+    "status": "required",
+    "scope": "The exact final descendant containing this review record; no tag, Release, package upload or real provider run."
+  },
+  "reviewed_evidence": [
+    "CPython 3.9.6: python3 -m unittest discover -s tests -v; 1111 tests OK in 76.836 seconds, exit 0.",
+    "Ruff 0.17.3: ruff check --select E9,F pocketchat tests; exit 0.",
+    "The final review-cap closure inspected only d3be73c..fad7a96 and found the malformed-usage finding closed with no new blocker in that two-file diff.",
+    "No real provider, package build/install, tag, Release or package-index action was run."
+  ],
+  "unverified": [
+    "Real providers and cross-platform behavior.",
+    "Persisted task-budget resume; budgeted resume currently refuses.",
+    "Live Session wiring for the standalone layered context projector.",
+    "Build/install artifacts and publication.",
+    "Human sign-off for the new final candidate."
+  ]
 }
