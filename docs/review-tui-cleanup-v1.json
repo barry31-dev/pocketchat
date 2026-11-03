@@ -1,0 +1,43 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "tests/test_agent.py",
+    "docs/review-tui-cleanup-v1.json"
+  ],
+  "categories": [
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "tui-worker-cleanup-race",
+      "detail": "apply_key starts the asynchronous TUI worker; the test then ended and TemporaryDirectory cleanup could race with worker writes. Added the existing _wait_for_tui_idle synchronization before assertions."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "unittest-mock-not-imported",
+      "detail": "test_agent relied on unittest.mock being imported as a side effect of another test. It now imports mock explicitly; the file runs successfully in isolation."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "tests/test_agent.py",
+    "docs/review-tui-cleanup-v1.json"
+  ],
+  "reviewed_evidence": [
+    "Root cause from PR #2 run 41715676648: Linux Python 3.9 failed with TemporaryDirectory cleanup ENOTEMPTY after test_tui_real_terminal_enter_sends_but_raw_ctrl_j_does_not.",
+    "The target test applies the Enter key, which starts the asynchronous TUI worker. The test now waits for worker exit and busy=false before leaving the test body.",
+    "test_agent.py now imports mock explicitly; it no longer depends on another test having imported unittest.mock.",
+    "python3 -m unittest discover -s tests -p test_agent.py -v: 86 tests OK; target test passed; ruff E9/F passed; git diff --check passed."
+  ],
+  "unverified_scope": "Only the local macOS CPython 3.13.9 test entry was run. Linux/Windows CI, the post-merge PR #2 tree, real providers, packaging/install, tags and Releases were not run. This is test-only maintenance and adds no product behavior."
+}

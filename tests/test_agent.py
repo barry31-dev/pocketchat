@@ -12,6 +12,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -156,7 +157,7 @@ class AgentCommandTests(unittest.TestCase):
         from pocketchat import cli as cli_module
 
         unavailable = getattr(cli_module, "TUIUnavailable", RuntimeError)
-        with unittest.mock.patch.object(
+        with mock.patch.object(
                 cli_module, "run_tui", side_effect=unavailable("no curses")):
             result = hp.run_cli(
                 ["--config", str(self.config)],
@@ -1041,6 +1042,7 @@ class AgentCommandTests(unittest.TestCase):
         tui.workspace = self.base
         state = InputState(text="hello", cursor=5)
         self.assertEqual(apply_key(tui, state, "\n"), "send")
+        self._wait_for_tui_idle(tui)
         self.assertEqual(tui.transcript[0], ("you", "hello"))
         state = InputState(text="line one", cursor=8)
         self.assertEqual(apply_key(tui, state, 10), "continue")
