@@ -92,7 +92,8 @@ Windows 当前显式 `unsupported_platform`，不继承普通 CLI 的目标平�
 
 ## 未发布：additive 记忆检索核心
 
-`pocketchat-memory-retrieval.v1` 是纯离线候选结果形状。它不改变已发布的
-`memory` 命令，也不改变默认 `memory_search` 子串行为；在后续切片接线并发布前，
-它不是稳定 CLI 面。固定分词、准入、排序、双预算 excerpt、遗漏计数与 stale-cursor
+`pocketchat-memory-retrieval.v1` 是新增的离线检索表面。旧 `memory` 命令和默认
+`memory_search` 子串行为不变。`memory recall --dry-run` 只读；只有同时显式开启
+layered projection 与 `memory_recall_enabled`，并给出 v2 store 和 workspace id，
+召回内容才会进入请求。固定分词、准入、排序、双预算 excerpt、遗漏计数与 stale-cursor
 拒绝规则见 [memory-retrieval.zh-CN.md](memory-retrieval.zh-CN.md)。

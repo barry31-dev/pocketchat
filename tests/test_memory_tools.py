@@ -8,7 +8,11 @@ import unittest
 from pathlib import Path
 
 from pocketchat.memory import add_memory
+from pocketchat.memory_migration import (
+    accept_v2_record, migrate_v1_to_v2, read_v2_store,
+)
 from pocketchat.provider import build_payload
+from pocketchat.service import context_preview
 from pocketchat.session import Session
 
 
@@ -73,6 +77,7 @@ class MemoryToolTests(unittest.TestCase):
             "provider_adapter": adapter,
             "tool_memory_search_enabled": True,
             "tool_memory_search_max_results": 2,
+            "context_projection_max_bytes": 65536,
         }
 
     def test_payload_offers_only_memory_search_when_enabled(self):
@@ -193,6 +198,81 @@ class MemoryToolTests(unittest.TestCase):
         with self.assertRaises(TaskBudgetError) as caught:
             session.task_budget.reserve(1, request_id="after_failure")
         self.assertEqual("task_token_usage_unknown", caught.exception.error_type)
+
+    def _accepted_v2_store(self):
+        store = Path(".pocketchat/memory.v2.jsonl")
+        migrate_v1_to_v2(
+            self.root, workspace_id="workspace-1", out=store)
+        record = read_v2_store(self.root, store)[0]
+        accept_v2_record(
+            self.root, store, record["memory_id"], "operator",
+            verification_status="not_required")
+        return store
+
+    def test_memory_recall_projection_is_opt_in_and_workspace_bound(self):
+        store = self._accepted_v2_store()
+        adapter = FakeMemoryAdapter([text_response()])
+        config = self.config(adapter)
+        config.update({
+            "context_projection_enabled": True,
+            "memory_recall_enabled": True,
+            "memory_recall_store": str(store),
+            "memory_recall_workspace_id": "workspace-1",
+        })
+        session = Session(config, self.root / "traces" / "recall.jsonl",
+                          "run_recall", api_key="secret-tool")
+        self.assertEqual("completed", session.run(["answer"]))
+        self.assertIn("memory_recall", str(adapter.calls[0]))
+        self.assertIn("the answer is 42", str(adapter.calls[0]))
+
+    def test_memory_recall_is_absent_when_disabled(self):
+        self._accepted_v2_store()
+        adapter = FakeMemoryAdapter([text_response()])
+        config = self.config(adapter)
+        config["context_projection_enabled"] = True
+        session = Session(config, self.root / "traces" / "no-recall.jsonl",
+                          "run_no_recall", api_key="secret-tool")
+        self.assertEqual("completed", session.run(["answer"]))
+        self.assertNotIn("memory_recall", str(adapter.calls[0]))
+
+    def test_context_preview_matches_enabled_recall_projection(self):
+        store = self._accepted_v2_store()
+        adapter = FakeMemoryAdapter([text_response()])
+        config = self.config(adapter)
+        config.update({
+            "context_projection_enabled": True,
+            "memory_recall_enabled": True,
+            "memory_recall_store": str(store),
+            "memory_recall_workspace_id": "workspace-1",
+        })
+        session_path = self.root / "sessions" / "recall.jsonl"
+        session_path.parent.mkdir()
+        session = Session(config, self.root / "traces" / "recall-preview.jsonl",
+                          "run_recall_preview", session_path=session_path,
+                          api_key="secret-tool")
+        self.assertEqual("completed", session.run(["answer"]))
+        preview = context_preview(
+            session_path, sessions_dir=str(self.root / "sessions"),
+            workspace=self.root, pending_prompt="answer")
+        self.assertIn("memory_recall",
+                      str(preview["preview_messages"]))
+        self.assertEqual(1, preview["context_projection"]["memory_recall"]
+                         ["evidence_count"])
+
+    def test_memory_recall_does_not_cross_workspace_ids(self):
+        store = self._accepted_v2_store()
+        adapter = FakeMemoryAdapter([text_response()])
+        config = self.config(adapter)
+        config.update({
+            "context_projection_enabled": True,
+            "memory_recall_enabled": True,
+            "memory_recall_store": str(store),
+            "memory_recall_workspace_id": "workspace-2",
+        })
+        session = Session(config, self.root / "traces" / "wrong-workspace.jsonl",
+                          "run_wrong_workspace", api_key="secret-tool")
+        self.assertEqual("completed", session.run(["answer"]))
+        self.assertNotIn("the answer is 42", str(adapter.calls[0]))
 
     def test_memory_search_is_disabled_by_default(self):
         config = self.config(FakeMemoryAdapter([]))

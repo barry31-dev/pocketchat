@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import copy
+import hashlib
 import json
 import time
 from datetime import datetime, timezone
@@ -30,6 +31,9 @@ from .request_admission import AdmissionError, admit_for_config
 from .task_budget import TaskBudgetError
 from .tool_results import ResultProjectionError, project_result
 from .memory import search_memory
+from .memory_migration import MemoryMigrationError, read_v2_store
+from .memory_retrieval import (MemoryRetrievalError, recall_context_message,
+                               recall_evidence_items, retrieve_memories)
 from .tools import (ToolError, ToolPermissionError,
                     execute_read_file, execute_write_file)
 from .request import (CredentialInRequestError, canonical_bytes,
@@ -247,6 +251,7 @@ class Session:
         self.last_reason = ""
         self._context_projection: Optional[Dict[str, Any]] = None
         self._projection_sidecar = ""
+        self._memory_recall: Optional[Dict[str, Any]] = None
 
     def config_summary(self) -> Dict[str, Any]:
         """The run configuration as the recorder sees it.
@@ -280,6 +285,17 @@ class Session:
                 "context_projection_enabled") is True,
             "context_projection_max_bytes": self.config.get(
                 "context_projection_max_bytes", 65536),
+            "memory_recall_enabled": self.config.get(
+                "memory_recall_enabled") is True,
+            "memory_recall_store": self.config.get("memory_recall_store"),
+            "memory_recall_workspace_id":
+                self.config.get("memory_recall_workspace_id"),
+            "memory_recall_max_results": self.config.get(
+                "memory_recall_max_results", 20),
+            "memory_recall_max_excerpt_bytes": self.config.get(
+                "memory_recall_max_excerpt_bytes", 4096),
+            "memory_recall_max_recall_tokens": self.config.get(
+                "memory_recall_max_recall_tokens", 1024),
             "tools": tool_offer_summary(self.config),
             "verbose": self.verbose,
             "pocketchat_version": pocketchat.__version__,
@@ -405,6 +421,7 @@ class Session:
         self.turn_attempt_count = 0
         self._context_projection = None
         self._projection_sidecar = ""
+        self._memory_recall = None
         if self.config.get("requires_api_key", True) is not False and not self.api_key:
             raise SessionError(
                 "missing_credential",
@@ -609,6 +626,8 @@ class Session:
                 if self._projection_sidecar:
                     started_payload["context_projection_sidecar"] = (
                         self._projection_sidecar)
+                if self._memory_recall is not None:
+                    started_payload["memory_recall"] = self._memory_recall
             self._task_before_step("model")
             started = self.recorder.append("model.request.started", started_payload)
             started_at = utc_now()
@@ -1006,6 +1025,8 @@ class Session:
                                   snapshot_digest: str) -> None:
         """Write a metadata-only sidecar bound to the exact request snapshot."""
         manifest = dict(self._context_projection)
+        if self._memory_recall is not None:
+            manifest["memory_recall"] = self._memory_recall
         manifest["request_sha256"] = snapshot_digest
         manifest["request_snapshot"] = Path(
             os.path.relpath(snapshot, self.trace_path.parent)).as_posix()
@@ -1055,6 +1076,51 @@ class Session:
             # it. Failing the run here would lose a turn that succeeded.
             self.session_file = None
 
+    def _memory_recall_projection(self, prompt: str):
+        """Build one explicit opt-in recall message and its evidence metadata."""
+        if self.config.get("context_projection_enabled") is not True \
+                or self.config.get("memory_recall_enabled") is not True:
+            return [], [], None
+        store = self.config.get("memory_recall_store")
+        workspace_id = self.config.get("memory_recall_workspace_id")
+        if not isinstance(store, str) or not store.strip() \
+                or not isinstance(workspace_id, str) or not workspace_id.strip():
+            raise SessionError(
+                "invalid_memory_recall",
+                "memory recall requires an explicit store and workspace id")
+        workspace = Path.cwd()
+        if self.config.get("task_workspace_root"):
+            workspace = Path(self.config["task_workspace_root"])
+        elif self.trace_path.parent.name == "traces":
+            workspace = self.trace_path.parent.parent
+        try:
+            records = read_v2_store(workspace, Path(store))
+            result = retrieve_memories(
+                records, prompt, workspace_id=workspace_id,
+                now=datetime.now(timezone.utc),
+                max_results=int(self.config.get(
+                    "memory_recall_max_results", 20)),
+                max_excerpt_bytes=int(self.config.get(
+                    "memory_recall_max_excerpt_bytes", 4096)),
+                max_recall_tokens=int(self.config.get(
+                    "memory_recall_max_recall_tokens", 1024)))
+        except (MemoryMigrationError, MemoryRetrievalError, OSError, ValueError) as exc:
+            raise SessionError("memory_recall_failed", str(exc)) from exc
+        evidence = recall_evidence_items(result)
+        messages = [recall_context_message(result)] if evidence else []
+        summary = {
+            "schema_version": result["schema_version"],
+            "query_sha256": hashlib.sha256(
+                prompt.encode("utf-8")).hexdigest(),
+            "workspace_id": workspace_id,
+            "matched_count": result["matched_count"],
+            "selected_count": result["selected_count"],
+            "excluded_count": len(result["excluded"]),
+            "evidence_count": len(evidence),
+            "status": result["status"],
+        }
+        return messages, evidence, summary
+
     def _context_with_budget(self, prompt: str) -> List[Dict[str, str]]:
         """Return the context to send and record the selection it came from.
 
@@ -1078,15 +1144,17 @@ class Session:
                 raise SessionError(
                     "invalid_context_projection",
                     "context_projection_max_bytes must be a positive integer")
+            recall_messages, recall_evidence, recall_summary = \
+                self._memory_recall_projection(prompt)
             instructions = [message for message in self.messages
-                            if message.get("role") == "system"]
+                            if message.get("role") == "system"] + recall_messages
             history = [message for message in self.messages
                        if message.get("role") != "system"]
             pending = [{"role": "user", "content": prompt}]
             try:
                 projected = project_context(
                     {"instructions": instructions, "messages": history,
-                     "evidence": []},
+                     "evidence": recall_evidence},
                     max_chars=budget,
                     keep_recent_turns=1,
                     pending_messages=pending)
@@ -1101,6 +1169,7 @@ class Session:
                                                projection_budget))
             projected_messages = projected["messages"]
             self._context_projection = projected["manifest"]
+            self._memory_recall = recall_summary
             projected_history = [
                 message for message in projected_messages
                 if message.get("role") != "system"][:-len(pending)]

@@ -100,6 +100,40 @@ class ProfileWriteCliTests(unittest.TestCase):
         self.assertIs(True, profile["context_projection_enabled"])
         self.assertEqual(32768, profile["context_projection_max_bytes"])
 
+    def test_memory_recall_requires_store_and_workspace(self):
+        result = self._run(
+            "set", "bad-recall", "--base-url", "https://new.invalid/v1",
+            "--model", "bad-recall-model", "--api-key-env", "NEW_KEY",
+            "--memory-recall", "--json")
+        self.assertEqual(2, result.returncode)
+        payload = json.loads(result.stdout)
+        self.assertEqual("invalid profile", payload["error"])
+        self.assertIn("memory_recall_enabled", payload["message"])
+        self.assertNotIn("bad-recall",
+                         json.loads(self.config.read_text(encoding="utf-8"))
+                         ["profiles"])
+
+    def test_set_carries_memory_recall_fields(self):
+        result = self._run(
+            "set", "recall", "--base-url", "https://new.invalid/v1",
+            "--model", "recall-model", "--api-key-env", "NEW_KEY",
+            "--context-projection", "--memory-recall",
+            "--memory-recall-store", ".pocketchat/memory.v2.jsonl",
+            "--memory-recall-workspace-id", "workspace-1",
+            "--memory-recall-max-results", "3",
+            "--memory-recall-max-excerpt-bytes", "256",
+            "--memory-recall-max-tokens", "64", "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        raw = json.loads(self.config.read_text(encoding="utf-8"))
+        profile = raw["profiles"]["recall"]
+        self.assertIs(True, profile["memory_recall_enabled"])
+        self.assertEqual(".pocketchat/memory.v2.jsonl",
+                         profile["memory_recall_store"])
+        self.assertEqual("workspace-1", profile["memory_recall_workspace_id"])
+        self.assertEqual(3, profile["memory_recall_max_results"])
+        self.assertEqual(256, profile["memory_recall_max_excerpt_bytes"])
+        self.assertEqual(64, profile["memory_recall_max_recall_tokens"])
+
     def test_set_carries_token_budget_fields(self):
         result = self._run(
             "set", "new", "--base-url", "https://new.invalid/v1",

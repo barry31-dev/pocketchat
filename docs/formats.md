@@ -104,7 +104,9 @@ body: the request snapshot remains the exact body sent.
 
 The sidecar binds the request snapshot digest, selected message count, source
 and projection SHA-256 values, evidence references, omission reasons and the
-64 KiB sidecar limit. It is created exclusively beside request snapshots and
+64 KiB sidecar limit. Opt-in memory recall adds a `memory_recall` summary with
+the query digest and selected/excluded counts; the request snapshot remains the
+authority for the exact excerpts sent. It is created exclusively beside request snapshots and
 is never rewritten. If request snapshot or sidecar creation fails on the
 projection path, no request is sent. A sidecar is evidence for the selection
 that produced a request; it is not task acceptance or publication proof.

@@ -3,9 +3,11 @@
 Owner: `pocketchat.memory_retrieval`. Result version:
 `pocketchat-memory-retrieval.v1`.
 
-This is a pure core over validated `pocketchat-memory.v2` records. It does not
-read a store, call a provider, wire a CLI, inject context, or change the legacy
-`memory search` substring path.
+This is a pure core over validated `pocketchat-memory.v2` records. The core
+does not read a store or call a provider. This slice adds an explicit read-only
+`memory recall --dry-run` command and an opt-in Session projection path; it does
+not change the legacy `memory search` substring path or inject memory when the
+recall mode is disabled.
 
 ## Admission before matching
 
@@ -55,5 +57,23 @@ The result reports items skipped before the cursor and omissions caused by
 `max_results`, byte budget and token budget separately.
 
 The core is offline and deterministic. It is not semantic relevance, a vector
-index, secure deletion, fact verification, release evidence or authorization to
-inject recalled data into a request.
+index, secure deletion, fact verification or release evidence. Automatic
+injection happens only when both layered context projection and
+`memory_recall_enabled` are explicitly enabled with an exact v2 store and
+workspace id; otherwise recall remains a dry-run/read-only surface.
+
+## Explicit recall and projection wiring
+
+`pocketchat memory recall <query> --workspace-id <id> --store <path> --dry-run --json`
+reads one workspace-confined v2 store and returns the same selected items,
+exclusions, budgets and cursor semantics as the core. It never mutates the
+store. The JSON response includes a bounded `context_message` preview containing
+only selected excerpts and metadata.
+
+When a profile explicitly enables both `context_projection_enabled` and
+`memory_recall_enabled`, Session uses the current prompt as the recall query and
+prepends one bounded `memory_recall` system message to the projected request.
+The projection sidecar and request-start metadata bind the query digest and
+selection counts. Cross-workspace records are excluded before ranking. If either
+mode is disabled, no recalled content is injected. `context preview` performs
+the same selection for the supplied pending prompt.
