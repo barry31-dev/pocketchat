@@ -145,6 +145,22 @@ class MemoryToolTests(unittest.TestCase):
         self.assertNotIn("tool.call.started", [event["type"] for event in events])
         self.assertIn("task_token_usage_unknown", trace.read_text())
 
+    def test_malformed_usage_blocks_the_shared_task_ledger(self):
+        from pocketchat.task_budget import TaskBudget, TaskBudgetError
+        response = text_response()
+        response["usage"] = {"input_tokens": "bad", "output_tokens": 1}
+        adapter = FakeMemoryAdapter([response])
+        trace = self.root / "traces" / "malformed-usage.jsonl"
+        session = Session(self.config(adapter), trace,
+                          "run_malformed_usage", api_key="secret-tool")
+        session.task_budget = TaskBudget(limit_tokens=10000)
+        self.assertEqual("failed", session.run(["short prompt"]))
+        self.assertEqual(1, len(adapter.calls))
+        with self.assertRaises(TaskBudgetError) as caught:
+            session.task_budget.reserve(1, request_id="after_malformed_usage")
+        self.assertEqual("task_token_usage_unknown", caught.exception.error_type)
+        self.assertIn("task_token_usage_unknown", trace.read_text())
+
     def test_task_reservation_includes_the_configured_output_reserve(self):
         from pocketchat.task_budget import TaskBudget
         adapter = FakeMemoryAdapter([text_response()])

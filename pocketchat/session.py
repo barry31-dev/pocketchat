@@ -625,8 +625,31 @@ class Session:
                         pass  # Keep the unknown reservation and the interrupt.
                 raise
 
-            usage = response["usage"]
-            actual_turn = usage["input_tokens"] + usage["output_tokens"]
+            usage = response.get("usage")
+            try:
+                input_tokens = usage["input_tokens"]
+                output_tokens = usage["output_tokens"]
+                if (isinstance(input_tokens, bool)
+                        or not isinstance(input_tokens, int)
+                        or input_tokens < 0
+                        or isinstance(output_tokens, bool)
+                        or not isinstance(output_tokens, int)
+                        or output_tokens < 0):
+                    raise ValueError("usage tokens must be non-negative integers")
+            except (KeyError, TypeError, ValueError) as exc:
+                if self.task_budget is not None:
+                    try:
+                        self.task_budget.settle(
+                            self.task_budget_request_id, input_tokens=0,
+                            output_tokens=0, reported=False)
+                    except TaskBudgetError as budget_error:
+                        raise SessionError(
+                            budget_error.error_type,
+                            str(budget_error)) from exc
+                raise SessionError(
+                    "invalid_provider_response",
+                    "provider returned malformed token usage") from exc
+            actual_turn = input_tokens + output_tokens
             payload: Dict[str, Any] = {
                 "model": config["model"],
                 "usage": usage,
@@ -654,8 +677,8 @@ class Session:
                 try:
                     self.task_budget.settle(
                         self.task_budget_request_id,
-                        input_tokens=usage["input_tokens"],
-                        output_tokens=usage["output_tokens"],
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
                         reported=bool(response.get("usage_reported", False)),
                     )
                 except TaskBudgetError as exc:
@@ -675,8 +698,8 @@ class Session:
                     "token_budget_exceeded",
                     "reported session tokens would reach %d, above max_session_tokens %d"
                     % (used_tokens + turn_usage + actual_turn, session_budget))
-            self.total_input_tokens += usage["input_tokens"]
-            self.total_output_tokens += usage["output_tokens"]
+            self.total_input_tokens += input_tokens
+            self.total_output_tokens += output_tokens
             turn_usage += actual_turn
             self._task_after_step("model", "completed",
                                   detail=config["model"])
