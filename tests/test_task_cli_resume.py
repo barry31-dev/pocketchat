@@ -108,6 +108,8 @@ class TaskExecResumeTests(unittest.TestCase):
         self.spec_path.write_text(json.dumps(self.spec_payload), encoding="utf-8")
         self.plan_path.write_text(json.dumps(self.plan.source), encoding="utf-8")
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "budgeted resume requires secure descriptor-relative reads")
     def test_budgeted_report_resume_restores_the_persisted_ledger(self):
         self._enable_task_budget()
         _, report = self.stop()
@@ -130,6 +132,8 @@ class TaskExecResumeTests(unittest.TestCase):
             {row["request_id"] for row in persisted["requests"]}
             <= {row["request_id"] for row in successor["task_budget"]["requests"]})
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "budgeted resume requires secure descriptor-relative reads")
     def test_budgeted_checkpoint_resume_restores_the_persisted_ledger(self):
         self._enable_task_budget()
         _, report = self.stop()
@@ -149,6 +153,8 @@ class TaskExecResumeTests(unittest.TestCase):
         successor = json.loads((self.root / payload["reports"][0]).read_text())
         self.assertEqual(4, len(successor["task_budget"]["requests"]))
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "budgeted resume requires secure descriptor-relative reads")
     def test_budgeted_resume_rejects_missing_tampered_or_mismatched_ledger(self):
         self._enable_task_budget()
         _, report = self.stop()

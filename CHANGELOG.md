@@ -11,6 +11,9 @@ package-index publication.
   uses `msvcrt` byte-range locks while POSIX retains `fcntl`, both are loaded
   only on their supported platform, and a failed lock attempt is not treated
   as held during cleanup.
+- Keep task-state artifact references portable across Windows and POSIX, and
+  gate recovery-resume regressions on the documented secure-reader support
+  instead of treating `unsupported_platform` as a product failure.
 - Harden the runtime admission candidate after an offline pre-merge review:
   known usage is charged against whole-task headroom rather than just the input
   estimate, missing usage blocks tools/repair/retries, and output reservations
