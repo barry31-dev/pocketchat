@@ -77,6 +77,20 @@ class ToolContractTests(unittest.TestCase):
             "Workspace-relative new path",
             CONTRACTS["write_file"].parameters["properties"]["path"]["description"])
 
+    def test_argument_diagnostics_are_bounded_and_encoding_safe(self):
+        cases = (
+            {"path": "facts.txt", "x" * 20000: True},
+            {"path": "facts.txt", "\ud800": True},
+        )
+        for arguments in cases:
+            with self.subTest(arguments=len(str(arguments))):
+                with self.assertRaises(ToolContractError) as caught:
+                    parse_arguments("read_file", arguments)
+                diagnostic = str(caught.exception)
+                self.assertLess(len(diagnostic), 300)
+                self.assertTrue(diagnostic.isascii())
+                diagnostic.encode("utf-8")
+
     def test_task_policy_tools_are_imported_from_the_contract(self):
         payload = {
             "schema_version": "pocketchat-task-policy.v1",

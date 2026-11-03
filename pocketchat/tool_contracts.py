@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Tuple
 
 MAX_ARGUMENT_BYTES = 64 * 1024
+MAX_DIAGNOSTIC_CHARS = 160
 
 
 class ToolContractError(ValueError):
@@ -122,8 +123,15 @@ def parse_arguments(name: str, value: Any) -> Dict[str, str]:
         raise ToolContractError("%s arguments must be an object" % name)
     unknown = sorted(key for key in value if key not in contract.argument_types)
     if unknown:
-        raise ToolContractError("%s has unknown argument(s): %s"
-                                % (name, ", ".join(unknown)))
+        shown = ", ".join(str(key).encode(
+            "ascii", "backslashreplace").decode("ascii")[:64]
+            for key in unknown[:4])
+        if len(unknown) > 4:
+            shown += ", ..."
+        message = "%s has unknown argument(s): %s" % (name, shown)
+        if len(message) > MAX_DIAGNOSTIC_CHARS:
+            message = message[:MAX_DIAGNOSTIC_CHARS - 3] + "..."
+        raise ToolContractError(message)
     missing = [key for key in contract.required if key not in value]
     if missing:
         raise ToolContractError("%s is missing argument(s): %s"
