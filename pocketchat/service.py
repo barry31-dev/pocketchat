@@ -18,6 +18,8 @@ after printing half the conversation.
 
 from __future__ import annotations
 
+import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -28,6 +30,9 @@ from .queries import (QueryError, collect_history, diff_sessions,  # noqa: F401
                       render_search_lines, search_messages)
 from .context import ContextBudgetExceeded, context_chars, preview_budget
 from .context_projection import ContextProjectionError, project_context
+from .memory_migration import MemoryMigrationError, read_v2_store
+from .memory_retrieval import (MemoryRetrievalError, recall_context_message,
+                               recall_evidence_items, retrieve_memories)
 from .provider import estimate_tokens
 from .sessions import (SessionFileError, looks_like_session,
                        looks_like_trace, read_context_messages,
@@ -149,6 +154,45 @@ def _trace_config_summary(trace: Optional[Path]) -> Dict[str, Any]:
     return {}
 
 
+def _memory_recall_preview(config: Dict[str, Any], root: Path,
+                           prompt: Optional[str]):
+    if (config.get("context_projection_enabled") is not True
+            or config.get("memory_recall_enabled") is not True
+            or prompt is None):
+        return [], [], None
+    store = config.get("memory_recall_store")
+    workspace_id = config.get("memory_recall_workspace_id")
+    if not isinstance(store, str) or not store.strip() \
+            or not isinstance(workspace_id, str) or not workspace_id.strip():
+        raise SessionFileError(
+            "memory recall requires an explicit store and workspace id")
+    try:
+        result = retrieve_memories(
+            read_v2_store(root, Path(store)), prompt,
+            workspace_id=workspace_id,
+            now=datetime.datetime.now(datetime.timezone.utc),
+            max_results=int(config.get("memory_recall_max_results", 20)),
+            max_excerpt_bytes=int(config.get(
+                "memory_recall_max_excerpt_bytes", 4096)),
+            max_recall_tokens=int(config.get(
+                "memory_recall_max_recall_tokens", 1024)))
+    except (MemoryMigrationError, MemoryRetrievalError, OSError, ValueError) as exc:
+        raise SessionFileError("memory recall failed: %s" % exc) from exc
+    evidence = recall_evidence_items(result)
+    summary = {
+        "schema_version": result["schema_version"],
+        "query_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+        "workspace_id": workspace_id,
+        "matched_count": result["matched_count"],
+        "selected_count": result["selected_count"],
+        "excluded_count": len(result["excluded"]),
+        "evidence_count": len(evidence),
+        "status": result["status"],
+    }
+    messages = [recall_context_message(result)] if evidence else []
+    return messages, evidence, summary
+
+
 def context_preview(target, sessions_dir: str = "sessions",
                     workspace=None, budget_chars: Optional[int] = None,
                     keep_recent: int = 2,
@@ -165,6 +209,7 @@ def context_preview(target, sessions_dir: str = "sessions",
             raise SessionFileError("pending prompt must be non-empty")
         pending = [{"role": "user", "content": pending_prompt}]
     config = _trace_config_summary(trace)
+    root = Path(workspace) if workspace is not None else Path.cwd()
     if budget_chars is None:
         value = config.get("max_context_chars")
         budget_chars = (value if isinstance(value, int)
@@ -172,20 +217,24 @@ def context_preview(target, sessions_dir: str = "sessions",
                         else 24000)
     projection = None
     if config.get("context_projection_enabled") is True:
+        recall_messages, recall_evidence, recall_summary = \
+            _memory_recall_preview(config, root, pending_prompt)
         selected = [message for message in messages
-                    if message.get("role") == "system"]
+                    if message.get("role") == "system"] + recall_messages
         turns = [message for message in messages
                  if message.get("role") != "system"]
         try:
             projected = project_context(
                 {"instructions": selected, "messages": turns,
-                 "evidence": []}, max_chars=budget_chars,
+                 "evidence": recall_evidence}, max_chars=budget_chars,
                 keep_recent_turns=keep_recent,
                 pending_messages=pending)
         except ContextProjectionError as exc:
             raise ContextBudgetExceeded(str(exc)) from exc
         selected_messages = projected["messages"]
         projection = projected["manifest"]
+        if recall_summary is not None:
+            projection["memory_recall"] = recall_summary
         preview = {
             "total_chars": context_chars(messages),
             "budget_chars": int(budget_chars),
@@ -212,7 +261,6 @@ def context_preview(target, sessions_dir: str = "sessions",
         selected_messages = [
             message for index, message in enumerate(messages)
             if index in kept]
-    root = Path(workspace) if workspace is not None else Path.cwd()
     result = {
         "ok": True,
         "schema_version": "1",
@@ -229,6 +277,9 @@ def context_preview(target, sessions_dir: str = "sessions",
     }
     if projection is not None:
         result["context_projection"] = projection
+    if config.get("memory_recall_enabled") is True and pending_prompt is not None:
+        result["memory_recall"] = projection.get("memory_recall") \
+            if projection is not None else None
     return result
 
 def show_record(target, sessions_dir: str = "sessions",

@@ -13,6 +13,7 @@ the config does not leave a half-written run behind.
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -40,6 +41,8 @@ from .memory import (MemoryError, add_memory, list_memory, remove_memory,
 from .memory_migration import (MemoryMigrationError, accept_v2_record,
                                forget_v2_record, migrate_v1_to_v2,
                                read_v2_store, retire_v2_record)
+from .memory_retrieval import (MemoryRetrievalError, recall_context_message,
+                               retrieve_memories)
 from .queries import (QueryError, collect_history, diff_sessions,
                       render_diff_lines, render_history_lines,
                       render_search_lines, search_messages)
@@ -337,6 +340,21 @@ def _parser() -> argparse.ArgumentParser:
     memory_forget.add_argument("--store", type=Path, default=None,
                                help="workspace-relative v2 store")
     memory_forget.add_argument("--json", action="store_true", dest="as_json")
+    memory_recall = memory_sub.add_parser(
+        "recall", help="dry-run deterministic recall from an explicit v2 store")
+    memory_recall.add_argument("query", help="recall query")
+    memory_recall.add_argument("--workspace-id", required=True,
+                               help="stable workspace identity to admit")
+    memory_recall.add_argument("--store", type=Path, required=True,
+                               help="workspace-relative v2 store")
+    memory_recall.add_argument("--max-results", type=int, default=20)
+    memory_recall.add_argument("--max-excerpt-bytes", type=int, default=4096)
+    memory_recall.add_argument("--max-recall-tokens", type=int, default=1024)
+    memory_recall.add_argument("--cursor", default=None)
+    memory_recall.add_argument("--now", default=None,
+                               help="RFC 3339 UTC expiry cutoff")
+    memory_recall.add_argument("--dry-run", action="store_true", dest="dry_run")
+    memory_recall.add_argument("--json", action="store_true", dest="as_json")
 
     delegate = subparsers.add_parser(
         "delegate", help="run a bounded, serial delegation batch")
@@ -672,6 +690,30 @@ def _parser() -> argparse.ArgumentParser:
                              default=None,
                              help="byte bound for projected messages "
                                   "(default: 65536)")
+    memory_recall_group = profile_set.add_mutually_exclusive_group()
+    memory_recall_group.add_argument("--memory-recall", action="store_true",
+                                     dest="memory_recall_enabled", default=None,
+                                     help="enable opt-in memory recall projection")
+    memory_recall_group.add_argument("--no-memory-recall", action="store_false",
+                                     dest="memory_recall_enabled",
+                                     help="disable automatic memory recall")
+    profile_set.add_argument("--memory-recall-store", default=None,
+                             dest="memory_recall_store",
+                             help="workspace-relative v2 store for recall")
+    profile_set.add_argument("--memory-recall-workspace-id", default=None,
+                             dest="memory_recall_workspace_id",
+                             help="workspace identity admitted for recall")
+    profile_set.add_argument("--memory-recall-max-results", type=int,
+                             default=None, dest="memory_recall_max_results",
+                             help="maximum recalled memories (default: 20)")
+    profile_set.add_argument("--memory-recall-max-excerpt-bytes", type=int,
+                             default=None,
+                             dest="memory_recall_max_excerpt_bytes",
+                             help="total recalled excerpt byte budget")
+    profile_set.add_argument("--memory-recall-max-tokens", type=int,
+                             default=None,
+                             dest="memory_recall_max_recall_tokens",
+                             help="total recalled estimated-token budget")
     tool_read_group = profile_set.add_mutually_exclusive_group()
     tool_read_group.add_argument("--tool-read", action="store_true",
                                  dest="tool_read_enabled", default=None,
@@ -1912,6 +1954,10 @@ def _cmd_profile_write(args: argparse.Namespace) -> int:
                 "tool_call_max_count", "tool_result_max_bytes",
                 "context_projection_enabled",
                 "context_projection_max_bytes",
+                "memory_recall_enabled", "memory_recall_store",
+                "memory_recall_workspace_id", "memory_recall_max_results",
+                "memory_recall_max_excerpt_bytes",
+                "memory_recall_max_recall_tokens",
             ):
                 value = getattr(args, key)
                 if value is not None:
@@ -1982,6 +2028,11 @@ def _cmd_profile_list(args: argparse.Namespace) -> int:
                 record.get("tool_memory_search_max_results"),
             "tool_call_max_count": record.get("tool_call_max_count"),
             "tool_result_max_bytes": record.get("tool_result_max_bytes"),
+            "memory_recall_enabled": bool(
+                record.get("memory_recall_enabled", False)),
+            "memory_recall_store": record.get("memory_recall_store"),
+            "memory_recall_workspace_id":
+                record.get("memory_recall_workspace_id"),
         })
 
     if args.as_json:
@@ -2778,6 +2829,36 @@ def _cmd_memory(args: argparse.Namespace) -> int:
             remove_memory(root, args.memory_id)
             result = {"ok": True, "schema_version": "1",
                       "removed": args.memory_id}
+        elif args.memory_command == "recall":
+            if args.now is None:
+                now = datetime.datetime.now(datetime.timezone.utc)
+            else:
+                try:
+                    now = datetime.datetime.fromisoformat(
+                        args.now.replace("Z", "+00:00"))
+                except ValueError as exc:
+                    raise MemoryRetrievalError(
+                        "now must be RFC 3339 UTC",
+                        error_type="invalid_retrieval") from exc
+            retrieval = retrieve_memories(
+                read_v2_store(root, args.store), args.query,
+                workspace_id=args.workspace_id, now=now,
+                max_results=args.max_results,
+                max_excerpt_bytes=args.max_excerpt_bytes,
+                max_recall_tokens=args.max_recall_tokens,
+                cursor=args.cursor)
+            result = {
+                "ok": True,
+                "schema_version": "1",
+                "dry_run": bool(args.dry_run),
+                "items": retrieval["items"],
+                "excluded": retrieval["excluded"],
+                "matched_count": retrieval["matched_count"],
+                "selected_count": retrieval["selected_count"],
+                "status": retrieval["status"],
+                "next_cursor": retrieval["next_cursor"],
+                "context_message": recall_context_message(retrieval),
+            }
         elif args.memory_command == "migrate":
             migration = migrate_v1_to_v2(
                 root, workspace_id=args.workspace_id, out=args.store)
@@ -2809,7 +2890,7 @@ def _cmd_memory(args: argparse.Namespace) -> int:
                       "forgotten": args.memory_id}
         else:
             raise MemoryError("unknown memory command")
-    except (MemoryError, MemoryMigrationError) as exc:
+    except (MemoryError, MemoryMigrationError, MemoryRetrievalError) as exc:
         if args.as_json:
             _print_json_error("memory", str(exc))
         else:
@@ -2821,7 +2902,8 @@ def _cmd_memory(args: argparse.Namespace) -> int:
     items = result.get("items")
     if items is not None:
         for item in items:
-            print("%s  %s" % (item["memory_id"], item["content"]))
+            text = item.get("excerpt", item.get("content", ""))
+            print("%s  %s" % (item["memory_id"], text))
     elif "item" in result:
         print("%s  %s" % (result["item"]["memory_id"],
                          result["item"]["admission_status"]))

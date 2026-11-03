@@ -1,0 +1,97 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/formats.md",
+    "docs/memory-retrieval.md",
+    "docs/memory-retrieval.zh-CN.md",
+    "docs/review-memory-recall-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/cli.py",
+    "pocketchat/config.py",
+    "pocketchat/memory_retrieval.py",
+    "pocketchat/service.py",
+    "pocketchat/session.py",
+    "tests/test_memory.py",
+    "tests/test_memory_retrieval.py",
+    "tests/test_memory_tools.py",
+    "tests/test_profile_admin.py",
+    "tests/test_profiles.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/formats.md",
+    "docs/memory-retrieval.md",
+    "docs/memory-retrieval.zh-CN.md",
+    "docs/review-memory-recall-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/cli.py",
+    "pocketchat/config.py",
+    "pocketchat/memory_retrieval.py",
+    "pocketchat/service.py",
+    "pocketchat/session.py",
+    "tests/test_memory.py",
+    "tests/test_memory_retrieval.py",
+    "tests/test_memory_tools.py",
+    "tests/test_profile_admin.py",
+    "tests/test_profiles.py"
+  ],
+  "reviewed_evidence": [
+    "Red first: the new recall projection and CLI tests failed before implementation with missing recall APIs/arguments; after the smallest implementation the focused target suite passed.",
+    "CPython 3.9.6: tests.test_memory_retrieval, tests.test_memory, tests.test_memory_tools, tests.test_profiles, tests.test_profile_admin, tests.test_context_projection, tests.test_context, tests.test_session, tests.test_cli_json and tests.test_release_process_docs => 153 tests OK (exit 0).",
+    "CPython 3.9.6: tests.test_skeleton and tests.test_package_independence => 23 tests OK (exit 0).",
+    "ruff check --select E9,F pocketchat tests => All checks passed! (exit 0). git diff --check => exit 0.",
+    "Fresh-context diff walk checked the closed retrieval-to-evidence shape, workspace admission, opt-in gating, prompt-bound recall, context-preview parity, profile validation and legacy search preservation; no blocker or major finding was found."
+  ],
+  "unverified_scope": "Full-suite behavior beyond the listed target modules, real v1/v2 stores beyond fixtures, real provider calls, semantic recall quality, concurrent readers, Windows/Linux execution, packaging/installation, tag, Release and package-index actions were not run. The recall query is the current prompt only in the explicitly enabled projection mode; historical replay semantics and checkpoint binding remain for PC-CTXRESUME-1.",
+  "landing_sign_off": {
+    "status": "approved",
+    "scope": "User directive of 2026-11-03: “批准，全力推进项目，把剩下的任务都完成”, interpreted for the current PC-RECALL-1 slice and its exact candidate; no tag, Release, package upload or real provider run."
+  },
+  "review_context": {
+    "why": [
+      "This is a medium-risk Python behavior slice joining deterministic v2 retrieval to explicit CLI dry-run and opt-in context projection."
+    ],
+    "not_doing": [
+      "No provider call, real store migration, vector index, legacy search change, checkpoint/replay binding, release or publication action."
+    ],
+    "diff_walk": [
+      "pocketchat/memory_retrieval.py: adds bounded recall evidence records and one deterministic recall system message without returning full memory content.",
+      "pocketchat/cli.py: adds read-only `memory recall --dry-run` with explicit workspace/store, budgets, cursor and stable JSON output.",
+      "pocketchat/session.py and pocketchat/service.py: inject the recall message only when both projection and recall are enabled, bind selection metadata to the request sidecar, and keep context preview aligned.",
+      "pocketchat/config.py and pocketchat/cli.py profile plumbing: opt-in flags and bounds are validated; missing recall store/workspace is refused.",
+      "tests and bilingual docs: cover red/green behavior, workspace isolation, disabled-mode non-injection, preview parity, profile validation and compatibility wording."
+    ],
+    "static_checks": [
+      "Workspace and admission filtering happen before ranking and Top-K.",
+      "Recall evidence is excerpt-bounded and source-bound to workspace, memory id, revision and full-content digest.",
+      "The legacy memory_search tool and v1 memory commands remain unchanged.",
+      "No recall content is injected when either projection or recall mode is disabled."
+    ],
+    "review_notes": [
+      "This record is self-bound to the product candidate; the landing sign-off above is the user’s 2026-11-03 directive for the current remaining work."
+    ],
+    "gaps": [
+      "PC-CTXRESUME-1 still needs to bind recall/projection artifacts to checkpoints and prove historical replay does not re-search current memory."
+    ]
+  }
+}

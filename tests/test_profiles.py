@@ -341,6 +341,10 @@ class ProfileConfigTests(unittest.TestCase):
                 "output_reserve_tokens", "safety_margin_tokens",
                 "max_output_tokens_supported",
                 "context_projection_enabled", "context_projection_max_bytes",
+                "memory_recall_enabled", "memory_recall_store",
+                "memory_recall_workspace_id", "memory_recall_max_results",
+                "memory_recall_max_excerpt_bytes",
+                "memory_recall_max_recall_tokens",
                 "profile", "system_prompt",
             })
 

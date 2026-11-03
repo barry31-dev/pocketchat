@@ -93,6 +93,8 @@ run。不会提供 shell、执行或网络工具。
 参数。已有文件、路径逃逸、敏感/二进制路径和超限内容一律拒绝。
 
 `--tool-memory-search` 提供只读自动 `memory_search` 工具。
+`--memory-recall` 启用 opt-in v2 recall projection，必须同时给出
+`--memory-recall-store` 和 `--memory-recall-workspace-id`；它与旧工具相互独立。
 `--tool-memory-search-max-results` 限制返回记录数（默认 20），并继续受工具结果
 字节上限约束。模型不能新增、修改或删除记忆；`--no-tool-memory-search` 可关闭。
 
@@ -437,13 +439,16 @@ pocketchat memory remove <memory-id> --json
 search 为字面、只读匹配；损坏或 schema 不匹配的 store 一律拒绝。记忆不会自动
 注入模型请求。
 
-v2 记忆操作必须显式给出 `--store`，不会把 `.pocketchat/memory.v2.jsonl` 变成默认 store：
+v2 记忆操作必须显式给出 `--store`，不会把 `.pocketchat/memory.v2.jsonl` 变成默认 store。
+`memory recall` 只读，`--dry-run` 预览确定性 v2 检索、排除项和有界 context message，
+不写 store 也不注入任何内容：
 
 ```bash
 pocketchat memory migrate --workspace-id workspace-1 --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory accept <memory-id> --by operator --verification not_required --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory retire <memory-id> --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory forget <memory-id> --store .pocketchat/memory.v2.jsonl --json
+pocketchat memory recall "query" --workspace-id workspace-1 --store .pocketchat/memory.v2.jsonl --dry-run --json
 ```
 
 `migrate` 创建新的有界 v2 文件，v1 源文件保持不变；legacy 记录仍是未验证候选。

@@ -3,8 +3,9 @@
 归属：`pocketchat.memory_retrieval`。结果版本：
 `pocketchat-memory-retrieval.v1`。
 
-这是针对已校验 `pocketchat-memory.v2` 记录的纯函数核心。它不读 store、不调
-provider、不接 CLI、不注入上下文，也不改旧 `memory search` 的子串路径。
+这是针对已校验 `pocketchat-memory.v2` 记录的纯函数核心。核心本身不读 store、不调
+provider；本切片新增显式只读 `memory recall --dry-run` 命令和 opt-in Session 投影接线，
+不改旧 `memory search` 的子串路径，未开启召回模式时也不注入记忆。
 
 ## 先准入，后匹配
 
@@ -43,5 +44,18 @@ tags，英文词是 `[a-z0-9]+`；连续 CJK 字符按顺序切成二字片段�
 `memory_retrieval_cursor_stale`，不会静默改变页边界。结果分别报告 cursor 之前跳过的
 条目，以及 `max_results`、byte 预算和 token 预算造成的遗漏。
 
-这个核心离线且确定性。它不是语义相关性、向量索引、安全擦除、事实核验、发布证据，
-也不是把召回内容注入请求的授权。
+这个核心离线且确定性。它不是语义相关性、向量索引、安全擦除、事实核验或发布证据。
+只有同时显式开启 layered context projection 与 `memory_recall_enabled`，并给出精确 v2
+store 与 workspace id，Session 才会自动注入召回内容；否则召回保持 dry-run/只读。
+
+## 显式召回与投影接线
+
+`pocketchat memory recall <query> --workspace-id <id> --store <path> --dry-run --json`
+读取一个受 workspace 约束的 v2 store，返回与核心相同的选中项、排除项、预算与 cursor
+语义，绝不修改 store。JSON 响应中的 `context_message` 只包含有界 excerpt 与元数据。
+
+当 profile 同时显式开启 `context_projection_enabled` 与 `memory_recall_enabled` 时，
+Session 使用当前 prompt 作为召回查询，并在投影请求前加入一条有界 `memory_recall`
+system message。投影 sidecar 与 request-start 元数据绑定 query digest 和选择计数。
+跨 workspace 记录在排序前排除；任一模式关闭时不注入召回内容。`context preview` 对给定
+pending prompt 执行相同选择。

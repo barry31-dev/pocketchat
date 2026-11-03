@@ -106,6 +106,16 @@ def _optional_string_list(record: Dict[str, Any], key: str,
     return result
 
 
+def _optional_nonempty_string(record: Dict[str, Any], key: str,
+                              where: str) -> Optional[str]:
+    value = record.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError("%s: %r must be a non-empty string" % (where, key))
+    return value.strip()
+
+
 def _optional_name(record: Dict[str, Any], key: str, where: str) -> Optional[str]:
     value = record.get(key)
     if value is None:
@@ -142,6 +152,9 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
         "model_context_window_tokens", "output_reserve_tokens",
         "safety_margin_tokens", "max_output_tokens_supported",
         "context_projection_enabled", "context_projection_max_bytes",
+        "memory_recall_enabled", "memory_recall_store",
+        "memory_recall_workspace_id", "memory_recall_max_results",
+        "memory_recall_max_excerpt_bytes", "memory_recall_max_recall_tokens",
     }
     unknown = sorted(set(provider) - allowed)
     if unknown:
@@ -158,6 +171,17 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
         api_key_env = str(provider.get("api_key_env") or "").strip()
         if api_key_env and not _ENV_VAR_PATTERN.match(api_key_env):
             raise ConfigError("%s: api_key_env must be an environment variable name" % where)
+    memory_recall_enabled = _optional_bool(
+        provider, "memory_recall_enabled", where, False)
+    memory_recall_store = _optional_nonempty_string(
+        provider, "memory_recall_store", where)
+    memory_recall_workspace_id = _optional_nonempty_string(
+        provider, "memory_recall_workspace_id", where)
+    if memory_recall_enabled and (memory_recall_store is None
+                                  or memory_recall_workspace_id is None):
+        raise ConfigError(
+            "%s: memory_recall_enabled requires memory_recall_store and "
+            "memory_recall_workspace_id" % where)
     return {
         "base_url": base_url.rstrip("/"),
         "model": _require_string(provider, "model", where),
@@ -237,6 +261,17 @@ def _profile_record(provider: Dict[str, Any], where: str) -> Dict[str, Any]:
         "context_projection_max_bytes": _optional_int(
             provider, "context_projection_max_bytes", where,
             1, 10 ** 9, 65536),
+        "memory_recall_enabled": memory_recall_enabled,
+        "memory_recall_store": memory_recall_store,
+        "memory_recall_workspace_id": memory_recall_workspace_id,
+        "memory_recall_max_results": _optional_int(
+            provider, "memory_recall_max_results", where, 1, 100, 20),
+        "memory_recall_max_excerpt_bytes": _optional_int(
+            provider, "memory_recall_max_excerpt_bytes", where,
+            1, 1024 * 1024, 4096),
+        "memory_recall_max_recall_tokens": _optional_int(
+            provider, "memory_recall_max_recall_tokens", where,
+            1, 10 ** 6, 1024),
     }
 
 
@@ -256,6 +291,9 @@ _PROFILE_FIELDS = {
     "tool_memory_search_enabled", "tool_memory_search_max_results",
     "tool_call_max_count", "tool_result_max_bytes", "max_payload_bytes",
     "context_projection_enabled", "context_projection_max_bytes",
+    "memory_recall_enabled", "memory_recall_store",
+    "memory_recall_workspace_id", "memory_recall_max_results",
+    "memory_recall_max_excerpt_bytes", "memory_recall_max_recall_tokens",
 }
 
 

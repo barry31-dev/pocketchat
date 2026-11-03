@@ -111,6 +111,9 @@ be listed with repeated `--tool-write-allow`; the model supplies `path` and
 binary paths and oversized content are refused.
 
 `--tool-memory-search` offers a read-only automatic `memory_search` tool.
+`--memory-recall` enables opt-in v2 recall projection and requires
+`--memory-recall-store` plus `--memory-recall-workspace-id`; it is separate
+from the legacy tool.
 `--tool-memory-search-max-results` bounds returned records (default 20), and
 the existing tool-result byte limit applies. The model cannot add, edit or
 delete memory; `--no-tool-memory-search` withholds the tool.
@@ -528,13 +531,16 @@ Records have a `memory_id`, timestamp, content and tags. Add is bounded to
 stores are refused. Memory is never injected into model requests automatically.
 
 The v2 memory operations are explicit and require `--store`; they never make
-`.pocketchat/memory.v2.jsonl` the default store:
+`.pocketchat/memory.v2.jsonl` the default store. `memory recall` is read-only
+and `--dry-run` previews deterministic v2 retrieval, exclusions and the bounded
+context message without writing or injecting anything:
 
 ```bash
 pocketchat memory migrate --workspace-id workspace-1 --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory accept <memory-id> --by operator --verification not_required --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory retire <memory-id> --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory forget <memory-id> --store .pocketchat/memory.v2.jsonl --json
+pocketchat memory recall "query" --workspace-id workspace-1 --store .pocketchat/memory.v2.jsonl --dry-run --json
 ```
 
 `migrate` creates a new bounded v2 file and leaves the v1 source unchanged.

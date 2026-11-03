@@ -7,6 +7,7 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Add explicit v2 memory recall dry-run and opt-in context projection wiring. The command is read-only and workspace-bound; Session injects one bounded recall message only when both layered projection and `memory_recall_enabled` are explicitly enabled, while legacy `memory search` remains unchanged. See `docs/memory-retrieval.md`.
 - Add explicit v2 memory CLI operations: `memory migrate` creates a bounded
   new store without rewriting v1, `accept` requires an approver and never
   invents verification, `retire` records lifecycle metadata, and `forget`

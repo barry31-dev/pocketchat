@@ -426,3 +426,74 @@ def retrieve_memories(records: Iterable[dict[str, Any]], query: str, *,
     if error_type:
         result["error_type"] = error_type
     return result
+
+
+RECALL_SCHEMA_VERSION = "pocketchat-memory-recall.v1"
+
+
+def recall_evidence_items(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Turn selected retrieval items into bounded context evidence records."""
+    if not isinstance(result, dict) or result.get("schema_version") != SCHEMA_VERSION:
+        raise MemoryRetrievalError(
+            "retrieval result has the wrong schema",
+            error_type="invalid_retrieval_result")
+    items = result.get("items")
+    if not isinstance(items, list):
+        raise MemoryRetrievalError(
+            "retrieval result items must be a list",
+            error_type="invalid_retrieval_result")
+    evidence = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise MemoryRetrievalError(
+                "retrieval result items must be objects",
+                error_type="invalid_retrieval_result")
+        required = {
+            "memory_id", "revision", "workspace_id", "content_sha256",
+            "excerpt", "source_refs", "verification_status",
+            "admission_status", "matched_terms", "matched_tags",
+            "excerpt_truncated",
+        }
+        if not required <= set(item):
+            raise MemoryRetrievalError(
+                "retrieval result item is missing recall fields",
+                error_type="invalid_retrieval_result")
+        source = "memory:%s:%s:%s:%s" % (
+            item["workspace_id"], item["memory_id"], item["revision"],
+            item["content_sha256"])
+        evidence.append({
+            "source": source,
+            "kind": "memory_recall",
+            "memory_id": item["memory_id"],
+            "revision": item["revision"],
+            "workspace_id": item["workspace_id"],
+            "content": item["excerpt"],
+            "content_sha256": item["content_sha256"],
+            "source_refs": item["source_refs"],
+            "verification_status": item["verification_status"],
+            "admission_status": item["admission_status"],
+            "matched_terms": item["matched_terms"],
+            "matched_tags": item["matched_tags"],
+            "excerpt_truncated": item["excerpt_truncated"],
+        })
+    return evidence
+
+
+def recall_context_message(result: dict[str, Any]) -> dict[str, Any]:
+    """Build the one explicit system message carrying selected recall excerpts."""
+    evidence = recall_evidence_items(result)
+    items = []
+    for item in evidence:
+        copied = dict(item)
+        copied["excerpt"] = copied.pop("content")
+        items.append(copied)
+    body = {
+        "schema_version": RECALL_SCHEMA_VERSION,
+        "tokenizer_version": result.get("tokenizer_version"),
+        "items": items,
+    }
+    return {
+        "role": "system",
+        "content": json.dumps(body, ensure_ascii=False, sort_keys=True,
+                             separators=(",", ":")),
+    }

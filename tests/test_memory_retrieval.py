@@ -9,6 +9,8 @@ import unittest
 from pocketchat.memory_migration import parse_v2_record
 from pocketchat.memory_retrieval import (
     MemoryRetrievalError,
+    recall_context_message,
+    recall_evidence_items,
     retrieve_memories,
 )
 
@@ -173,6 +175,21 @@ class MemoryRetrievalTests(unittest.TestCase):
             retrieval(changed, max_results=1, cursor=first["next_cursor"])
         self.assertEqual("memory_retrieval_cursor_stale",
                          caught.exception.error_type)
+
+    def test_recall_projection_is_bounded_and_source_bound(self):
+        content = "alpha " + "x" * 200
+        result = retrieval([memory_record("mem_a", content)],
+                           max_excerpt_bytes=8)
+        evidence = recall_evidence_items(result)
+        message = recall_context_message(result)
+        self.assertEqual(["memory:workspace-1:mem_a:1:" + result["items"][0]["content_sha256"]],
+                         [item["source"] for item in evidence])
+        self.assertEqual("alpha xx", evidence[0]["content"])
+        self.assertNotIn(content, repr(evidence))
+        self.assertNotIn(content, repr(message))
+        self.assertEqual("system", message["role"])
+        self.assertIn("memory_recall", message["content"])
+        self.assertEqual(evidence, recall_evidence_items(result))
 
     def test_empty_results_and_unrepresentable_budget_are_distinct(self):
         empty = retrieval([memory_record("mem_a", "other")])

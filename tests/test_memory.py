@@ -472,6 +472,46 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertFalse((outside / "memory.v2.jsonl").exists())
 
+    def test_memory_recall_dry_run_is_read_only_and_bounded(self):
+        added = run_cli(("memory", "add", "answer fact", "--json"), self.root)
+        memory_id = json.loads(added.stdout)["memory_id"]
+        store = ".pocketchat/memory.v2.jsonl"
+        run_cli(("memory", "migrate", "--workspace-id", "workspace-1",
+                 "--store", store, "--json"), self.root)
+        run_cli(("memory", "accept", memory_id, "--by", "operator",
+                 "--verification", "not_required", "--store", store, "--json"),
+                self.root)
+        before = (self.root / store).read_bytes()
+        recalled = run_cli(("memory", "recall", "answer",
+                            "--workspace-id", "workspace-1", "--store", store,
+                            "--dry-run", "--json"), self.root)
+        payload = json.loads(recalled.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["dry_run"])
+        self.assertEqual([memory_id],
+                         [item["memory_id"] for item in payload["items"]])
+        self.assertIn("answer fact", payload["context_message"]["content"])
+        self.assertEqual(before, (self.root / store).read_bytes())
+
+    def test_memory_recall_excludes_other_workspaces(self):
+        added = run_cli(("memory", "add", "answer fact", "--json"), self.root)
+        memory_id = json.loads(added.stdout)["memory_id"]
+        store = ".pocketchat/memory.v2.jsonl"
+        run_cli(("memory", "migrate", "--workspace-id", "workspace-1",
+                 "--store", store, "--json"), self.root)
+        run_cli(("memory", "accept", memory_id, "--by", "operator",
+                 "--verification", "not_required", "--store", store, "--json"),
+                self.root)
+        recalled = run_cli(("memory", "recall", "answer",
+                            "--workspace-id", "workspace-2", "--store", store,
+                            "--dry-run", "--json"), self.root)
+        payload = json.loads(recalled.stdout)
+        self.assertEqual([], payload["items"])
+        self.assertEqual({"workspace_mismatch"},
+                         {reason for item in payload["excluded"]
+                          for reason in item["reasons"]})
+        self.assertNotIn("answer fact", payload["context_message"]["content"])
+
     def test_v2_memory_commands_run_end_to_end_as_subprocesses(self):
         env = {"PYTHONPATH": str(Path(__file__).resolve().parents[1])}
         added = subprocess.run(
