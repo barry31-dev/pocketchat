@@ -89,3 +89,10 @@ Web UI、本地 API、桌面打包、远程访问、账号体系、telemetry、�
 Windows 当前显式 `unsupported_platform`，不继承普通 CLI 的目标平台承诺。
 这是未发布源码新增能力，不追溯改变 v1.1.0 制品保证。完整边界见
 [task-acceptance.zh-CN.md](task-acceptance.zh-CN.md)。
+
+## 未发布：additive 记忆检索核心
+
+`pocketchat-memory-retrieval.v1` 是纯离线候选结果形状。它不改变已发布的
+`memory` 命令，也不改变默认 `memory_search` 子串行为；在后续切片接线并发布前，
+它不是稳定 CLI 面。固定分词、准入、排序、双预算 excerpt、遗漏计数与 stale-cursor
+拒绝规则见 [memory-retrieval.zh-CN.md](memory-retrieval.zh-CN.md)。

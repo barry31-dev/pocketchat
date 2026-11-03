@@ -103,3 +103,12 @@ not `passed`. The new verifier needs POSIX descriptor-relative no-follow APIs;
 Windows currently refuses with `unsupported_platform`, rather than inheriting
 the ordinary CLI's runtime target. These are unreleased source additions, not
 retroactive v1.1.0 artifact guarantees. See [task-acceptance.md](task-acceptance.md).
+
+## Unreleased additive memory retrieval core
+
+`pocketchat-memory-retrieval.v1` is a pure offline candidate result shape. It
+does not change the published `memory` command or the default `memory_search`
+substring behavior, and it is not a stable CLI surface until a later slice wires
+and publishes it. Fixed tokenization, admission, ranking, dual excerpt budgets,
+omission counts and stale-cursor refusal are documented in
+[memory-retrieval.md](memory-retrieval.md).
