@@ -51,13 +51,20 @@ Budget / stop:
 Rollback / next:
 ```
 
-A product-code change includes an update to the current slice record before it
-can enter `main`: either the referenced issue in this repository, or
-`docs/slice-queue.md` when the work is not tracked as an issue. The queue entry
-must already be approved: machine confirmation that the file or issue changed
-is a precondition, not approval. `CHANGELOG.md` is retained delivery history
-and does not substitute for the current slice. Documentation, process-tool and
-test-only maintenance does not create a product slice.
+An approved slice record must already be reachable from `main` before a
+development branch is created: either the referenced issue in this repository,
+or `docs/slice-queue.md` when the work is not tracked as an issue. A machine
+confirmation that the file or issue changed is a precondition, not approval.
+
+A development branch does not edit the shared queue merely to claim or complete
+work. Planner/integrator queue updates are small serialized commits on `main`:
+the planner may add approved future rows while development continues, and the
+integrator marks a row delivered after the product branch lands. Multiple task
+branches may proceed when they have different branch names, settled dependencies
+and disjoint `write_scope`; the same path or an ancestor/descendant path remains
+serial. `CHANGELOG.md` is retained delivery history and does not substitute for
+the current slice. Documentation, process-tool and test-only maintenance does
+not create a product slice.
 
 The goal is testable. "Improve the agent" is not a goal; "record a stable
 `error_type` for five failure classes and keep the old JSON fields" is.

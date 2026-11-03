@@ -1,0 +1,93 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "AGENTS.md",
+    "docs/development-and-release.md",
+    "docs/development-and-release.zh-CN.md",
+    "docs/review-parallel-development-process-v1.json",
+    "docs/slice-queue.md",
+    "tests/test_release_process_docs.py"
+  ],
+  "categories": [
+    "instructions",
+    "generated-blocks",
+    "links",
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "P1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "task-branches-contend-on-shared-queue",
+      "detail": "Requiring every product branch to update the shared queue serialised otherwise independent work.",
+      "reason": "Approval rows now land on main first; planner/integrator queue commits are separate from development branches."
+    },
+    {
+      "id": "P2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "product-queue-duplicates-live-lease-state",
+      "detail": "Using the public approval queue as live claim state would create a second operational authority.",
+      "reason": "The queue explicitly does not mirror live claim or lease state; it owns approval/integration state only."
+    },
+    {
+      "id": "P3",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "historical-delivered-rows-lack-parallel-fields",
+      "detail": "Historical delivered rows do not carry branch/write_scope fields.",
+      "reason": "The contract applies to new queued/ready/in_progress rows; rewriting delivered history would fabricate fields that were not recorded at the time."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "AGENTS.md",
+    "docs/development-and-release.md",
+    "docs/development-and-release.zh-CN.md",
+    "docs/review-parallel-development-process-v1.json",
+    "docs/slice-queue.md",
+    "tests/test_release_process_docs.py"
+  ],
+  "reviewed_evidence": [
+    "Observed red: the process-doc guard failed until both language pages and the queue contract named pre-landed approvals, disjoint write scopes and no per-branch queue edit.",
+    "CPython 3.9.6: tests.test_release_process_docs + tests.test_package_independence => 23 tests OK (exit 0).",
+    "git diff --check => exit 0.",
+    "Diff review checked public-only paths, planner/developer concurrency, one approval authority, historical-row compatibility and no product runtime capability change."
+  ],
+  "unverified_scope": "No product code, provider, packaging, install, CI, tag, Release or runtime multi-agent behavior was run. The private operational coordinator and production migration are outside this repository change.",
+  "landing_sign_off": {
+    "status": "approved",
+    "scope": "User directive of 2026-11-03 to optimize PocketChat planning and task claiming, allow planning and development concurrently, remove the fixed per-machine task count, and let the agent make implementation choices; no tag, Release or package upload."
+  },
+  "review_context": {
+    "why": [
+      "Independent PocketChat development branches must not contend on one queue Markdown file."
+    ],
+    "not_doing": [
+      "No product runtime multi-agent orchestration, task execution, release or publication feature."
+    ],
+    "diff_walk": [
+      "AGENTS.md and bilingual process docs require an approved row on main before branching and separate planner/integrator queue commits.",
+      "docs/slice-queue.md adds branch/write_scope fields and says it is not live lease authority.",
+      "tests/test_release_process_docs.py pins the public, bilingual, parallel-development contract."
+    ],
+    "static_checks": [
+      "New active rows need branch/write_scope/approved_by.",
+      "Ancestor/descendant write scopes remain serial.",
+      "Historical delivered rows are not rewritten."
+    ],
+    "review_notes": [
+      "The user delegated process choices; this record binds that authorization to this process-only candidate."
+    ],
+    "gaps": [
+      "No real concurrent product branches were claimed from the private coordinator in this repository slice."
+    ]
+  }
+}

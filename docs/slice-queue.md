@@ -18,6 +18,8 @@
 |---|---|
 | `id` | stable slice identifier |
 | `state` | `queued` / `ready` / `in_progress` / `delivered` / `cancelled` |
+| `branch` | unique `task/<area>-<slug>` branch reserved for the slice |
+| `write_scope` | normalized repository-relative paths this slice may write exclusively |
 | `depends_on` | slice ids that must be settled first |
 | `done_when` | the observable completion condition |
 | `evidence` | where the proof lives (commit, trace, test, artifact) |
@@ -26,9 +28,26 @@
 `queued` is a pool state, not readiness. `ready` additionally requires that
 dependencies are settled and the budget is available.
 
-A product-code change must update the current row before it can enter `main`.
-Documentation, process-tool and test-only maintenance does not create a
-product slice.
+For a new `queued`, `ready` or `in_progress` row, `branch`, `write_scope` and
+`approved_by` are mandatory before a development branch is created. Historical
+`delivered` rows below predate this contract and are retained as evidence.
+
+The approved row lands on `main` first. A development branch points to that row
+but does not edit this file merely to claim or complete work. Planner commits
+may add approved future rows while development branches are active; after a
+product branch lands, an integrator records `delivered` in a separate serialized
+queue-maintenance commit. This keeps planning and development concurrent without
+making every task branch contend on one Markdown file.
+
+This approval queue does not mirror live claim or lease state. A row may remain
+`ready` while an external coordinator holds its operational lease; duplicating
+that fast-changing state here would create two authorities.
+
+Two active slices may proceed together only when their branches differ, their
+dependencies are settled, and their `write_scope` values do not overlap. The
+same path or an ancestor/descendant path is a conflict and remains serial.
+Documentation, process-tool and test-only maintenance does not create a product
+slice.
 
 ## 2. Current queue
 

@@ -5,6 +5,7 @@ import unittest
 DOCS = Path(__file__).resolve().parents[1] / "docs"
 EN = DOCS / "development-and-release.md"
 ZH = DOCS / "development-and-release.zh-CN.md"
+QUEUE = DOCS / "slice-queue.md"
 RELEASE_EN = DOCS / "release-1.0.md"
 RELEASE_ZH = DOCS / "release-1.0.zh-CN.md"
 
@@ -110,15 +111,28 @@ class ReleaseProcessDocsTests(unittest.TestCase):
         """
         en = " ".join(EN.read_text(encoding="utf-8").split())
         zh = " ".join(ZH.read_text(encoding="utf-8").split())
-        self.assertIn("A product-code change includes an update to the current slice record", en)
+        self.assertIn("An approved slice record must already be reachable from `main`", en)
+        self.assertIn("does not edit the shared queue merely to claim or complete work", en)
+        self.assertIn("disjoint `write_scope`", en)
         self.assertIn("docs/slice-queue.md", en)
         self.assertIn("machine confirmation that the file or issue changed", en)
         self.assertIn("is a precondition, not approval", en)
         self.assertIn("delivery history", en)
-        self.assertIn("产品代码改动必须带当前格记录的更新", zh)
+        self.assertIn("批准记录必须已经能从 `main` 读到", zh)
+        self.assertIn("不会只为领取或完成任务而修改共享队列", zh)
+        self.assertIn("`write_scope` 不相交", zh)
         self.assertIn("docs/slice-queue.md", zh)
         self.assertIn("不能把“有变更”写成“已批准”", zh)
         self.assertIn("已交付历史", zh)
+
+    def test_slice_queue_declares_parallel_branch_and_write_scope_contract(self):
+        text = QUEUE.read_text(encoding="utf-8")
+        for field in ("`branch`", "`write_scope`", "`depends_on`", "`approved_by`"):
+            self.assertIn(field, text)
+        self.assertIn("before a development branch is created", text)
+        self.assertIn("does not edit this file", text)
+        self.assertIn("does not mirror live claim or lease state", text)
+        self.assertIn("same path or an ancestor/descendant path", text)
 
     def test_the_process_never_names_a_private_repository_path(self):
         """A process a public reader cannot follow is not a process.

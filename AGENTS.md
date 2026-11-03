@@ -97,12 +97,15 @@ choose a slice -> write the completion check -> red test
 
 ### 3.1 Where the current slice lives
 
-A product-code change must update the current slice record before it enters
-`main`: the referenced issue in this repository, or
+Before a product-code branch is created, its approved slice record must already
+be reachable from `main`: the referenced issue in this repository, or
 [`docs/slice-queue.md`](docs/slice-queue.md) when the work is not tracked as an
-issue. The queue entry must already be approved; a machine check that the file
-or issue changed is a precondition, **never** an approval.
+issue. A machine check that the file or issue changed is a precondition,
+**never** an approval.
 
+Task branches do not edit the shared queue merely to claim or complete work.
+Planner/integrator queue updates land as serialized process commits; branches
+with settled dependencies and disjoint write scopes may proceed independently.
 `CHANGELOG.md` is delivery history and does not substitute for the current
 slice. Documentation, process-tool and test-only maintenance does not create a
 product slice.
