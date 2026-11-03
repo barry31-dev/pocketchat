@@ -129,7 +129,7 @@ and sidecar/preview binding as a separate slice.
 - **State**: `ready`
 - **Branch**: `task/pocketchat-runtime-capabilities`
 - **Write scope**: `pocketchat/runtime_capabilities.py`,
-  `tests/test_runtime_capabilities.py`
+  `tests/test_runtime_capabilities.py`, `docs/review-runtime-capabilities-v1.json`
 - **Depends on**: none
 - **Done when**: A pure `collect_runtime_capabilities()` reports interpreter/OS
   facts and three explicit Python primitive booleans as schema 1 JSON without
