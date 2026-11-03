@@ -1,0 +1,31 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "pocketchat/runtime_capabilities.py",
+    "tests/test_runtime_capabilities.py",
+    "docs/review-runtime-capabilities-v1.json"
+  ],
+  "categories": [
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "pocketchat/runtime_capabilities.py",
+    "tests/test_runtime_capabilities.py",
+    "docs/review-runtime-capabilities-v1.json"
+  ],
+  "reviewed_evidence": [
+    "Red first: tests.test_runtime_capabilities failed with ModuleNotFoundError before the module existed.",
+    "After implementation: four focused tests pass, covering schema 1 JSON, explicit primitive booleans, fixed not_checked names and no I/O/environment enumeration.",
+    "Adjacent release/process documentation and package-independence guards ran 23 tests OK.",
+    "Ruff E9/F and git diff --check passed.",
+    "The report contains no provider, workspace or concurrency safety conclusion."
+  ],
+  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. Linux/Windows CI for this exact branch, real provider reachability, workspace permissions and concurrency atomicity were not run. The slice does not add a CLI surface or claim a new capability level."
+}
