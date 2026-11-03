@@ -1,0 +1,113 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/review-tool-contracts-v1.json",
+    "docs/security.md",
+    "docs/security.zh-CN.md",
+    "docs/slice-queue.md",
+    "pocketchat/provider.py",
+    "pocketchat/session.py",
+    "pocketchat/task_policy.py",
+    "pocketchat/tool_contracts.py",
+    "tests/test_tool_calls.py",
+    "tests/test_tool_contracts.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "write-file-required-content",
+      "detail": "The first candidate omitted content from the write_file provider schema required list while the host still required it; a red regression test and 047de49 restored path+content."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "provider-unused-hashlib",
+      "detail": "Removing the duplicated provider schemas left hashlib unused and would fail the CI E9/F gate; 047de49 removed it and ruff passed."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "unbounded-unknown-argument-diagnostic",
+      "detail": "Unknown property names were copied unbounded into the recoverable error envelope; a red test and f772f55 bounded the diagnostic to fixed-size ASCII."
+    },
+    {
+      "id": "F4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "unpaired-surrogate-argument-name",
+      "detail": "An unpaired surrogate in an unknown property name could fail UTF-8 trace writing; f772f55 escapes names through ASCII backslashreplace and the regression test covers it."
+    }
+  ],
+  "commit_or_candidate_sha": "f772f55e6bd7c7bcdc6e1ff3ce5dc263c5f46936",
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/review-tool-contracts-v1.json",
+    "docs/security.md",
+    "docs/security.zh-CN.md",
+    "docs/slice-queue.md",
+    "pocketchat/provider.py",
+    "pocketchat/session.py",
+    "pocketchat/task_policy.py",
+    "pocketchat/tool_contracts.py",
+    "tests/test_tool_calls.py",
+    "tests/test_tool_contracts.py"
+  ],
+  "reviewed_evidence": [
+    "Red first: the missing tool_contracts module, missing write_file required content, and unbounded/unsafe argument diagnostics failed before their respective fixes.",
+    "CPython 3.9.6 ran tool contract, tool call, memory tool, task policy, profile and task run suites; 106 tests passed (exit 0).",
+    "ruff check --select E9,F pocketchat tests passed (exit 0); git diff --check passed (exit 0).",
+    "First fresh-context review found the missing write_file required content and unused hashlib; 047de49 fixed both with regression coverage.",
+    "Second fresh-context review found unbounded and Unicode-unsafe unknown-argument diagnostics; f772f55 fixed both with regression coverage.",
+    "Final new-diff fresh-context review of f772f55 returned No findings."
+  ],
+  "unverified_scope": "Full-suite behavior outside the listed target modules, real providers, Windows/Linux execution, packaging/installation, tag, Release and package-index actions were not run. Command templates retain their existing parser and execution tests; this slice did not add a new command surface.",
+  "landing_sign_off": {
+    "status": "approved",
+    "scope": "User directive of 2026-11-03: “批准，全力推进项目，把剩下的任务都完成”, applied to PC-TCONTRACT-1 and its exact final candidate f772f55; no tag, Release, package upload or real provider run."
+  },
+  "review_context": {
+    "why": [
+      "PC-TCONTRACT-1 joins provider tool declarations, host argument validation, trace summaries and task-policy names behind one closed contract."
+    ],
+    "not_doing": [
+      "No new tool, shell execution, command-template expansion, provider call, default enablement, release or publication action."
+    ],
+    "diff_walk": [
+      "pocketchat/tool_contracts.py: declares the three closed tool schemas, bounded argument parsing, per-contract hashes and ASCII-bounded diagnostics.",
+      "pocketchat/provider.py: derives provider offers and trace summaries from the shared contracts and removes unused hashing.",
+      "pocketchat/session.py: validates model arguments before file or memory I/O and uses the validated values for execution.",
+      "pocketchat/task_policy.py: imports the task-policy tool names from the same contract.",
+      "tests and bilingual docs: cover default-off payloads, schema agreement, unknown/missing/oversized/malformed arguments, no I/O on refusal and compatibility wording."
+    ],
+    "static_checks": [
+      "All three provider schemas and host validators derive from CONTRACTS.",
+      "Unknown or missing arguments are refused before permission or tool-start events.",
+      "Diagnostics are at most 160 ASCII characters and never include unbounded model property names.",
+      "Command templates remain closed argv records executed without a shell."
+    ],
+    "review_notes": [
+      "This record is self-bound to the final candidate and includes the user’s continuing-work authorization."
+    ],
+    "gaps": [
+      "No real provider was invoked, so model compliance with the corrected schema is not measured."
+    ]
+  }
+}
