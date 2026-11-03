@@ -404,6 +404,9 @@ def _resolve_store(root: Path, store: Path) -> Path:
         raise MemoryMigrationError("v2 store must stay inside the workspace")
     if target.is_symlink():
         raise MemoryMigrationError("v2 memory store must not be a symlink")
+    if target.parent.is_symlink():
+        raise MemoryMigrationError(
+            "v2 memory store parent must not be a symlink")
     resolved = target.resolve()
     try:
         resolved.relative_to(workspace)
@@ -452,7 +455,7 @@ def _mutate_v2_store(root: Path, store: Path, change) -> Any:
 
 
 def read_v2_store(root: Path, store: Path) -> List[Dict[str, Any]]:
-    """Read one bounded v2 JSONL store without following its file entry."""
+    """Read one bounded v2 JSONL store without following its parent or file."""
     target = _resolve_store(root, store)
     try:
         target.lstat()
@@ -463,40 +466,43 @@ def read_v2_store(root: Path, store: Path) -> List[Dict[str, Any]]:
     if not hasattr(os, "O_NOFOLLOW"):
         raise MemoryMigrationError("v2 store requires no-follow file support")
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | os.O_NOFOLLOW
+    parent_descriptor = _open_target_parent(Path(root).resolve(), target.parent)
     try:
-        if target.is_symlink():
-            raise MemoryMigrationError("v2 memory store must not be a symlink")
-        descriptor = os.open(str(target), flags)
-    except MemoryMigrationError:
-        raise
-    except OSError as exc:
-        raise MemoryMigrationError(f"cannot open v2 memory store: {exc}")
-    try:
-        info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode):
-            raise MemoryMigrationError("v2 memory store must be a regular file")
-        if info.st_size > MAX_STORE_BYTES:
-            raise MemoryMigrationError(
-                f"v2 memory store exceeds {MAX_STORE_BYTES} bytes")
-        chunks = []
-        remaining = MAX_STORE_BYTES + 1
-        while remaining:
-            chunk = os.read(descriptor, min(65536, remaining))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            remaining -= len(chunk)
-        raw = b"".join(chunks)
-        if len(raw) > MAX_STORE_BYTES:
-            raise MemoryMigrationError(
-                f"v2 memory store exceeds {MAX_STORE_BYTES} bytes")
-        text = raw.decode("utf-8")
-    except MemoryMigrationError:
-        raise
-    except (OSError, UnicodeError) as exc:
-        raise MemoryMigrationError(f"cannot read v2 memory store: {exc}")
+        descriptor = None
+        try:
+            if target.is_symlink():
+                raise MemoryMigrationError(
+                    "v2 memory store must not be a symlink")
+            descriptor = os.open(target.name, flags, dir_fd=parent_descriptor)
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode):
+                raise MemoryMigrationError(
+                    "v2 memory store must be a regular file")
+            if info.st_size > MAX_STORE_BYTES:
+                raise MemoryMigrationError(
+                    f"v2 memory store exceeds {MAX_STORE_BYTES} bytes")
+            chunks = []
+            remaining = MAX_STORE_BYTES + 1
+            while remaining:
+                chunk = os.read(descriptor, min(65536, remaining))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            raw = b"".join(chunks)
+            if len(raw) > MAX_STORE_BYTES:
+                raise MemoryMigrationError(
+                    f"v2 memory store exceeds {MAX_STORE_BYTES} bytes")
+            text = raw.decode("utf-8")
+        except MemoryMigrationError:
+            raise
+        except (OSError, UnicodeError) as exc:
+            raise MemoryMigrationError(f"cannot read v2 memory store: {exc}")
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
     finally:
-        os.close(descriptor)
+        os.close(parent_descriptor)
 
     records = []
     for number, line in enumerate(text.split("\n"), 1):
@@ -658,7 +664,8 @@ def _open_target_parent(workspace: Path, parent: Path) -> int:
     except OSError as exc:
         if descriptor is not None:
             os.close(descriptor)
-        raise MemoryMigrationError(f"cannot open v2 target parent: {exc}")
+        raise MemoryMigrationError(
+            "cannot open v2 target parent without following symlinks") from exc
     return descriptor
 
 

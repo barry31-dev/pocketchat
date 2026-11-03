@@ -268,17 +268,30 @@ class MemoryStoreTests(unittest.TestCase):
         (outside / "memory.v2.jsonl").write_text("", encoding="utf-8")
         self.addCleanup(lambda: __import__("shutil").rmtree(outside,
                                                              ignore_errors=True))
-        target = parent / "memory.v2.jsonl"
+        target = (parent / "memory.v2.jsonl").resolve()
+        backup = self.root / ".pocketchat-backup"
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            backup, ignore_errors=True))
         original_open = __import__("os").open
+        replaced = False
 
         def replace_parent(path, *args, **kwargs):
-            if path == str(target):
-                parent.rmdir()
+            nonlocal replaced
+            target_read = (
+                path == str(target)
+                or (path == target.name and kwargs.get("dir_fd") is not None)
+            )
+            if target_read and not replaced:
+                parent.rename(backup)
                 parent.symlink_to(outside, target_is_directory=True)
+                replaced = True
             return original_open(path, *args, **kwargs)
 
+        replacement_open = replace_parent
         with mock.patch("pocketchat.memory_migration.os.open",
-                        side_effect=replace_parent):
+                        replacement_open), \
+                mock.patch("pocketchat.memory_migration.os.supports_dir_fd",
+                           {replacement_open}):
             result = run_cli(
                 ("memory", "accept", memory_id, "--by", "operator",
                  "--verification", "not_required",
@@ -288,6 +301,7 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertNotIn("no such memory", payload["message"])
         message = payload["message"].lower()
+        self.assertTrue(replaced, "parent replacement was not exercised")
         self.assertTrue("symlink" in message or "no-follow" in message, message)
         self.assertEqual("", (outside / "memory.v2.jsonl").read_text(
             encoding="utf-8"))
