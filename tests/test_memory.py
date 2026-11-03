@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from pocketchat import memory
 from pocketchat.memory import MemoryError, add_memory, list_memory, remove_memory, search_memory
 from tests._helpers import run_cli
 
@@ -16,6 +21,32 @@ class MemoryStoreTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+
+    def test_memory_import_does_not_require_fcntl(self):
+        code = (
+            "import sys; sys.modules['fcntl'] = None; "
+            "import pocketchat.memory; print('ok')"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1],
+            capture_output=True, text=True, check=False)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("ok", result.stdout.strip())
+
+    def test_windows_memory_lock_uses_msvcrt(self):
+        locking = mock.Mock()
+        msvcrt = types.SimpleNamespace(
+            LK_NBLCK=2, LK_UNLCK=0, locking=locking)
+        with mock.patch.object(memory.os, "name", "nt"), \
+                mock.patch.dict(sys.modules, {"msvcrt": msvcrt}):
+            with tempfile.TemporaryFile() as lock_file:
+                memory._lock_nonblocking(lock_file)
+                memory._unlock(lock_file)
+                descriptor = lock_file.fileno()
+        self.assertEqual(
+            [mock.call(descriptor, msvcrt.LK_NBLCK, 1),
+             mock.call(descriptor, msvcrt.LK_UNLCK, 1)],
+            locking.call_args_list)
 
     def test_add_requires_explicit_content_and_returns_an_id(self):
         record = add_memory(self.root, "Use short answers.", tags=["style"])
@@ -117,14 +148,13 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual(before, path.read_bytes())
 
     def test_stale_lock_holder_is_reported_as_busy(self):
-        import fcntl
         from pocketchat.memory import memory_path
         path = memory_path(self.root)
         path.parent.mkdir(parents=True)
         lock = path.with_name("memory.jsonl.lock")
-        descriptor = lock.open("a+")
+        descriptor = lock.open("a+b")
         self.addCleanup(descriptor.close)
-        fcntl.flock(descriptor.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        memory._lock_nonblocking(descriptor)
         with self.assertRaises(MemoryError) as caught:
             add_memory(self.root, "blocked")
         self.assertIn("busy", str(caught.exception).lower())

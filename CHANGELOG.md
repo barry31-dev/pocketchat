@@ -7,6 +7,10 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Make explicit memory locking portable across Windows and POSIX. Windows
+  uses `msvcrt` byte-range locks while POSIX retains `fcntl`, both are loaded
+  only on their supported platform, and a failed lock attempt is not treated
+  as held during cleanup.
 - Harden the runtime admission candidate after an offline pre-merge review:
   known usage is charged against whole-task headroom rather than just the input
   estimate, missing usage blocks tools/repair/retries, and output reservations

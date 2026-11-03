@@ -1,0 +1,84 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/review-release-smoke-evidence-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/memory.py",
+    "tests/test_memory.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "product-change-without-current-slice-update",
+      "detail": "The Windows memory-lock portability change modified product code without updating the current slice record in the first candidate. The SLICE-PREP-2 row now names the code, tests and review record that cover this work before landing."
+    }
+  ],
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/review-release-smoke-evidence-v1.json",
+    "docs/slice-queue.md",
+    "pocketchat/memory.py",
+    "tests/test_memory.py"
+  ],
+  "candidate_sha": "self",
+  "reviewed_evidence": [
+    "CPython 3.9.6: /usr/bin/python3 -m unittest discover -s tests -q; 1125 tests OK in 81.075 seconds, exit 0.",
+    "CPython 3.13.9: /opt/anaconda3/bin/python3.13 -m unittest discover -s tests -q; 1125 tests OK in 52.431 seconds, exit 0.",
+    "Focused memory/runtime portability: /opt/anaconda3/bin/python3.13 -m unittest tests.test_memory tests.test_runtime_portability -q; 19 tests OK, exit 0.",
+    "Ruff 0.17.3: ruff check --select E9,F pocketchat tests; All checks passed!, exit 0.",
+    "Local release smoke with documented offline fallback: /opt/anaconda3/bin/python3.13 scripts/release_smoke.py --work-dir /tmp/pocketchat-release-slprep2-offline.nZdMfz --no-build-isolation --json; wheel pocketchat-1.1.0-py3-none-any.whl, 245201 bytes, SHA-256 4ad47aa5ba9a8b8924e3ad0b6a4a94560cc1e127a23cbc202fb2cd029a2ae0f7, 60 members, five schemas and eleven task command families, exit 0.",
+    "Fresh-context review: OpenAI Codex v0.166.0-alpha.5.1 codex exec review --uncommitted --ephemeral, model trae-cn-mimo-v2.6-pro, sandbox read-only; completed and returned the F1 process finding. No functional code defect was reported.",
+    "git diff --check passed."
+  ],
+  "unverified": [
+    "A local isolated PEP 517 build was attempted but the proxy timed out while fetching setuptools>=61; it is a network failure, not a product build result. The local wheel/install evidence uses --no-build-isolation with setuptools 80.9.0 and wheel 0.48.0 already available.",
+    "Windows Python 3.9/3.13 execution and the isolated GitHub release-smoke job for this exact candidate are pending workflow_dispatch readback.",
+    "The documented unselected ruff check pocketchat tests is not clean at the base or candidate because existing style findings remain; the repository CI gate is the recorded E9,F selection.",
+    "Real provider behavior, package-index reachability, tag, Release and package upload are outside this slice and were not run."
+  ],
+  "landing_sign_off": {
+    "status": "required",
+    "scope": "Landing this exact medium-risk cross-platform lock candidate on main; no tag, Release, package upload or real provider run."
+  },
+  "review_context": {
+    "why": [
+      "Windows CI imports failed because pocketchat.memory imported POSIX fcntl eagerly. The fix selects msvcrt byte-range locking on Windows and fcntl on POSIX without changing the memory mutation contract."
+    ],
+    "not_doing": [
+      "No memory format change, CLI/API change, provider call, release publication, package upload or workflow scope expansion."
+    ],
+    "diff_walk": [
+      "pocketchat/memory.py: load lock backends lazily, map lock contention to MemoryError, track acquisition explicitly and unlock only a held lock.",
+      "tests/test_memory.py: prove module import works without fcntl, exercise the Windows msvcrt backend through a fake module and keep the busy-lock regression portable.",
+      "CHANGELOG.md and docs/slice-queue.md: record the delivered portability behavior in the existing SLICE-PREP-2 evidence boundary."
+    ],
+    "static_checks": [
+      "Windows calls msvcrt.locking with LK_NBLCK and LK_UNLCK; POSIX retains non-blocking flock behavior.",
+      "EACCES/EAGAIN lock contention remains the memory_store_is_busy path and failed acquisition is not unlocked.",
+      "No test module imports fcntl directly and the no-fcntl import regression runs in a subprocess."
+    ],
+    "red_green": [
+      "The no-fcntl import test failed with ModuleNotFoundError before lazy imports and passed after them.",
+      "The fake Windows lock test failed because the backend helper did not exist, then passed with the expected LK_NBLCK/LK_UNLCK calls.",
+      "The existing busy-lock regression caught an uninitialized locked flag after the first implementation; initialization was fixed before the final run."
+    ],
+    "review_notes": [
+      "The completed fresh-context review reported only F1, the missing current-slice record; it was fixed in this candidate."
+    ],
+    "gaps": [
+      "Actual Windows execution and exact-SHA isolated CI remain pending; the record must not be treated as those results."
+    ]
+  }
+}
