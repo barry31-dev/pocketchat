@@ -31,7 +31,7 @@
     "The four affected TUI worker tests passed, and two representative asynchronous tests passed 20 repeated runs after the cleanup helper began waiting for both worker exit and busy=false.",
     "CPython 3.13.9: the full unittest discover suite => 1214 tests OK (47.185s).",
     "ruff check --select E9,F over the four changed test files passed; git diff --check passed.",
-    "GitHub Actions run 41672846184 on final SHA b1b97e3: all 7 checks succeeded. Linux and Windows ran 1215 tests on Python 3.9/3.13; macOS 3.9/3.13 were re-run after runner-capacity cancellation and each ran 1215 tests OK; release-smoke succeeded."
+    "Candidate tree b1b97e3 / 00845cc: GitHub Actions run 41672846184 and run 41678248076 both reached seven successful checks after targeted runner retries. Every Linux, macOS and Windows Python 3.9/3.13 job ran 1215 tests and release-smoke succeeded; the PR head is the authoritative SHA for this reviewed tree."
   ],
   "unverified_scope": "No product implementation changed. The final SHA passed the GitHub Actions matrix and release-smoke; packaging/clean-install steps after the suite, real providers, release actions and long-term platform stability remain outside this test-only correction.",
   "landing_sign_off": {
