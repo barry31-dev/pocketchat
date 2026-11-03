@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 from pocketchat.memory import MAX_STORE_BYTES
+from tests._helpers import SECURE_DESCRIPTOR_READS
 from pocketchat.memory_migration import (
     MemoryMigrationError,
     _read_v1,
@@ -272,6 +273,8 @@ class MemoryV2ParserTests(unittest.TestCase):
             parse_v2_record(invalid)
 
 
+@unittest.skipUnless(
+    SECURE_DESCRIPTOR_READS, "requires no-follow descriptor support")
 class MemoryMigrationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
