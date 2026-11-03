@@ -43,8 +43,9 @@ is recorded and stops further work. Missing or malformed usage keeps the
 reservation unknown and stops before a tool, another request, or a repair edit.
 Transport failures likewise block budgeted retries because usage is unknown.
 These estimates are not a provider hard output cap. A hard output parameter is
-sent only when the profile declares support. Budgeted resume is currently
-refused until the historical ledger can be bound (see [task-exec.md](task-exec.md)).
+sent only when the profile declares support. Budgeted resume restores the
+ledger persisted in the selected execution report and refuses a missing,
+malformed or mismatched ledger (see [task-exec.md](task-exec.md)).
 The supported tools are
 `read_file`, create-only `write_file` and bounded
 `memory_search`. A read allowlist must stay inside the declared inputs.

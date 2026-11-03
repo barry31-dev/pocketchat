@@ -66,13 +66,11 @@ Spec/Plan, or missing evidence is refused before a new model/command call.
 requires `--report-sha256`, and neither resume form combines with
 `--stop-after`.
 
-A TaskSpec with `max_task_tokens` cannot currently resume from a report or
-checkpoint. The old report format does not bind the whole-task budget ledger;
-starting an empty ledger would renew spent or unknown allowance. Both resume
-forms therefore refuse before any new model or command call, rather than
-resetting the task limit. Unbudgeted resume keeps its existing behavior.
-A budgeted run can still stop at a step boundary, but that boundary is not a
-claim that budget-preserving continuation is available.
+A TaskSpec with `max_task_tokens` resumes only when the selected report
+contains the same historical ledger. The report's ledger limit must equal the
+TaskSpec limit; its prior reservations and settlements are restored before any
+new model or command call. A missing, malformed or mismatched ledger is
+refused. Unbudgeted resume keeps its existing behavior.
 
 The JSON result contains the exact spec/plan digests, task ids, step outcomes,
 and the execution report created by this invocation. A failed step returns 1

@@ -317,7 +317,7 @@ def _write_execution_report(execution: ExecutionPlan, root: Path,
                             changes: List[Dict[str, Any]],
                             issues: List[Dict[str, str]],
                             error: Dict[str, str] = None,
-                            recovery=None) -> Path:
+                            recovery=None, task_budget=None) -> Path:
     task_ids = sorted({item["task_id"] for item in results
                        if isinstance(item.get("task_id"), str)
                        and item["task_id"]})
@@ -331,6 +331,8 @@ def _write_execution_report(execution: ExecutionPlan, root: Path,
         "changes": changes,
         "evidence_issues": issues,
     }
+    if task_budget is not None:
+        payload["task_budget"] = task_budget.to_dict()
     if error is not None:
         payload["error"] = error
     if recovery is not None:
@@ -429,16 +431,31 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
         raise TaskExecutionError("stop_after must be a positive bounded step count")
     if resume_report is None and expected_report_sha256 is not None:
         raise TaskRecoveryError("a report digest needs an explicit report")
-    if resume_report is not None and task_budget is not None:
-        raise TaskRecoveryError(
-            "resuming a task budget requires a bound ledger; "
-            "budgeted resume is not supported")
     root = Path(workspace).resolve()
     previous = recovery = None
     if resume_report is not None:
         previous, recovery = prepare_recovery(
             execution, root, resume_report, expected_report_sha256,
             trace_dir=trace_dir, session_dir=session_dir)
+        previous_budget = previous.get("task_budget")
+        budget = task_budget
+        if budget is None and previous_budget is not None:
+            raise TaskRecoveryError(
+                "report has a task budget but the authorized spec does not")
+        if budget is not None:
+            from .task_budget import TaskBudget, TaskBudgetError
+            if previous_budget is None:
+                raise TaskRecoveryError(
+                    "budgeted resume requires a task budget in the report")
+            try:
+                restored = TaskBudget.from_dict(previous_budget)
+            except TaskBudgetError as exc:
+                raise TaskRecoveryError(
+                    "invalid task budget in report: %s" % exc)
+            if restored.limit_tokens != budget.limit_tokens:
+                raise TaskRecoveryError(
+                    "task budget limit does not match the authorized spec")
+            task_budget = restored
     results: List[Dict[str, Any]] = []
     changes: List[Dict[str, Any]] = []
     issues: List[Dict[str, str]] = []
@@ -533,7 +550,8 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
     except BaseException as exc:
         error = {"type": type(exc).__name__, "message": str(exc)}
         report_path = _write_execution_report(
-            execution, root, results, changes, issues, error, recovery)
+            execution, root, results, changes, issues, error, recovery,
+            task_budget)
         relative_report = report_path.relative_to(root).as_posix()
         for result in results:
             result.setdefault("execution_report", relative_report)
@@ -548,7 +566,8 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                 pass
         raise
     report_path = _write_execution_report(
-        execution, root, results, changes, issues, error, recovery)
+        execution, root, results, changes, issues, error, recovery,
+        task_budget)
     relative_report = report_path.relative_to(root).as_posix()
     for result in results:
         result.setdefault("execution_report", relative_report)
@@ -576,7 +595,8 @@ def _parse_execution_report(data: Dict[str, Any], name: str) -> Dict[str, Any]:
         raise TaskExecutionError(
             "execution report %s is not an object" % name)
     allowed = {"schema_version", "report_id", "spec_sha256", "plan_sha256",
-               "task_ids", "steps", "changes", "evidence_issues", "recovery"}
+               "task_ids", "steps", "changes", "evidence_issues", "recovery",
+               "task_budget"}
     if "error" in data:
         allowed.add("error")
         if not isinstance(data["error"], dict):
@@ -593,6 +613,14 @@ def _parse_execution_report(data: Dict[str, Any], name: str) -> Dict[str, Any]:
     if data.get("schema_version") != EXECUTION_REPORT_SCHEMA:
         raise TaskExecutionError("execution report %s has the wrong schema"
                                  % name)
+    if "task_budget" in data:
+        from .task_budget import TaskBudget, TaskBudgetError
+        try:
+            TaskBudget.from_dict(data["task_budget"])
+        except TaskBudgetError as exc:
+            raise TaskExecutionError(
+                "execution report %s has an invalid task budget: %s"
+                % (name, exc))
     if not _sha(data.get("spec_sha256")) or not _sha(data.get("plan_sha256")):
         raise TaskExecutionError("execution report %s has an invalid plan link"
                                  % name)

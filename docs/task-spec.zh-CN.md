@@ -37,8 +37,9 @@ provider 自报的输入/输出 usage 替代该预约，按任务总余额结算
 输入估算就误拒绝。真实 usage 超出任务总限额时也先记录消耗，再停止后续工作。
 缺失或损坏 usage 保持 unknown，在工具、下一请求或修复 edit 之前失败关闭；
 传输失败同样阻断预算模式下的重试，因为消耗未知。估算不等于 provider 硬输出上限，
-只有 profile 明确声明支持才发送硬输出参数。绑定历史账本落地前，带总预算的接续
-明确拒绝（见 [task-exec.zh-CN.md](task-exec.zh-CN.md)）。工具仅支持 `read_file`、create-only
+只有 profile 明确声明支持才发送硬输出参数。带总预算的接续会恢复所选执行报告
+持久化的历史账本；账本缺失、损坏或不匹配时明确拒绝（见
+[task-exec.zh-CN.md](task-exec.zh-CN.md)）。工具仅支持 `read_file`、create-only
 `write_file` 与有界 `memory_search`；读 allowlist 必须属于已声明 inputs。
 `write_file.create_only` 只能为 `true`，删除、自由 shell 字符串与未知工具均
 拒绝。`commands` 是封闭的 argv 模板列表，每个模板经校验后只能由 TaskPlan

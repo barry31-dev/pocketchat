@@ -13,10 +13,10 @@ package-index publication.
   include the configured allowance. Memory results select whole records against
   the final JSON envelope instead of forcing one oversized match. The local
   context projector rejects orphan and out-of-order tool results.
-- Refuse `max_task_tokens` report/checkpoint resume until a historical budget
-  ledger is bound. Unbudgeted resume remains supported; no fresh allowance is
-  invented for an already-started budgeted task. These changes are an unlanded
-  candidate, not a release or a real-provider validation.
+- Persist the optional whole-task budget ledger in execution reports and
+  restore it for report/checkpoint resume. A missing, malformed or mismatched
+  ledger is refused before a new request; no fresh allowance is invented for
+  an already-started budgeted task. Unbudgeted resume remains supported.
 - Add a deterministic layered context projector. It keeps fixed
   instructions and task state ahead of recent complete exchanges and declared
   evidence, deduplicates evidence sources, refuses orphan tool exchanges and

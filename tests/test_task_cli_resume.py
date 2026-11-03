@@ -100,35 +100,84 @@ class TaskExecResumeTests(unittest.TestCase):
         report = self.root / payload["reports"][0]
         return payload, report
 
-    def test_budgeted_report_and_checkpoint_resume_cannot_reset_the_ledger(self):
-        self.spec_payload["budgets"]["max_task_tokens"] = 100000
+    def _enable_task_budget(self, limit=100000):
+        self.spec_payload["budgets"]["max_task_tokens"] = limit
         self.spec = parse_spec(self.spec_payload)
         self.plan.source["spec_sha256"] = spec_sha256(self.spec)
         self.plan = parse_plan(self.plan.source, spec=self.spec)
         self.spec_path.write_text(json.dumps(self.spec_payload), encoding="utf-8")
         self.plan_path.write_text(json.dumps(self.plan.source), encoding="utf-8")
+
+    def test_budgeted_report_resume_restores_the_persisted_ledger(self):
+        self._enable_task_budget()
         _, report = self.stop()
+        persisted = json.loads(report.read_text())["task_budget"]
+        self.assertEqual(100000, persisted["limit_tokens"])
+        self.assertEqual(2, len(persisted["requests"]))
+        self.assertEqual(2, sum(
+            row["state"] == "settled" for row in persisted["requests"]))
         before_calls = len(self.adapter.calls)
-        report_sha = digest(report)
-        report_count = len(list((self.root / "task-reports").glob("*.json")))
         result = run_cli(self.args(
-            "--resume-report", str(report), "--report-sha256", report_sha,
+            "--resume-report", str(report), "--report-sha256", digest(report),
             "--json"), self.root, env={})
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn("task budget", result.stdout.lower())
-        self.assertEqual(before_calls, len(self.adapter.calls))
-        self.assertEqual(report_count,
-                         len(list((self.root / "task-reports").glob("*.json"))))
-        checkpoint = self.root / "checkpoint.json"
-        checkpoint_record = create_checkpoint(
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("completed", payload["status"])
+        self.assertEqual(before_calls + 2, len(self.adapter.calls))
+        successor = json.loads((self.root / payload["reports"][0]).read_text())
+        self.assertEqual(4, len(successor["task_budget"]["requests"]))
+        self.assertTrue(
+            {row["request_id"] for row in persisted["requests"]}
+            <= {row["request_id"] for row in successor["task_budget"]["requests"]})
+
+    def test_budgeted_checkpoint_resume_restores_the_persisted_ledger(self):
+        self._enable_task_budget()
+        _, report = self.stop()
+        report_sha = digest(report)
+        checkpoint = create_checkpoint(
             json.loads(report.read_text()), report_path=report,
             expected_report_sha256=report_sha)
-        checkpoint.write_text(json.dumps(checkpoint_record), encoding="utf-8")
+        checkpoint_path = self.root / "budget-checkpoint.json"
+        checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+        before_calls = len(self.adapter.calls)
         result = run_cli(self.args(
-            "--checkpoint", str(checkpoint), "--json"), self.root, env={})
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn("task budget", result.stdout.lower())
+            "--checkpoint", str(checkpoint_path), "--json"), self.root, env={})
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("completed", payload["status"])
+        self.assertEqual(before_calls + 2, len(self.adapter.calls))
+        successor = json.loads((self.root / payload["reports"][0]).read_text())
+        self.assertEqual(4, len(successor["task_budget"]["requests"]))
+
+    def test_budgeted_resume_rejects_missing_tampered_or_mismatched_ledger(self):
+        self._enable_task_budget()
+        _, report = self.stop()
+        original = json.loads(report.read_text())
+        variants = []
+        missing = json.loads(json.dumps(original))
+        missing.pop("task_budget")
+        variants.append(missing)
+        forged = json.loads(json.dumps(original))
+        forged["task_budget"]["requests"][0]["settled_tokens"] = 0
+        variants.append(forged)
+        mismatched = json.loads(json.dumps(original))
+        mismatched["task_budget"]["limit_tokens"] = 99999
+        variants.append(mismatched)
+        before_calls = len(self.adapter.calls)
+        before_reports = sorted((self.root / ".pocketchat/task-reports").glob("*.json"))
+        for index, data in enumerate(variants):
+            candidate = (self.root / ".pocketchat/task-reports"
+                         / report.name)
+            candidate.write_text(json.dumps(data), encoding="utf-8")
+            result = run_cli(self.args(
+                "--resume-report", str(candidate),
+                "--report-sha256", digest(candidate), "--json"),
+                self.root, env={})
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+            self.assertIn("task budget", result.stdout.lower())
         self.assertEqual(before_calls, len(self.adapter.calls))
+        self.assertEqual(before_reports,
+                         sorted((self.root / ".pocketchat/task-reports").glob("*.json")))
 
     def test_stop_after_writes_a_boundary_and_exits_zero(self):
         payload, report = self.stop()

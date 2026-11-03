@@ -154,20 +154,42 @@ class ExecutionTests(unittest.TestCase):
                      session_dir=self.root / "sessions", task_budget=budget)
         self.assertEqual([budget], seen)
 
-    def test_budgeted_resume_refuses_an_unbound_fresh_ledger_before_work(self):
+    def test_budgeted_resume_refuses_a_report_without_a_ledger_before_work(self):
+        import hashlib
+        import json
         from pocketchat.task_budget import TaskBudget
         from pocketchat.task_recovery import TaskRecoveryError
+        relative = (".pocketchat/task-reports/"
+                    "execution_without_budget.json")
+        report = self.root / relative
+        report.parent.mkdir(parents=True)
+        report.write_text(json.dumps({
+            "schema_version": "pocketchat-task-execution-report.v1",
+            "report_id": "execution_without_budget",
+            "spec_sha256": self.execution.spec_sha256,
+            "plan_sha256": self.execution.plan_sha256,
+            "task_ids": [],
+            "steps": [
+                {"step_id": step.id, "action": step.action,
+                 "status": "not_executed", "reason": "step_boundary"}
+                for step in self.execution.steps
+            ],
+            "changes": [],
+            "evidence_issues": [],
+        }), encoding="utf-8")
+        digest = hashlib.sha256(report.read_bytes()).hexdigest()
         calls = []
         with self.assertRaises(TaskRecoveryError) as caught:
             execute_plan(
                 self.execution, run_task=lambda **kwargs: calls.append(kwargs),
-                workspace=self.root, config={}, trace_dir=self.root / "traces",
-                session_dir=self.root / "sessions", task_budget=TaskBudget(
-                    limit_tokens=1000), resume_report="missing.json",
-                expected_report_sha256="a" * 64)
+                workspace=self.root.resolve(), config={},
+                trace_dir=self.root.resolve() / "traces",
+                session_dir=self.root.resolve() / "sessions",
+                task_budget=TaskBudget(limit_tokens=1000),
+                resume_report=relative,
+                expected_report_sha256=digest)
         self.assertIn("task budget", str(caught.exception).lower())
         self.assertEqual([], calls)
-        self.assertFalse((self.root / "task-reports").exists())
 
     def test_execute_plan_reuses_run_task_in_dependency_order(self):
         calls = []

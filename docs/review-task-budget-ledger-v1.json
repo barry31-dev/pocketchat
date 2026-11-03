@@ -1,0 +1,77 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/slice-queue.md",
+    "docs/task-exec.md",
+    "docs/task-exec.zh-CN.md",
+    "docs/task-spec.md",
+    "docs/task-spec.zh-CN.md",
+    "pocketchat/task_exec.py",
+    "tests/test_task_cli_resume.py",
+    "tests/test_task_exec.py",
+    "docs/review-task-budget-ledger-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/slice-queue.md",
+    "docs/task-exec.md",
+    "docs/task-exec.zh-CN.md",
+    "docs/task-spec.md",
+    "docs/task-spec.zh-CN.md",
+    "pocketchat/task_exec.py",
+    "tests/test_task_cli_resume.py",
+    "tests/test_task_exec.py",
+    "docs/review-task-budget-ledger-v1.json"
+  ],
+  "candidate_sha": "self",
+  "reviewed_evidence": [
+    "CPython 3.13.9: python3 -m unittest discover -s tests -v; 1113 tests OK in 49022 ms, exit 0.",
+    "CPython 3.9.6: /usr/bin/python3 -m unittest discover -s tests -v; 1113 tests OK in 77900 ms, exit 0.",
+    "Ruff 0.17.3: ruff check --select E9,F pocketchat tests; exit 0.",
+    "Focused suites: test_task_cli_resume 11 tests, test_task_exec 12 tests, test_task_budget 10 tests, test_task_cli_exec 11 tests, test_task_acceptance 19 tests, test_task_report 13 tests, test_plan_recovery 19 tests, test_task_checkpoint_create_cli 8 tests, test_release_process_docs 15 tests; all exit 0.",
+    "git diff --check passed."
+  ],
+  "unverified": [
+    "Real provider behavior, usage accounting and cost.",
+    "Cross-platform behavior and clean install/build artifacts.",
+    "Automatic crash recovery and concurrent writers.",
+    "Tag, Release and package-index publication."
+  ],
+  "review_context": {
+    "why": [
+      "This is a medium-risk Python behavior change: execution reports gain an optional task-budget field and report/checkpoint resume restores and validates it before work."
+    ],
+    "not_doing": [
+      "No provider call, cross-platform run, build/install, tag, Release or package-index action."
+    ],
+    "diff_walk": [
+      "pocketchat/task_exec.py: write TaskBudget.to_dict() for budgeted reports, accept the additive field in the closed report parser, and before resume restore it only when its limit equals the authorized TaskBudget.",
+      "tests/test_task_exec.py: a budgeted resume of an old report without a ledger is refused before run_task.",
+      "tests/test_task_cli_resume.py: budgeted stop/resume and checkpoint resume preserve prior request rows; missing, tampered and mismatched ledgers are refused without new provider calls.",
+      "docs and CHANGELOG: replace the prior budgeted-resume refusal with the persisted-ledger contract; product slice queue marks the new delivered slice."
+    ],
+    "static_checks": [
+      "Closed report schema is extended by exactly one additive optional field.",
+      "A report ledger with no spec budget is refused; a spec budget with no report ledger is refused; limit mismatch is refused.",
+      "Restored ledger rows are validated by TaskBudget.from_dict; the next reservation uses the same limit and prior requests remain.",
+      "No public CLI flag or JSON envelope field outside the execution report changes."
+    ],
+    "red_green": [
+      "Before the implementation, the tests failed with missing task_budget and the old \"budgeted resume is not supported\" error. After the change, all focused and full tests pass on CPython 3.9.6 and 3.13.9."
+    ],
+    "gaps": [
+      "Real provider usage, crash recovery, concurrent writers, build/install and cross-platform behavior remain unverified."
+    ]
+  }
+}
