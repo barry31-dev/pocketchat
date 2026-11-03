@@ -31,9 +31,9 @@
     "The four affected TUI worker tests passed, and two representative asynchronous tests passed 20 repeated runs after the cleanup helper began waiting for both worker exit and busy=false.",
     "CPython 3.13.9: the full unittest discover suite => 1214 tests OK (47.185s).",
     "ruff check --select E9,F over the four changed test files passed; git diff --check passed.",
-    "GitHub Actions run 41667960148 on candidate 1804cfa: all 7 checks succeeded; Linux 3.13 ran 1215 tests with no skips (OK), Windows 3.9 and 3.13 ran 1215 tests with 130 capability-based skips (OK)."
+    "GitHub Actions run 41672846184 on final SHA b1b97e3: all 7 checks succeeded. Linux and Windows ran 1215 tests on Python 3.9/3.13; macOS 3.9/3.13 were re-run after runner-capacity cancellation and each ran 1215 tests OK; release-smoke succeeded."
   ],
-  "unverified_scope": "No product implementation changed. The exact candidate was verified by the GitHub Actions matrix and release-smoke; packaging/clean-install steps after the suite, real providers, release actions and long-term platform stability remain outside this test-only correction.",
+  "unverified_scope": "No product implementation changed. The final SHA passed the GitHub Actions matrix and release-smoke; packaging/clean-install steps after the suite, real providers, release actions and long-term platform stability remain outside this test-only correction.",
   "landing_sign_off": {
     "status": "pending",
     "scope": "CI gate correction for the already-open PC-TCONTRACT-1 / PC-MSTORE-PARENT-1 candidate; the exact final candidate still needs the user's explicit human sign-off before merge. Machine evidence does not replace that signature and this record adds no product slice, tag, Release, package upload or real provider run."
