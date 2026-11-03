@@ -496,6 +496,47 @@ class MemoryMigrationTests(unittest.TestCase):
         self.assertCountEqual([mock.call(42), mock.call(41)],
                               close.call_args_list)
 
+    def test_write_store_fdopen_failure_closes_the_target_descriptor(self):
+        from unittest import mock
+        from pocketchat.memory_migration import _write_store_from_parent
+
+        def fail_fdopen(descriptor, mode):
+            raise OSError("fdopen failed")
+
+        with mock.patch("pocketchat.memory_migration.os.open",
+                        return_value=42), \
+                mock.patch("pocketchat.memory_migration.os.fdopen",
+                           side_effect=fail_fdopen), \
+                mock.patch("pocketchat.memory_migration.os.unlink"), \
+                mock.patch("pocketchat.memory_migration.os.close") as close:
+            with self.assertRaises(MemoryMigrationError):
+                _write_store_from_parent("memory.v2.jsonl", 41, b"")
+        close.assert_called_once_with(42)
+
+    def test_lock_fdopen_failure_closes_lock_and_parent_descriptors(self):
+        from unittest import mock
+        from pocketchat.memory_migration import _mutate_v2_store
+
+        def fail_fdopen(descriptor, mode):
+            raise OSError("fdopen failed")
+
+        with mock.patch(
+                "pocketchat.memory_migration._open_target_parent",
+                return_value=41), \
+                mock.patch("pocketchat.memory_migration.os.stat",
+                           return_value=mock.Mock(st_mode=0o100600)), \
+                mock.patch("pocketchat.memory_migration.os.open",
+                           return_value=42), \
+                mock.patch("pocketchat.memory_migration.os.fdopen",
+                           side_effect=fail_fdopen), \
+                mock.patch("pocketchat.memory_migration.os.close") as close:
+            with self.assertRaises(MemoryMigrationError):
+                _mutate_v2_store(
+                    self.root, Path(".pocketchat/memory.v2.jsonl"),
+                    lambda records, write: None)
+        self.assertCountEqual([mock.call(42), mock.call(41)],
+                              close.call_args_list)
+
     def test_read_v1_closes_the_source_descriptor_after_success(self):
         from unittest import mock
 

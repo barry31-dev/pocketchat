@@ -16,7 +16,7 @@ import os
 import re
 import stat
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 from uuid import uuid4
 
 from .memory import (MAX_LINE_BYTES, MAX_STORE_BYTES,
@@ -417,63 +417,61 @@ def _resolve_store(root: Path, store: Path) -> Path:
     return resolved
 
 
-def _v2_lock_path(target: Path) -> Path:
-    return target.with_name(target.name + ".lock")
+def _store_payload(records: Iterable[Dict[str, Any]]) -> bytes:
+    validated = [parse_v2_record(record) for record in records]
+    payload = b"".join(
+        (json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+        .encode("utf-8") for record in validated)
+    if len(payload) > MAX_STORE_BYTES:
+        raise MemoryMigrationError(
+            f"v2 memory store would exceed {MAX_STORE_BYTES} bytes")
+    if any(len(line) > MAX_LINE_BYTES
+           for line in payload.splitlines(keepends=True)):
+        raise MemoryMigrationError(
+            "v2 memory record would exceed the line budget")
+    return payload
 
 
-def _mutate_v2_store(root: Path, store: Path, change) -> Any:
-    """Run one read-modify-write under the v2 store's exclusive lock."""
-    target = _resolve_store(root, store)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    lock = _v2_lock_path(target)
-    if lock.is_symlink():
-        raise MemoryMigrationError("v2 memory store lock must not be a symlink")
-    try:
-        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
-        if not hasattr(os, "O_NOFOLLOW"):
+def _parse_store_text(text: str) -> List[Dict[str, Any]]:
+    records = []
+    for number, line in enumerate(text.split("\n"), 1):
+        if not line:
+            continue
+        if len(line.encode("utf-8")) > MAX_LINE_BYTES:
             raise MemoryMigrationError(
-                "v2 store requires no-follow lock support")
-        flags |= os.O_NOFOLLOW
-        descriptor = os.open(str(lock), flags, 0o600)
-        lock_file = os.fdopen(descriptor, "a+")
-    except MemoryMigrationError:
-        raise
-    except OSError as exc:
-        raise MemoryMigrationError(f"cannot open v2 memory store lock: {exc}")
-    locked = False
-    try:
-        _lock_nonblocking(lock_file)
-        locked = True
-        records = read_v2_store(root, store)
-        return change(records)
-    finally:
+                f"v2 memory store line {number} exceeds {MAX_LINE_BYTES} bytes")
         try:
-            if locked:
-                _unlock(lock_file)
-        finally:
-            lock_file.close()
+            record = json.loads(line)
+        except ValueError as exc:
+            raise MemoryMigrationError(
+                f"v2 memory store line {number} is invalid JSON: {exc}")
+        records.append(parse_v2_record(record))
+    return records
 
 
-def read_v2_store(root: Path, store: Path) -> List[Dict[str, Any]]:
-    """Read one bounded v2 JSONL store without following its parent or file."""
-    target = _resolve_store(root, store)
+def _require_parent_current(parent: Path, parent_descriptor: int) -> None:
     try:
-        target.lstat()
-    except FileNotFoundError:
-        return []
-    except OSError as exc:
-        raise MemoryMigrationError(f"cannot inspect v2 memory store: {exc}")
+        current = parent.lstat()
+    except OSError:
+        current = None
+    opened = os.fstat(parent_descriptor)
+    if (current is None or not stat.S_ISDIR(current.st_mode)
+            or current.st_dev != opened.st_dev
+            or current.st_ino != opened.st_ino):
+        raise MemoryMigrationError(
+            "v2 memory store parent must remain stable without following "
+            "symlinks")
+
+
+def _read_store_from_parent(name: str, parent_descriptor: int
+                            ) -> List[Dict[str, Any]]:
     if not hasattr(os, "O_NOFOLLOW"):
         raise MemoryMigrationError("v2 store requires no-follow file support")
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | os.O_NOFOLLOW
-    parent_descriptor = _open_target_parent(Path(root).resolve(), target.parent)
+    descriptor = None
     try:
-        descriptor = None
         try:
-            if target.is_symlink():
-                raise MemoryMigrationError(
-                    "v2 memory store must not be a symlink")
-            descriptor = os.open(target.name, flags, dir_fd=parent_descriptor)
+            descriptor = os.open(name, flags, dir_fd=parent_descriptor)
             info = os.fstat(descriptor)
             if not stat.S_ISREG(info.st_mode):
                 raise MemoryMigrationError(
@@ -498,53 +496,57 @@ def read_v2_store(root: Path, store: Path) -> List[Dict[str, Any]]:
             raise
         except (OSError, UnicodeError) as exc:
             raise MemoryMigrationError(f"cannot read v2 memory store: {exc}")
-        finally:
-            if descriptor is not None:
-                os.close(descriptor)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    return _parse_store_text(text)
+
+
+def read_v2_store(root: Path, store: Path) -> List[Dict[str, Any]]:
+    """Read one bounded v2 JSONL store without following its parent or file."""
+    target = _resolve_store(root, store)
+    try:
+        target.lstat()
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        raise MemoryMigrationError(f"cannot inspect v2 memory store: {exc}")
+    parent_descriptor = _open_target_parent(
+        Path(root).resolve(), target.parent, create=False)
+    try:
+        records = _read_store_from_parent(target.name, parent_descriptor)
+        _require_parent_current(target.parent, parent_descriptor)
+        return records
     finally:
         os.close(parent_descriptor)
 
-    records = []
-    for number, line in enumerate(text.split("\n"), 1):
-        if not line:
-            continue
-        if len(line.encode("utf-8")) > MAX_LINE_BYTES:
-            raise MemoryMigrationError(
-                f"v2 memory store line {number} exceeds {MAX_LINE_BYTES} bytes")
-        try:
-            record = json.loads(line)
-        except ValueError as exc:
-            raise MemoryMigrationError(
-                f"v2 memory store line {number} is invalid JSON: {exc}")
-        records.append(parse_v2_record(record))
-    return records
 
-
-def _write_store(root: Path, store: Path, records: Iterable[Dict[str, Any]]) -> None:
-    """Atomically replace one v2 store after validating every record."""
-    target = _resolve_store(root, store)
-    validated = [parse_v2_record(record) for record in records]
-    payload = b"".join(
-        (json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
-        .encode("utf-8") for record in validated)
-    if len(payload) > MAX_STORE_BYTES:
-        raise MemoryMigrationError(
-            f"v2 memory store would exceed {MAX_STORE_BYTES} bytes")
-    if any(len(line) > MAX_LINE_BYTES for line in payload.splitlines(keepends=True)):
-        raise MemoryMigrationError("v2 memory record would exceed the line budget")
-    parent_descriptor = _open_target_parent(Path(root).resolve(), target.parent)
+def _write_store_from_parent(name: str, parent_descriptor: int,
+                             payload: bytes,
+                             parent_path: Optional[Path] = None) -> None:
+    if parent_path is not None:
+        _require_parent_current(parent_path, parent_descriptor)
     temporary_name = None
     try:
-        temporary_name = f".{target.name}.{uuid4().hex}.tmp"
+        temporary_name = f".{name}.{uuid4().hex}.tmp"
         descriptor = os.open(
             temporary_name,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
             0o600, dir_fd=parent_descriptor)
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary_name, target.name,
+        descriptor_needs_close = True
+        try:
+            handle = os.fdopen(descriptor, "wb")
+            descriptor_needs_close = False
+            with handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+        finally:
+            if descriptor_needs_close:
+                os.close(descriptor)
+        if parent_path is not None:
+            _require_parent_current(parent_path, parent_descriptor)
+        os.replace(temporary_name, name,
                    src_dir_fd=parent_descriptor,
                    dst_dir_fd=parent_descriptor)
         temporary_name = None
@@ -556,7 +558,75 @@ def _write_store(root: Path, store: Path, records: Iterable[Dict[str, Any]]) -> 
                 os.unlink(temporary_name, dir_fd=parent_descriptor)
             except OSError:
                 pass
+
+
+def _write_store(root: Path, store: Path,
+                 records: Iterable[Dict[str, Any]]) -> None:
+    """Atomically replace one v2 store after validating every record."""
+    target = _resolve_store(root, store)
+    payload = _store_payload(records)
+    parent_descriptor = _open_target_parent(
+        Path(root).resolve(), target.parent, create=True)
+    try:
+        _write_store_from_parent(
+            target.name, parent_descriptor, payload, parent_path=target.parent)
+    finally:
         os.close(parent_descriptor)
+
+
+def _mutate_v2_store(root: Path, store: Path, change) -> Any:
+    """Run one read-modify-write through one no-follow parent descriptor."""
+    target = _resolve_store(root, store)
+    parent_descriptor = _open_target_parent(
+        Path(root).resolve(), target.parent, create=True)
+    lock_name = target.name + ".lock"
+    lock_file = None
+    locked = False
+    try:
+        try:
+            lock_info = os.stat(
+                lock_name, dir_fd=parent_descriptor, follow_symlinks=False)
+            if stat.S_ISLNK(lock_info.st_mode):
+                raise MemoryMigrationError(
+                    "v2 memory store lock must not be a symlink")
+        except FileNotFoundError:
+            pass
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)
+        if not hasattr(os, "O_NOFOLLOW"):
+            raise MemoryMigrationError(
+                "v2 store requires no-follow lock support")
+        flags |= os.O_NOFOLLOW
+        descriptor = os.open(
+            lock_name, flags, 0o600, dir_fd=parent_descriptor)
+        descriptor_needs_close = True
+        try:
+            lock_file = os.fdopen(descriptor, "a+")
+            descriptor_needs_close = False
+        finally:
+            if descriptor_needs_close:
+                os.close(descriptor)
+        _lock_nonblocking(lock_file)
+        locked = True
+        records = _read_store_from_parent(target.name, parent_descriptor)
+
+        def write(validated_records):
+            _write_store_from_parent(
+                target.name, parent_descriptor,
+                _store_payload(validated_records), parent_path=target.parent)
+
+        return change(records, write)
+    except MemoryMigrationError:
+        raise
+    except OSError as exc:
+        raise MemoryMigrationError(f"cannot open v2 memory store lock: {exc}")
+    finally:
+        try:
+            if locked:
+                _unlock(lock_file)
+        finally:
+            if lock_file is not None:
+                lock_file.close()
+            os.close(parent_descriptor)
 
 
 def _new_timestamp() -> str:
@@ -570,7 +640,7 @@ def accept_v2_record(root: Path, store: Path, memory_id: str,
     if not isinstance(accepted_by, str) or not accepted_by.strip():
         raise MemoryMigrationError("accepted_by must be a non-empty string")
 
-    def change(records):
+    def change(records, write):
         for index, record in enumerate(records):
             if record["memory_id"] != memory_id:
                 continue
@@ -594,7 +664,7 @@ def accept_v2_record(root: Path, store: Path, memory_id: str,
             updated["updated_by"] = accepted_by.strip()
             updated["updated"] = _new_timestamp()
             records[index] = parse_v2_record(updated)
-            _write_store(root, store, records)
+            write(records)
             return records[index]
         raise MemoryMigrationError(f"no such memory: {memory_id}")
 
@@ -603,7 +673,7 @@ def accept_v2_record(root: Path, store: Path, memory_id: str,
 
 def retire_v2_record(root: Path, store: Path, memory_id: str,
                      *, superseded_by: str | None = None) -> Dict[str, Any]:
-    def change(records):
+    def change(records, write):
         for index, record in enumerate(records):
             if record["memory_id"] != memory_id:
                 continue
@@ -622,7 +692,7 @@ def retire_v2_record(root: Path, store: Path, memory_id: str,
                         f"replacement memory does not exist: {replacement}")
                 updated["superseded_by"] = replacement
             records[index] = parse_v2_record(updated)
-            _write_store(root, store, records)
+            write(records)
             return records[index]
         raise MemoryMigrationError(f"no such memory: {memory_id}")
 
@@ -630,16 +700,17 @@ def retire_v2_record(root: Path, store: Path, memory_id: str,
 
 
 def forget_v2_record(root: Path, store: Path, memory_id: str) -> None:
-    def change(records):
+    def change(records, write):
         kept = [record for record in records if record["memory_id"] != memory_id]
         if len(kept) == len(records):
             raise MemoryMigrationError(f"no such memory: {memory_id}")
-        _write_store(root, store, kept)
+        write(kept)
 
     _mutate_v2_store(root, store, change)
 
 
-def _open_target_parent(workspace: Path, parent: Path) -> int:
+def _open_target_parent(workspace: Path, parent: Path, *,
+                        create: bool = True) -> int:
     """Open the target's parent without following a replaced symlink."""
     if os.open not in os.supports_dir_fd or not hasattr(os, "O_NOFOLLOW"):
         raise MemoryMigrationError("v2 target requires no-follow directory support")
@@ -654,10 +725,11 @@ def _open_target_parent(workspace: Path, parent: Path) -> int:
     try:
         descriptor = os.open(str(workspace), flags)
         for part in relative.parts:
-            try:
-                os.mkdir(part, mode=0o700, dir_fd=descriptor)
-            except FileExistsError:
-                pass
+            if create:
+                try:
+                    os.mkdir(part, mode=0o700, dir_fd=descriptor)
+                except FileExistsError:
+                    pass
             child = os.open(part, flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = child

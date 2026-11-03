@@ -306,6 +306,86 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual("", (outside / "memory.v2.jsonl").read_text(
             encoding="utf-8"))
 
+    def test_v2_read_does_not_recreate_a_replaced_parent(self):
+        added = run_cli(("memory", "add", "read target", "--json"), self.root)
+        self.assertEqual(0, added.returncode, added.stdout + added.stderr)
+        store = ".pocketchat/memory.v2.jsonl"
+        migrated = run_cli(
+            ("memory", "migrate", "--workspace-id", "workspace-1",
+             "--store", store, "--json"), self.root)
+        self.assertEqual(0, migrated.returncode, migrated.stdout + migrated.stderr)
+        from pocketchat.memory_migration import (
+            MemoryMigrationError, _open_target_parent, read_v2_store)
+        parent = self.root / ".pocketchat"
+        backup = self.root / ".pocketchat-backup"
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            backup, ignore_errors=True))
+        original_open_parent = _open_target_parent
+        replaced = False
+
+        def replace_then_open(workspace, target_parent, **kwargs):
+            nonlocal replaced
+            if not replaced:
+                parent.rename(backup)
+                replaced = True
+            if kwargs:
+                return original_open_parent(workspace, target_parent, **kwargs)
+            return original_open_parent(workspace, target_parent)
+
+        with mock.patch("pocketchat.memory_migration._open_target_parent",
+                        replace_then_open):
+            with self.assertRaises(MemoryMigrationError):
+                read_v2_store(self.root, Path(store))
+        self.assertTrue(replaced)
+        self.assertFalse(parent.exists())
+
+    def test_v2_mutation_does_not_create_lock_through_a_replaced_parent(self):
+        added = run_cli(("memory", "add", "lock target", "--json"), self.root)
+        memory_id = json.loads(added.stdout)["memory_id"]
+        store = ".pocketchat/memory.v2.jsonl"
+        migrated = run_cli(
+            ("memory", "migrate", "--workspace-id", "workspace-1",
+             "--store", store, "--json"), self.root)
+        self.assertEqual(0, migrated.returncode, migrated.stdout + migrated.stderr)
+        parent = self.root / ".pocketchat"
+        outside = self.root.parent / f"{self.root.name}-outside-mutation-lock"
+        outside.mkdir()
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            outside, ignore_errors=True))
+        backup = self.root / ".pocketchat-backup"
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            backup, ignore_errors=True))
+        target = (self.root / store).resolve()
+        lock_name = target.name + ".lock"
+        original_open = __import__("os").open
+        replaced = False
+
+        def replace_before_lock(path, *args, **kwargs):
+            nonlocal replaced
+            lock_open = (
+                path == str(target.with_name(lock_name))
+                or (path == lock_name and kwargs.get("dir_fd") is not None)
+            )
+            if lock_open and not replaced:
+                parent.rename(backup)
+                parent.symlink_to(outside, target_is_directory=True)
+                replaced = True
+            return original_open(path, *args, **kwargs)
+
+        replacement_open = replace_before_lock
+        with mock.patch("pocketchat.memory_migration.os.open",
+                        replacement_open), \
+                mock.patch("pocketchat.memory_migration.os.supports_dir_fd",
+                           {replacement_open}):
+            result = run_cli(
+                ("memory", "accept", memory_id, "--by", "operator",
+                 "--verification", "not_required", "--store", store, "--json"),
+                self.root)
+        self.assertTrue(replaced)
+        self.assertEqual(2, result.returncode)
+        self.assertFalse(json.loads(result.stdout)["ok"])
+        self.assertFalse((outside / lock_name).exists())
+
     def test_v2_mutation_refuses_a_symlinked_lock(self):
         added = run_cli(("memory", "add", "lock target", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -468,20 +548,30 @@ class MemoryStoreTests(unittest.TestCase):
         outside = self.root.parent / f"{self.root.name}-outside-parent"
         outside.mkdir()
         self.addCleanup(lambda: outside.rmdir() if outside.exists() else None)
-        original_open = __import__("os").open
+        from pocketchat.memory_migration import _write_store_from_parent
+        original_write = _write_store_from_parent
+        replaced = False
 
-        def replace_parent(*args, **kwargs):
-            if len(args) > 1 and args[0] == str(parent):
-                parent.rmdir()
+        def replace_before_write(name, parent_descriptor, payload, **kwargs):
+            nonlocal replaced
+            if not replaced:
+                parent.rename(backup)
                 parent.symlink_to(outside, target_is_directory=True)
-            return original_open(*args, **kwargs)
+                replaced = True
+            return original_write(
+                name, parent_descriptor, payload, **kwargs)
 
-        with mock.patch("pocketchat.memory_migration.os.open",
-                        side_effect=replace_parent):
+        backup = self.root / ".pocketchat-backup"
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            backup, ignore_errors=True))
+        with mock.patch(
+                "pocketchat.memory_migration._write_store_from_parent",
+                replace_before_write):
             result = run_cli(
                 ("memory", "accept", memory_id, "--by", "operator",
                  "--verification", "not_required",
                  "--store", store, "--json"), self.root)
+        self.assertTrue(replaced)
         self.assertEqual(2, result.returncode)
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertFalse((outside / "memory.v2.jsonl").exists())
