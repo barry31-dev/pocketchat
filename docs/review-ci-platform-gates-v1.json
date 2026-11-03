@@ -35,8 +35,8 @@
   ],
   "unverified_scope": "No product implementation changed. The final SHA passed the GitHub Actions matrix and release-smoke; packaging/clean-install steps after the suite, real providers, release actions and long-term platform stability remain outside this test-only correction.",
   "landing_sign_off": {
-    "status": "pending",
-    "scope": "CI gate correction for the already-open PC-TCONTRACT-1 / PC-MSTORE-PARENT-1 candidate; the exact final candidate still needs the user's explicit human sign-off before merge. Machine evidence does not replace that signature and this record adds no product slice, tag, Release, package upload or real provider run."
+    "status": "approved",
+    "scope": "User directive of 2026-11-04: “好”, approving merge of the exact final PR candidate after this sign-off commit and a green CI run on that exact SHA. This closes the CI gate correction for PC-TCONTRACT-1 / PC-MSTORE-PARENT-1; it does not authorize a tag, Release, package upload or real provider run."
   },
   "review_context": {
     "why": [
