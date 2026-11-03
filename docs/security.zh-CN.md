@@ -58,9 +58,11 @@
 
 模型自动 tool call 默认关闭。profile 只提供它显式启用的本地工具（`read_file`、
 create-only `write_file` 或只读 `memory_search`），路径来自显式 allowlist，
-调用次数和结果大小受限。禁用/未知工具、缺参数和 guard 拒绝返回有界失败结果，
-让模型纠错；底层 I/O/存储错误、结果超限和预算耗尽仍结束 run。run trace 记录
-tool schema hash 与 call id；shell、执行和网络工具仍不可用。
+调用次数和结果大小受限。禁用/未知工具、缺参数或未知参数和 guard 拒绝返回有界失败结果，
+让模型纠错；参数在触达文件或记忆 I/O 前按封闭 contract 校验。provider schema、
+trace 摘要、task policy 与宿主校验共用 `pocketchat.tool_contracts`。底层
+I/O/存储错误、结果超限和预算耗尽仍结束 run。run trace 记录各 contract 的 schema
+hash 与 call id；shell、执行和网络工具仍不可用。
 
 启用 `tool_write_enabled` 时，`write_file` 只能 create-only。模型不能请求
 overwrite 或 delete，目标必须显式 allowlist；已有文件在写入前 fail-closed。

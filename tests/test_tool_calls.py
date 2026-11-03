@@ -181,6 +181,10 @@ class ToolCallTests(unittest.TestCase):
         offered = events[0]["payload"]["config_summary"]["tools"]
         self.assertTrue(offered[0]["available"])
         self.assertEqual(64, len(offered[0]["schema_hash"]))
+        self.assertTrue(offered[1]["available"])
+        self.assertEqual(64, len(offered[1]["schema_hash"]))
+        self.assertFalse(offered[2]["available"])
+        self.assertEqual(64, len(offered[2]["schema_hash"]))
 
     def test_adapter_rebuild_drift_is_not_sent(self):
         adapter = FakeToolAdapter([text_response()])

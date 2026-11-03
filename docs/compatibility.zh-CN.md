@@ -99,3 +99,11 @@ Windows 当前显式 `unsupported_platform`，不继承普通 CLI 的目标平�
 layered projection 与 `memory_recall_enabled`，并给出 v2 store 和 workspace id，
 召回内容才会进入请求。固定分词、准入、排序、双预算 excerpt、遗漏计数与 stale-cursor
 拒绝规则见 [memory-retrieval.zh-CN.md](memory-retrieval.zh-CN.md)。
+
+## 未发布：集中工具 contract
+
+`read_file`、`write_file` 与 `memory_search` 的 provider schema、trace hash、
+task-policy 名称和宿主参数校验现在都来自同一个封闭 contract 模块。现有 payload
+保持 additive 且默认关闭：未启用工具不出现，合法调用参数不变，未知参数在 I/O
+之前返回有界 `invalid_arguments`。Trace 的 `tools[]` 仍列出三个名称、可用标志与
+逐 contract schema hash。边界见 [security.zh-CN.md](security.zh-CN.md)。

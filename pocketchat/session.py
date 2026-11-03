@@ -27,6 +27,7 @@ from .context import context_chars as _context_chars
 from .context_projection import ContextProjectionError, project_context
 from .provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
 from .provider import estimate_tokens, tool_offer_summary
+from .tool_contracts import ToolContractError, parse_arguments
 from .request_admission import AdmissionError, admit_for_config
 from .task_budget import TaskBudgetError
 from .tool_results import ResultProjectionError, project_result
@@ -849,8 +850,13 @@ class Session:
             return self._tool_failure_result(
                 call, "unsupported_tool",
                 "tool is not in the supported set", result_limit)
-        arguments = call.get("arguments")
-        path = arguments.get("path") if isinstance(arguments, dict) else None
+        try:
+            arguments = parse_arguments(str(tool_name), call.get("arguments"))
+        except ToolContractError as exc:
+            return self._record_invalid_arguments(
+                call, str(exc), result_limit)
+        path = (arguments["path"]
+                if tool_name in ("read_file", "write_file") else None)
         workspace = Path.cwd()
         if config.get("task_workspace_root"):
             workspace = Path(config["task_workspace_root"])
@@ -858,9 +864,6 @@ class Session:
             workspace = self.trace_path.parent.parent
         try:
             if tool_name == "read_file":
-                if not isinstance(path, str) or not path.strip():
-                    return self._record_invalid_arguments(
-                        call, "read_file requires a path", result_limit)
                 result = execute_read_file(
                     workspace, path,
                     allowed_paths=config.get("tool_read_allow_paths") or [],
@@ -869,13 +872,7 @@ class Session:
                     tool_call_id=str(call.get("id") or ""),
                 )
             elif tool_name == "write_file":
-                if not isinstance(path, str) or not path.strip():
-                    return self._record_invalid_arguments(
-                        call, "write_file requires a path", result_limit)
-                content = arguments.get("content") if isinstance(arguments, dict) else None
-                if not isinstance(content, str):
-                    return self._record_invalid_arguments(
-                        call, "write_file requires content", result_limit)
+                content = arguments["content"]
                 result = execute_write_file(
                     workspace, path, content,
                     allowed_paths=config.get("tool_write_allow_paths") or [],
@@ -884,10 +881,7 @@ class Session:
                     tool_call_id=str(call.get("id") or ""),
                 )
             else:
-                query = arguments.get("query") if isinstance(arguments, dict) else None
-                if not isinstance(query, str) or not query:
-                    return self._record_invalid_arguments(
-                        call, "memory_search requires a query", result_limit)
+                query = arguments["query"]
                 self.recorder.append("permission.requested", {
                     "action": "search", "resource": query,
                     "tool": "memory_search",

@@ -114,3 +114,13 @@ a request only when layered projection and `memory_recall_enabled` are both
 explicitly enabled with a v2 store and workspace id. Fixed tokenization,
 admission, ranking, dual excerpt budgets, omission counts and stale-cursor
 refusal are documented in [memory-retrieval.md](memory-retrieval.md).
+
+## Unreleased: centralized tool contracts
+
+The `read_file`, `write_file` and `memory_search` provider schemas, trace
+hashes, task-policy names and host argument validator now derive from one
+closed contract module. Existing payloads remain additive and default-off:
+disabled tools stay absent, valid calls keep their documented arguments, and
+unknown arguments return a bounded `invalid_arguments` failure before I/O.
+Trace `tools[]` still reports all three names with an availability flag and a
+per-contract schema hash. See [security.md](security.md).

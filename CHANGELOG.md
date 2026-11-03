@@ -7,6 +7,7 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Declare `read_file`, `write_file` and `memory_search` through one closed tool-contract module shared by the provider schema, trace summary, task policy and host argument validator. Unknown or malformed arguments now fail before file or memory I/O while disabled tools remain absent from the default payload. See `pocketchat/tool_contracts.py`.
 - Bind task checkpoints to optional context/recall artifacts and persisted budget ledgers, and validate projection sidecars during dry-run replay. Historical replay uses the saved request snapshot and never re-searches current memory; missing or changed bound artifacts refuse before resume.
 - Add explicit v2 memory recall dry-run and opt-in context projection wiring. The command is read-only and workspace-bound; Session injects one bounded recall message only when both layered projection and `memory_recall_enabled` are explicitly enabled, while legacy `memory search` remains unchanged. See `docs/memory-retrieval.md`.
 - Add explicit v2 memory CLI operations: `memory migrate` creates a bounded
