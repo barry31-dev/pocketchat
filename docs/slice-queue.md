@@ -107,6 +107,39 @@ and sidecar/preview binding as a separate slice.
 | `PC-TCONTRACT-1` | `delivered` | `PC-RESULT-2` | `read_file`, `write_file` and `memory_search` share one closed contract for provider schema, host argument validation, trace hashing and task-policy naming; disabled tools stay default-off, unknown arguments fail before I/O, and command templates never become a free shell. `approved_by`: user directive of 2026-11-03, “批准，全力推进项目，把剩下的任务都完成” | `tests/test_tool_contracts.py`; `tests/test_tool_calls.py`; `pocketchat/tool_contracts.py`; `pocketchat/provider.py`; `pocketchat/session.py`; `pocketchat/task_policy.py`; `docs/review-tool-contracts-v1.json` |
 
 
+### Approved foundational slices
+
+#### `PC-SFILE-READ-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-session-read-errors`
+- **Write scope**: `pocketchat/sessions.py`, `tests/test_session_read_errors.py`,
+  `docs/session-read-errors.md`, `docs/session-read-errors.zh-CN.md`
+- **Depends on**: none
+- **Done when**: A malformed UTF-8 session file is rejected as the existing typed
+  session-file error, and `show --json` returns the existing `session_file`
+  refusal with exit 2 and no traceback while the input bytes remain unchanged.
+- **Evidence**: `tests/test_session_read_errors.py`, `tests/test_sessions.py`,
+  both session-read error docs, and `docs/review-session-read-errors-v1.json`.
+- **Approved by**: User directive of 2026-11-03 to continue PocketChat
+  foundational work; MyWork planner recorded the approved design at `9496c235`.
+
+#### `PC-RCAP-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-runtime-capabilities`
+- **Write scope**: `pocketchat/runtime_capabilities.py`,
+  `tests/test_runtime_capabilities.py`
+- **Depends on**: none
+- **Done when**: A pure `collect_runtime_capabilities()` reports interpreter/OS
+  facts and three explicit Python primitive booleans as schema 1 JSON without
+  I/O, and fixed `not_checked` names keep provider, workspace and concurrency
+  claims out of the result.
+- **Evidence**: `tests/test_runtime_capabilities.py`,
+  `pocketchat/runtime_capabilities.py`.
+- **Approved by**: User directive of 2026-11-03 to continue PocketChat
+  foundational work; MyWork planner recorded the approved design at `9496c235`.
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.
