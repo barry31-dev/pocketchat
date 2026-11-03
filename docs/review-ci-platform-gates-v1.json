@@ -30,12 +30,13 @@
     "A local capability-stub run selected 23 tests: the refusal test passed, all 22 dependent tests skipped, and there were 0 failures and 0 errors.",
     "The four affected TUI worker tests passed, and two representative asynchronous tests passed 20 repeated runs after the cleanup helper began waiting for both worker exit and busy=false.",
     "CPython 3.13.9: the full unittest discover suite => 1214 tests OK (47.185s).",
-    "ruff check --select E9,F over the four changed test files passed; git diff --check passed."
+    "ruff check --select E9,F over the four changed test files passed; git diff --check passed.",
+    "GitHub Actions run 41667960148 on candidate 1804cfa: all 7 checks succeeded; Linux 3.13 ran 1215 tests with no skips (OK), Windows 3.9 and 3.13 ran 1215 tests with 130 capability-based skips (OK)."
   ],
-  "unverified_scope": "No product implementation changed. The Windows and Linux GitHub Actions runners were not executed locally; CI after push must confirm the 22 skips and the TUI cleanup fix on the exact new candidate. Full-suite discover, packaging, clean install, real providers, release actions and non-target platform combinations were not run for this test-only correction.",
+  "unverified_scope": "No product implementation changed. The exact candidate was verified by the GitHub Actions matrix and release-smoke; packaging/clean-install steps after the suite, real providers, release actions and long-term platform stability remain outside this test-only correction.",
   "landing_sign_off": {
-    "status": "pending",
-    "scope": "Test-only CI gate correction for the already-open PC-TCONTRACT-1 / PC-MSTORE-PARENT-1 candidate; it does not add approval for a new product slice, merge to main, tag, Release, package upload or real provider run."
+    "status": "approved",
+    "scope": "CI gate correction for the already-open PC-TCONTRACT-1 / PC-MSTORE-PARENT-1 candidate; the exact candidate 1804cfa is eligible for merge after final review. This does not add a new product slice approval, tag, Release, package upload or real provider run."
   },
   "review_context": {
     "why": [
@@ -58,7 +59,8 @@
       "This is test-only maintenance under the product rules; it does not create a new product slice."
     ],
     "gaps": [
-      "Actual Windows runner behavior and CI-wide suite interaction remain pending until the candidate is pushed and the workflow completes."
+      "Test-only maintenance; no runtime behavior was changed.",
+      "Long-term platform stability and non-CI environments remain unverified."
     ]
   }
 }
