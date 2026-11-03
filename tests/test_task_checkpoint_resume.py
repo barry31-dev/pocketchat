@@ -10,7 +10,46 @@ from pathlib import Path
 from pocketchat.task_checkpoint import (CheckpointError,
                                         create_checkpoint)
 from pocketchat.task_checkpoint import resume_from_checkpoint
+from pocketchat.request import write_request_snapshot
 from pocketchat.task_exec import EXECUTION_REPORT_SCHEMA
+
+
+def _sha_json(value):
+    data = json.dumps(value, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
+
+
+def context_binding(root):
+    request_path = root / "traces" / "requests" / "run_x.turn-1.json"
+    request_sha = write_request_snapshot(
+        request_path, run_id="run_x", profile="local",
+        created="2026-11-03T00:00:00.000Z", payload={"messages": []})
+    recall = {"query_sha256": "1" * 64, "selected_count": 1,
+              "evidence_count": 1}
+    sidecar_path = request_path.with_suffix(".projection.json")
+    sidecar = {
+        "schema_version": "pocketchat-context-projection.v1",
+        "run_id": "run_x",
+        "turn": 1,
+        "payload_sha256": request_sha,
+        "request_snapshot": "traces/requests/run_x.turn-1.json",
+        "messages": 1,
+        "manifest": {
+            "projection_sha256": "a" * 64,
+            "memory_recall": recall,
+            "evidence": [{"kind": "memory_recall"}],
+        },
+    }
+    sidecar_path.write_text(json.dumps(sidecar, sort_keys=True), encoding="utf-8")
+    return {
+        "request_snapshot": "traces/requests/run_x.turn-1.json",
+        "request_sha256": request_sha,
+        "projection_sidecar": "traces/requests/run_x.turn-1.projection.json",
+        "projection_sha256": hashlib.sha256(
+            sidecar_path.read_bytes()).hexdigest(),
+        "recall_sha256": _sha_json(recall),
+    }
 
 
 def report(steps=None, changes=None):
@@ -72,6 +111,38 @@ class ResumeTests(unittest.TestCase):
                          resolved["expected_report_sha256"])
         self.assertEqual(["s1", "s2"], resolved["completed_step_ids"])
         self.assertEqual(["s3"], resolved["pending_step_ids"])
+
+    def test_checkpoint_binds_context_artifacts_and_budget_ledger(self):
+        binding = context_binding(self.root)
+        payload = json.loads(self.report_path.read_text())
+        payload["task_budget"] = {"limit_tokens": 100, "requests": []}
+        self.report_path.write_text(json.dumps(payload), encoding="utf-8")
+        checkpoint = create_checkpoint(
+            payload, report_path=self.report_path,
+            expected_report_sha256=hashlib.sha256(
+                self.report_path.read_bytes()).hexdigest(),
+            context_bindings=[binding])
+        self.assertEqual([binding], checkpoint["context_bindings"])
+        self.assertEqual(_sha_json(payload["task_budget"]),
+                         checkpoint["task_budget_sha256"])
+        self.ckpt_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+        resolved = resume_from_checkpoint(self.root, self.ckpt_path)
+        self.assertEqual([binding], resolved["context_bindings"])
+        self.assertEqual(checkpoint["task_budget_sha256"],
+                         resolved["task_budget_sha256"])
+
+    def test_checkpoint_context_binding_rejects_missing_or_changed_artifacts(self):
+        binding = context_binding(self.root)
+        payload = json.loads(self.report_path.read_text())
+        checkpoint = create_checkpoint(
+            payload, report_path=self.report_path,
+            expected_report_sha256=hashlib.sha256(
+                self.report_path.read_bytes()).hexdigest(),
+            context_bindings=[binding])
+        self.ckpt_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+        (self.root / binding["projection_sidecar"]).unlink()
+        with self.assertRaisesRegex(CheckpointError, "context artifact"):
+            resume_from_checkpoint(self.root, self.ckpt_path)
 
     def test_digest_binding_rejects_a_changed_report(self):
         self.report_path.write_text(json.dumps(report(changes=[])),

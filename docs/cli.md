@@ -297,7 +297,9 @@ every turn in the default `traces/requests` layout; when `--trace` changed the
 snapshot name, pass the explicit snapshot path instead. The command needs no
 configuration or credential, and it does not open a socket.
 
-A mismatch exits 2 and prints both the expected and actual digest. A missing or
+A mismatch exits 2 and prints both the expected and actual digest. When an
+adjacent projection sidecar exists, replay validates its request binding and
+recall evidence counts without reading the current memory store. A missing or
 malformed snapshot is also a usage error, because there is nothing trustworthy
 to replay.
 

@@ -23,6 +23,12 @@ _ALLOWED_KEYS = {
     "schema_version", "checkpoint_id", "report_id", "spec_sha256",
     "plan_sha256", "completed_step_ids", "pending_step_ids", "boundary_index",
     "task_ids", "file_effects", "command_effects", "report_sha256",
+    "context_bindings", "task_budget_sha256",
+}
+_REQUIRED_KEYS = _ALLOWED_KEYS - {"context_bindings", "task_budget_sha256"}
+_CONTEXT_BINDING_KEYS = {
+    "request_snapshot", "request_sha256", "projection_sidecar",
+    "projection_sha256", "recall_sha256",
 }
 _FILE_KEYS = {"path", "new_sha256", "bytes", "baseline"}
 _COMMAND_KEYS = {"step_id", "template_id", "exit_code", "timed_out",
@@ -69,6 +75,18 @@ def _closed(value: Dict[str, Any], allowed, what: str) -> None:
         raise CheckpointError("%s has %s" % (what, "; ".join(detail)))
 
 
+def _closed_checkpoint(value: Dict[str, Any]) -> None:
+    unknown = sorted(key for key in value if key not in _ALLOWED_KEYS)
+    missing = sorted(key for key in _REQUIRED_KEYS if key not in value)
+    if unknown or missing:
+        detail = []
+        if unknown:
+            detail.append("unknown field(s): %s" % ", ".join(unknown))
+        if missing:
+            detail.append("missing field(s): %s" % ", ".join(missing))
+        raise CheckpointError("checkpoint has %s" % "; ".join(detail))
+
+
 def _integer(value: Any, what: str, low: int, high: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise CheckpointError("%s must be an integer" % what)
@@ -104,6 +122,50 @@ def _json_object(pairs):
             raise CheckpointError("duplicate JSON member: %s" % key)
         value[key] = item
     return value
+
+
+def _workspace_path(value: Any, what: str) -> str:
+    path = _text(value, what, 1024)
+    if path.startswith("/") or "\\" in path or ".." in path.split("/"):
+        raise CheckpointError("%s must be workspace-relative" % what)
+    return path
+
+
+def _context_bindings(value: Any) -> List[Dict[str, str]]:
+    if not isinstance(value, list) or len(value) > 64:
+        raise CheckpointError("context_bindings must be a bounded list")
+    rows = []
+    for index, raw in enumerate(value):
+        row = _object(raw, "context_bindings[%d]" % index)
+        _closed(row, _CONTEXT_BINDING_KEYS, "context_bindings[%d]" % index)
+        projection = row["projection_sidecar"]
+        if projection:
+            projection = _workspace_path(
+                projection, "projection sidecar path")
+        projection_sha = row["projection_sha256"]
+        recall_sha = row["recall_sha256"]
+        if not projection:
+            if projection_sha or recall_sha:
+                raise CheckpointError(
+                    "context binding projection digest has no sidecar")
+            projection_sha = ""
+            recall_sha = ""
+        else:
+            projection_sha = _sha(projection_sha, "projection_sha256")
+            recall_sha = _sha(recall_sha, "recall_sha256") if recall_sha else ""
+        rows.append({
+            "request_snapshot": _workspace_path(
+                row["request_snapshot"], "request snapshot path"),
+            "request_sha256": _sha(row["request_sha256"], "request_sha256"),
+            "projection_sidecar": projection,
+            "projection_sha256": projection_sha,
+            "recall_sha256": recall_sha,
+        })
+    keys = [row["request_snapshot"] for row in rows]
+    if keys != sorted(keys) or len(keys) != len(set(keys)):
+        raise CheckpointError(
+            "context_bindings must be sorted and unique by request snapshot")
+    return rows
 
 
 def _file_effects(value: Any) -> List[Dict[str, Any]]:
@@ -170,7 +232,7 @@ def parse_checkpoint(payload: Any, *, expected_spec_sha256=None,
     plan must refuse rather than describe a different execution.
     """
     record = _object(payload, "checkpoint")
-    _closed(record, _ALLOWED_KEYS, "checkpoint")
+    _closed_checkpoint(record)
     if record["schema_version"] != CHECKPOINT_SCHEMA:
         raise CheckpointError("checkpoint has the wrong schema")
     checkpoint_id = _text(record["checkpoint_id"], "checkpoint id", 64)
@@ -192,6 +254,11 @@ def parse_checkpoint(payload: Any, *, expected_spec_sha256=None,
     command_ids = {row["step_id"] for row in commands}
     if not command_ids <= set(completed):
         raise CheckpointError("a command effect is not a completed step")
+    context_bindings = (_context_bindings(record["context_bindings"])
+                        if "context_bindings" in record else None)
+    task_budget_sha256 = (_sha(record["task_budget_sha256"],
+                               "task_budget_sha256")
+                          if "task_budget_sha256" in record else None)
     parsed = {
         "schema_version": CHECKPOINT_SCHEMA,
         "checkpoint_id": checkpoint_id,
@@ -206,6 +273,10 @@ def parse_checkpoint(payload: Any, *, expected_spec_sha256=None,
         "command_effects": commands,
         "report_sha256": _sha(record["report_sha256"], "report_sha256"),
     }
+    if context_bindings is not None:
+        parsed["context_bindings"] = context_bindings
+    if task_budget_sha256 is not None:
+        parsed["task_budget_sha256"] = task_budget_sha256
     if expected_spec_sha256 is not None and parsed["spec_sha256"] != _sha(
             expected_spec_sha256, "expected spec_sha256"):
         raise CheckpointError("checkpoint spec digest does not match the plan")
@@ -281,7 +352,8 @@ def _step_id(value: Any, what: str) -> str:
 
 
 def create_checkpoint(report: Any, *, report_path, checkpoint_id=None,
-                      expected_report_sha256=None) -> Dict[str, Any]:
+                      expected_report_sha256=None,
+                      context_bindings=None) -> Dict[str, Any]:
     """Derive one closed checkpoint from a validated execution report."""
     payload = _object(report, "execution report")
     for field in ("schema_version", "report_id", "spec_sha256", "plan_sha256",
@@ -405,6 +477,12 @@ def create_checkpoint(report: Any, *, report_path, checkpoint_id=None,
         "command_effects": commands,
         "report_sha256": actual,
     }
+    if context_bindings is not None:
+        record["context_bindings"] = context_bindings
+    if "task_budget" in payload:
+        budget = _object(payload["task_budget"], "task budget")
+        record["task_budget_sha256"] = _digest(
+            _canonical(budget).encode("utf-8"))
     return parse_checkpoint(record)
 
 
@@ -465,6 +543,25 @@ def resume_from_checkpoint(root: Path, checkpoint_path: Path, *,
     if actual != record["report_sha256"]:
         raise CheckpointError(
             "checkpoint report digest changed; refuse to resume from it")
+    try:
+        report_record = json.loads(candidate.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise CheckpointError("checkpoint report is invalid JSON: %s" % exc) from exc
+    report_budget = report_record.get("task_budget")
+    if record.get("task_budget_sha256"):
+        if not isinstance(report_budget, dict):
+            raise CheckpointError("checkpoint budget ledger is missing from the report")
+        if _digest(_canonical(report_budget).encode("utf-8")) != record[
+                "task_budget_sha256"]:
+            raise CheckpointError("checkpoint budget ledger digest changed")
+    elif report_budget is not None:
+        raise CheckpointError("checkpoint does not bind the report budget ledger")
+    try:
+        from .task_recovery import validate_resume_context
+        context = validate_resume_context(
+            root, record.get("context_bindings", []))
+    except ValueError as exc:
+        raise CheckpointError(str(exc)) from exc
     return {
         "schema_version": CHECKPOINT_SCHEMA,
         "checkpoint_id": record["checkpoint_id"],
@@ -476,4 +573,7 @@ def resume_from_checkpoint(root: Path, checkpoint_path: Path, *,
         "completed_step_ids": record["completed_step_ids"],
         "pending_step_ids": record["pending_step_ids"],
         "boundary_index": record["boundary_index"],
+        "context_bindings": context["context_bindings"],
+        "replayed_side_effects": context["replayed_side_effects"],
+        "task_budget_sha256": record.get("task_budget_sha256", ""),
     }

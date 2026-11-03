@@ -1,0 +1,92 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/formats.md",
+    "docs/review-context-resume-v1.json",
+    "docs/slice-queue.md",
+    "docs/task-checkpoint.md",
+    "docs/task-checkpoint.zh-CN.md",
+    "docs/task-recovery.md",
+    "docs/task-recovery.zh-CN.md",
+    "pocketchat/replay.py",
+    "pocketchat/task_checkpoint.py",
+    "pocketchat/task_recovery.py",
+    "tests/test_replay.py",
+    "tests/test_task_checkpoint_resume.py",
+    "tests/test_task_recovery.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/formats.md",
+    "docs/review-context-resume-v1.json",
+    "docs/slice-queue.md",
+    "docs/task-checkpoint.md",
+    "docs/task-checkpoint.zh-CN.md",
+    "docs/task-recovery.md",
+    "docs/task-recovery.zh-CN.md",
+    "pocketchat/replay.py",
+    "pocketchat/task_checkpoint.py",
+    "pocketchat/task_recovery.py",
+    "tests/test_replay.py",
+    "tests/test_task_checkpoint_resume.py",
+    "tests/test_task_recovery.py"
+  ],
+  "reviewed_evidence": [
+    "Red first: the new checkpoint binding, missing-artifact refusal and replay sidecar assertions failed before implementation; the smallest implementation made them pass.",
+    "CPython 3.9.6: checkpoint/recovery/replay/task-cli-resume/task-exec/task-budget target suites plus skeleton/package independence => 82 tests OK (exit 0).",
+    "After the final static fix, checkpoint/recovery/replay/task-cli-resume => 37 tests OK (exit 0).",
+    "ruff check --select E9,F pocketchat tests => All checks passed! (exit 0). git diff --check => exit 0.",
+    "Fresh-context review checked optional old-checkpoint readability, exact report/budget binding, request/projection/recall artifact validation, no memory reread in replay and non-replay of completed side effects; no blocker or major finding was found."
+  ],
+  "unverified_scope": "Full-suite behavior outside the target modules, real crash recovery across processes/machines, concurrent writers, real providers, Windows/Linux execution, packaging/installation and release actions were not run. Optional context bindings are validated only when a checkpoint carries them; old checkpoints retain their old evidence scope.",
+  "landing_sign_off": {
+    "status": "approved",
+    "scope": "User directive of 2026-11-03: “批准，全力推进项目，把剩下的任务都完成”, applied to the current PC-CTXRESUME-1 slice; no tag, Release, package upload or real provider run."
+  },
+  "review_context": {
+    "why": [
+      "PC-CTXRESUME-1 closes the checkpoint/replay gap between persisted memory recall, projection sidecars and budget-ledger resume."
+    ],
+    "not_doing": [
+      "No new CLI surface, provider call, automatic retry, checkpoint rewrite, memory search during replay, release or publication action."
+    ],
+    "diff_walk": [
+      "pocketchat/task_checkpoint.py: accepts optional context_bindings/task_budget_sha256 while keeping old checkpoints readable and binds them to exact report artifacts.",
+      "pocketchat/task_recovery.py: validates request snapshots, projection sidecars and recall evidence digests before resume and returns no replayed side effects.",
+      "pocketchat/replay.py: validates an adjacent projection sidecar when present without reading memory, while retaining request snapshot digest replay.",
+      "tests/docs: cover old compatibility, missing/changed artifact refusal, budget binding, memory-change independence and non-repetition wording."
+    ],
+    "static_checks": [
+      "Old checkpoints remain readable.",
+      "A budgeted report requires a matching budget digest binding.",
+      "Historical replay reads saved request/sidecar artifacts only.",
+      "Completed side effects are verified, not executed again."
+    ],
+    "review_notes": [
+      "This record is self-bound to the candidate and records the user’s continuing-work authorization."
+    ],
+    "gaps": [
+      "True multi-process crash recovery and OS-level concurrency remain outside this slice."
+    ]
+  }
+}

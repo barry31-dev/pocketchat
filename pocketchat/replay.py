@@ -7,10 +7,11 @@ request body that was sent.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .request import REQUEST_SCHEMA_VERSION, request_digest
 
@@ -45,6 +46,46 @@ def _read_snapshot(path: Path) -> Dict[str, Any]:
     return record
 
 
+def _projection_sidecar(path: Path, request_sha256: str) -> Optional[Dict[str, Any]]:
+    sidecar = Path(path).with_suffix(".projection.json")
+    if not sidecar.exists():
+        return None
+    if sidecar.is_symlink() or not sidecar.is_file():
+        raise ReplayError("%s is not a regular projection sidecar" % sidecar)
+    try:
+        record = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ReplayError("cannot read projection sidecar %s: %s"
+                          % (sidecar, exc)) from exc
+    if (not isinstance(record, dict)
+            or record.get("schema_version") != "pocketchat-context-projection.v1"
+            or record.get("payload_sha256") != request_sha256):
+        raise ReplayError("%s does not bind this request snapshot" % sidecar)
+    manifest = record.get("manifest")
+    projection_sha = manifest.get("projection_sha256") \
+        if isinstance(manifest, dict) else None
+    if (not isinstance(projection_sha, str)
+            or not _DIGEST_PATTERN.match(projection_sha)):
+        raise ReplayError("%s has no valid projection digest" % sidecar)
+    recall = manifest.get("memory_recall") if isinstance(manifest, dict) else None
+    if recall is not None:
+        evidence = manifest.get("evidence") if isinstance(manifest, dict) else None
+        count = (len([item for item in evidence
+                      if isinstance(item, dict)
+                      and item.get("kind") == "memory_recall"])
+                 if isinstance(evidence, list) else 0)
+        if (not isinstance(recall, dict)
+                or recall.get("evidence_count") != count):
+            raise ReplayError("%s has an unbound recall set" % sidecar)
+    data = sidecar.read_bytes()
+    return {
+        "sidecar_path": str(sidecar),
+        "sidecar_sha256": hashlib.sha256(data).hexdigest(),
+        "projection_sha256": projection_sha,
+        "memory_recall": recall,
+    }
+
+
 def replay_dry_run(path: Path) -> Dict[str, Any]:
     """Rebuild one snapshot's request and compare its digest.
 
@@ -63,6 +104,7 @@ def replay_dry_run(path: Path) -> Dict[str, Any]:
         "recomputed_sha256": recomputed,
         "match": stored == recomputed,
         "sent": False,
+        "context_projection": _projection_sidecar(target, stored),
     }
 
 

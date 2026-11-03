@@ -39,7 +39,10 @@ unknown/refused。该兼容 helper **不绑定** Spec、Plan、任务记录或�
 
 ## 报告与不重复执行
 
-已完成结果保留原 task id、trace/session 路径与 hash。执行器仅执行从未开始的后缀，权限仍来自
+已完成结果保留原 task id、trace/session 路径与 hash。`validate_resume_context`
+还会检查 checkpoint 绑定的 request snapshot、projection sidecar 与 recall-set digest；
+后续 memory store 变化不能改写历史请求，绑定产物缺失时在任何新步骤前拒绝。
+执行器仅执行从未开始的后缀，权限仍来自
 同一 one-action policy 和声明 runner。新报告累计保留结果及文件改动，并用 `recovery` 字段
 记录前序报告的相对路径与精确 hash；不重写旧报告、trace 或 session。
 对全部完成报告续跑是已验证的 no-op：直接返回原结果，不创建新的累计报告。

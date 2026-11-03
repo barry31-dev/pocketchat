@@ -47,6 +47,33 @@ class ReplayKernelTests(unittest.TestCase):
         )
         return path, digest
 
+    def test_replay_binds_projection_and_recall_without_rereading_memory(self):
+        path, digest = self._write()
+        recall = {"query_sha256": "1" * 64, "selected_count": 1,
+                  "evidence_count": 1}
+        sidecar = {
+            "schema_version": "pocketchat-context-projection.v1",
+            "run_id": "run_x",
+            "turn": 1,
+            "payload_sha256": digest,
+            "request_snapshot": "traces/requests/run_x.turn-1.json",
+            "messages": 1,
+            "manifest": {
+                "projection_sha256": "a" * 64,
+                "memory_recall": recall,
+                "evidence": [{"kind": "memory_recall"}],
+            },
+        }
+        path.with_suffix(".projection.json").write_text(
+            json.dumps(sidecar, sort_keys=True), encoding="utf-8")
+        (self.base / "memory.v2.jsonl").write_text("changed later", encoding="utf-8")
+        from pocketchat.replay import replay_dry_run
+        result = replay_dry_run(path)
+        self.assertTrue(result["match"])
+        self.assertEqual("a" * 64,
+                         result["context_projection"]["projection_sha256"])
+        self.assertEqual(recall, result["context_projection"]["memory_recall"])
+
     def test_replay_dry_run_rebuilds_request_without_network(self):
         from pocketchat.replay import replay_dry_run
 

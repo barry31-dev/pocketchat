@@ -242,8 +242,9 @@ SHA-256。传 run id 会核对默认 `traces/requests` 布局里它记录的每�
 `--trace` 改变了快照文件名，则改为传明确的快照路径。这个命令不需要配置或凭据，
 也不会打开 socket。
 
-哈希不一致时 exit 2，同时打印期望值与实际值。快照缺失或格式损坏同样属于用法错误，
-因为没有一份可信的请求可以 replay。
+哈希不一致时 exit 2，同时打印期望值与实际值。若相邻 projection sidecar 存在，
+replay 会校验其 request 绑定与 recall 证据计数，不读取当前 memory store。
+快照缺失或格式损坏同样属于用法错误，因为没有一份可信的请求可以 replay。
 
 ## 会话
 

@@ -412,3 +412,111 @@ def prepare_recovery(execution, root, report_path, expected_sha256, *,
                 for path in step.policy.write_allow_paths:
                     _unused_output(root, root / step.policy.workspace_root / path)
     return report, {"report": relative, "sha256": expected_sha256}
+
+
+_CONTEXT_BINDING_KEYS = {
+    "request_snapshot", "request_sha256", "projection_sidecar",
+    "projection_sha256", "recall_sha256",
+}
+
+
+def _canonical_sha(value):
+    import hashlib
+    data = json.dumps(value, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
+
+
+def validate_resume_context(root: Path, bindings) -> Dict[str, Any]:
+    """Validate bound request/projection/recall artifacts without replaying."""
+    root = Path(root).resolve()
+    if bindings is None:
+        bindings = []
+    if not isinstance(bindings, list) or len(bindings) > 64:
+        raise TaskRecoveryError("context bindings must be a bounded list")
+    validated = []
+    for index, raw in enumerate(bindings):
+        if not isinstance(raw, dict) or set(raw) != _CONTEXT_BINDING_KEYS:
+            raise TaskRecoveryError(
+                "context artifact binding %d has an unsupported shape" % index)
+        request_rel = _relative(root, raw["request_snapshot"])
+        request_path = root / request_rel
+        if request_path.is_symlink() or not request_path.is_file():
+            raise TaskRecoveryError(
+                "context artifact request snapshot is missing: %s" % request_rel)
+        request_bytes = _read(root, request_rel)
+        try:
+            request_record = _decode(request_bytes)
+            from .request import request_digest
+            if (not isinstance(request_record, dict)
+                    or request_digest(request_record.get("request"))
+                    != raw["request_sha256"]):
+                raise TaskRecoveryError(
+                    "context artifact request body digest changed")
+        except TaskRecoveryError:
+            raise
+        except (OSError, ValueError) as exc:
+            raise TaskRecoveryError(
+                "context artifact request is invalid: %s" % exc) from exc
+
+        projection_rel = raw["projection_sidecar"]
+        recall_sha = raw["recall_sha256"]
+        projection_sha = raw["projection_sha256"]
+        if not projection_rel:
+            if projection_sha or recall_sha:
+                raise TaskRecoveryError(
+                    "context artifact projection digest has no sidecar")
+            validated.append({
+                "request_snapshot": request_rel,
+                "request_sha256": raw["request_sha256"],
+                "projection_sidecar": "",
+                "projection_sha256": "",
+                "recall_sha256": "",
+            })
+            continue
+        projection_rel = _relative(root, projection_rel)
+        projection_path = root / projection_rel
+        if projection_path.is_symlink() or not projection_path.is_file():
+            raise TaskRecoveryError(
+                "context artifact projection sidecar is missing: %s"
+                % projection_rel)
+        projection_bytes = _read(root, projection_rel)
+        if _sha(projection_bytes) != projection_sha:
+            raise TaskRecoveryError("context artifact projection digest changed")
+        try:
+            projection = _decode(projection_bytes)
+        except ValueError as exc:
+            raise TaskRecoveryError(
+                "context artifact projection is invalid: %s" % exc) from exc
+        manifest = projection.get("manifest") if isinstance(projection, dict) else None
+        if (not isinstance(projection, dict)
+                or projection.get("schema_version")
+                != "pocketchat-context-projection.v1"
+                or projection.get("payload_sha256") != raw["request_sha256"]
+                or not isinstance(manifest, dict)):
+            raise TaskRecoveryError(
+                "context artifact projection does not bind this request")
+        recall = manifest.get("memory_recall")
+        if recall_sha:
+            if not isinstance(recall, dict) or _canonical_sha(recall) != recall_sha:
+                raise TaskRecoveryError(
+                    "context artifact recall set digest changed")
+            evidence = manifest.get("evidence")
+            recall_count = (len([item for item in evidence
+                                 if isinstance(item, dict)
+                                 and item.get("kind") == "memory_recall"])
+                            if isinstance(evidence, list) else 0)
+            if recall.get("evidence_count") != recall_count:
+                raise TaskRecoveryError(
+                    "context artifact recall evidence count changed")
+        elif recall is not None:
+            raise TaskRecoveryError(
+                "context artifact recall set has no binding digest")
+        validated.append({
+            "request_snapshot": request_rel,
+            "request_sha256": raw["request_sha256"],
+            "projection_sidecar": projection_rel,
+            "projection_sha256": projection_sha,
+            "recall_sha256": recall_sha,
+        })
+    return {"context_bindings": validated, "replayed_side_effects": []}
