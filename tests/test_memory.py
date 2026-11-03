@@ -14,6 +14,7 @@ from unittest import mock
 from pocketchat import memory
 from pocketchat.memory import MemoryError, add_memory, list_memory, remove_memory, search_memory
 from tests._helpers import run_cli
+from tests import _helpers as hp
 
 
 class MemoryStoreTests(unittest.TestCase):
@@ -173,6 +174,9 @@ class MemoryStoreTests(unittest.TestCase):
                 self.assertFalse(payload["ok"])
                 self.assertIn("--store", payload["message"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_cli_v2_migrate_accept_retire_forget_are_explicit(self):
         added = run_cli(
             ("memory", "add", "legacy preference", "--tag", "style", "--json"),
@@ -254,6 +258,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertIn("no-follow", json.loads(result.stdout)["message"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_read_refuses_a_parent_replaced_before_file_open(self):
         added = run_cli(("memory", "add", "read target", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -268,17 +275,30 @@ class MemoryStoreTests(unittest.TestCase):
         (outside / "memory.v2.jsonl").write_text("", encoding="utf-8")
         self.addCleanup(lambda: __import__("shutil").rmtree(outside,
                                                              ignore_errors=True))
-        target = parent / "memory.v2.jsonl"
+        target = (parent / "memory.v2.jsonl").resolve()
+        backup = self.root / ".pocketchat-backup"
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            backup, ignore_errors=True))
         original_open = __import__("os").open
+        replaced = False
 
         def replace_parent(path, *args, **kwargs):
-            if path == str(target):
-                parent.rmdir()
+            nonlocal replaced
+            target_read = (
+                path == str(target)
+                or (path == target.name and kwargs.get("dir_fd") is not None)
+            )
+            if target_read and not replaced:
+                parent.rename(backup)
                 parent.symlink_to(outside, target_is_directory=True)
+                replaced = True
             return original_open(path, *args, **kwargs)
 
+        replacement_open = replace_parent
         with mock.patch("pocketchat.memory_migration.os.open",
-                        side_effect=replace_parent):
+                        replacement_open), \
+                mock.patch("pocketchat.memory_migration.os.supports_dir_fd",
+                           {replacement_open}):
             result = run_cli(
                 ("memory", "accept", memory_id, "--by", "operator",
                  "--verification", "not_required",
@@ -288,10 +308,100 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertNotIn("no such memory", payload["message"])
         message = payload["message"].lower()
-        self.assertTrue("symlink" in message or "no-follow" in message)
+        self.assertTrue(replaced, "parent replacement was not exercised")
+        self.assertTrue("symlink" in message or "no-follow" in message, message)
         self.assertEqual("", (outside / "memory.v2.jsonl").read_text(
             encoding="utf-8"))
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
+    def test_v2_read_does_not_recreate_a_replaced_parent(self):
+        added = run_cli(("memory", "add", "read target", "--json"), self.root)
+        self.assertEqual(0, added.returncode, added.stdout + added.stderr)
+        store = ".pocketchat/memory.v2.jsonl"
+        migrated = run_cli(
+            ("memory", "migrate", "--workspace-id", "workspace-1",
+             "--store", store, "--json"), self.root)
+        self.assertEqual(0, migrated.returncode, migrated.stdout + migrated.stderr)
+        from pocketchat.memory_migration import (
+            MemoryMigrationError, _open_target_parent, read_v2_store)
+        parent = self.root / ".pocketchat"
+        backup = self.root / ".pocketchat-backup"
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            backup, ignore_errors=True))
+        original_open_parent = _open_target_parent
+        replaced = False
+
+        def replace_then_open(workspace, target_parent, **kwargs):
+            nonlocal replaced
+            if not replaced:
+                parent.rename(backup)
+                replaced = True
+            if kwargs:
+                return original_open_parent(workspace, target_parent, **kwargs)
+            return original_open_parent(workspace, target_parent)
+
+        with mock.patch("pocketchat.memory_migration._open_target_parent",
+                        replace_then_open):
+            with self.assertRaises(MemoryMigrationError):
+                read_v2_store(self.root, Path(store))
+        self.assertTrue(replaced)
+        self.assertFalse(parent.exists())
+
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
+    def test_v2_mutation_does_not_create_lock_through_a_replaced_parent(self):
+        added = run_cli(("memory", "add", "lock target", "--json"), self.root)
+        memory_id = json.loads(added.stdout)["memory_id"]
+        store = ".pocketchat/memory.v2.jsonl"
+        migrated = run_cli(
+            ("memory", "migrate", "--workspace-id", "workspace-1",
+             "--store", store, "--json"), self.root)
+        self.assertEqual(0, migrated.returncode, migrated.stdout + migrated.stderr)
+        parent = self.root / ".pocketchat"
+        outside = self.root.parent / f"{self.root.name}-outside-mutation-lock"
+        outside.mkdir()
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            outside, ignore_errors=True))
+        backup = self.root / ".pocketchat-backup"
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            backup, ignore_errors=True))
+        target = (self.root / store).resolve()
+        lock_name = target.name + ".lock"
+        original_open = __import__("os").open
+        replaced = False
+
+        def replace_before_lock(path, *args, **kwargs):
+            nonlocal replaced
+            lock_open = (
+                path == str(target.with_name(lock_name))
+                or (path == lock_name and kwargs.get("dir_fd") is not None)
+            )
+            if lock_open and not replaced:
+                parent.rename(backup)
+                parent.symlink_to(outside, target_is_directory=True)
+                replaced = True
+            return original_open(path, *args, **kwargs)
+
+        replacement_open = replace_before_lock
+        with mock.patch("pocketchat.memory_migration.os.open",
+                        replacement_open), \
+                mock.patch("pocketchat.memory_migration.os.supports_dir_fd",
+                           {replacement_open}):
+            result = run_cli(
+                ("memory", "accept", memory_id, "--by", "operator",
+                 "--verification", "not_required", "--store", store, "--json"),
+                self.root)
+        self.assertTrue(replaced)
+        self.assertEqual(2, result.returncode)
+        self.assertFalse(json.loads(result.stdout)["ok"])
+        self.assertFalse((outside / lock_name).exists())
+
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_mutation_refuses_a_symlinked_lock(self):
         added = run_cli(("memory", "add", "lock target", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -313,6 +423,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertEqual("", outside.read_text(encoding="utf-8"))
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_store_refuses_symlink_and_corrupt_input(self):
         store = self.root / ".pocketchat" / "memory.v2.jsonl"
         store.parent.mkdir(parents=True)
@@ -339,6 +452,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertIn("invalid JSON", json.loads(result.stdout)["message"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_accept_refuses_non_user_source_and_unknown_retirement_target(self):
         added = run_cli(
             ("memory", "add", "legacy preference", "--json"), self.root)
@@ -369,6 +485,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertIn("replacement", json.loads(result.stdout)["message"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_forget_preserves_other_records(self):
         first = run_cli(("memory", "add", "first secret", "--json"), self.root)
         second = run_cli(("memory", "add", "second fact", "--json"), self.root)
@@ -387,6 +506,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual([second_id], [item["memory_id"] for item in records])
         self.assertNotIn("first secret", (self.root / store).read_text(encoding="utf-8"))
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_mutation_failure_leaves_store_unchanged(self):
         added = run_cli(("memory", "add", "keep me", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -406,6 +528,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertEqual(before, (self.root / store).read_bytes())
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_accept_records_the_actor_as_updated_by(self):
         added = run_cli(("memory", "add", "actor fact", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -421,6 +546,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual(0, accepted.returncode, accepted.stdout + accepted.stderr)
         self.assertEqual("operator", json.loads(accepted.stdout)["item"]["updated_by"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_accept_changes_only_admission_fields(self):
         added = run_cli(("memory", "add", "stable content", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -442,6 +570,9 @@ class MemoryStoreTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertEqual(before[field], after[field])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_write_does_not_follow_a_replaced_parent_during_write(self):
         added = run_cli(("memory", "add", "keep me", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -454,24 +585,37 @@ class MemoryStoreTests(unittest.TestCase):
         outside = self.root.parent / f"{self.root.name}-outside-parent"
         outside.mkdir()
         self.addCleanup(lambda: outside.rmdir() if outside.exists() else None)
-        original_open = __import__("os").open
+        from pocketchat.memory_migration import _write_store_from_parent
+        original_write = _write_store_from_parent
+        replaced = False
 
-        def replace_parent(*args, **kwargs):
-            if len(args) > 1 and args[0] == str(parent):
-                parent.rmdir()
+        def replace_before_write(name, parent_descriptor, payload, **kwargs):
+            nonlocal replaced
+            if not replaced:
+                parent.rename(backup)
                 parent.symlink_to(outside, target_is_directory=True)
-            return original_open(*args, **kwargs)
+                replaced = True
+            return original_write(
+                name, parent_descriptor, payload, **kwargs)
 
-        with mock.patch("pocketchat.memory_migration.os.open",
-                        side_effect=replace_parent):
+        backup = self.root / ".pocketchat-backup"
+        self.addCleanup(lambda: __import__("shutil").rmtree(
+            backup, ignore_errors=True))
+        with mock.patch(
+                "pocketchat.memory_migration._write_store_from_parent",
+                replace_before_write):
             result = run_cli(
                 ("memory", "accept", memory_id, "--by", "operator",
                  "--verification", "not_required",
                  "--store", store, "--json"), self.root)
+        self.assertTrue(replaced)
         self.assertEqual(2, result.returncode)
         self.assertFalse(json.loads(result.stdout)["ok"])
         self.assertFalse((outside / "memory.v2.jsonl").exists())
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_memory_recall_dry_run_is_read_only_and_bounded(self):
         added = run_cli(("memory", "add", "answer fact", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -493,6 +637,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertIn("answer fact", payload["context_message"]["content"])
         self.assertEqual(before, (self.root / store).read_bytes())
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_memory_recall_excludes_other_workspaces(self):
         added = run_cli(("memory", "add", "answer fact", "--json"), self.root)
         memory_id = json.loads(added.stdout)["memory_id"]
@@ -512,6 +659,9 @@ class MemoryStoreTests(unittest.TestCase):
                           for reason in item["reasons"]})
         self.assertNotIn("answer fact", payload["context_message"]["content"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_memory_commands_run_end_to_end_as_subprocesses(self):
         env = {"PYTHONPATH": str(Path(__file__).resolve().parents[1])}
         added = subprocess.run(
@@ -540,6 +690,9 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual("", accepted.stderr)
         self.assertEqual("accepted", json.loads(accepted.stdout)["item"]["admission_status"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_v2_concurrent_mutations_do_not_silently_lose_an_update(self):
         first = run_cli(("memory", "add", "first fact", "--json"), self.root)
         second = run_cli(("memory", "add", "second fact", "--json"), self.root)

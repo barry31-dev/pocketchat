@@ -19,7 +19,6 @@ evidence into guesswork:
 from __future__ import annotations
 
 import copy
-import hashlib
 import json
 import re
 import socket
@@ -29,6 +28,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional, cast
 
 from .request import canonical_bytes
+from .tool_contracts import contract_names, contract_summary, provider_tool
 
 DEFAULT_CHAT_PATH = "/chat/completions"
 MAX_ERROR_BODY_CHARS = 2000
@@ -168,75 +168,21 @@ def build_payload(messages: List[Dict[str, str]],
 
 
 def tool_offer(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    tools = []
-    if config.get("tool_read_enabled") is True:
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": "read_file",
-                "description": "Read one explicitly allowed UTF-8 workspace file.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "Workspace-relative allowed path",
-                        },
-                    },
-                    "required": ["path"],
-                    "additionalProperties": False,
-                },
-            },
-        })
-    if config.get("tool_write_enabled") is True:
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": "write_file",
-                "description": "Create one new UTF-8 workspace file; never overwrite.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string",
-                                 "description": "Workspace-relative new path"},
-                        "content": {"type": "string",
-                                    "description": "UTF-8 file content"},
-                    },
-                    "required": ["path", "content"],
-                    "additionalProperties": False,
-                },
-            },
-        })
-    if config.get("tool_memory_search_enabled") is True:
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": "memory_search",
-                "description": "Search explicitly saved local memory records.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"query": {"type": "string"}},
-                    "required": ["query"],
-                    "additionalProperties": False,
-                },
-            },
-        })
-    return tools
+    enabled = {
+        "read_file": config.get("tool_read_enabled") is True,
+        "write_file": config.get("tool_write_enabled") is True,
+        "memory_search": config.get("tool_memory_search_enabled") is True,
+    }
+    return [provider_tool(name) for name in contract_names()
+            if enabled[name]]
 
 
 def tool_offer_summary(config: Dict[str, Any]) -> List[Dict[str, Any]]:
-    tools = tool_offer(config)
-    encoded = json.dumps(tools, ensure_ascii=False, sort_keys=True,
-                         separators=(",", ":")).encode("utf-8")
-    summary = [{"name": "read_file", "available": False},
-               {"name": "write_file", "available": False},
-               {"name": "memory_search", "available": False}]
-    enabled = {tool["function"]["name"] for tool in tools}
-    for item in summary:
-        if item["name"] in enabled:
-            item["available"] = True
-            item["schema_hash"] = hashlib.sha256(encoded).hexdigest()
-    return summary
+    return contract_summary({
+        "read_file": config.get("tool_read_enabled") is True,
+        "write_file": config.get("tool_write_enabled") is True,
+        "memory_search": config.get("tool_memory_search_enabled") is True,
+    })
 
 
 def _parse_tool_calls(value: Any) -> List[Dict[str, Any]]:

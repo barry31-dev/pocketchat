@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
 
+from .tool_contracts import contract_names
+
 POLICY_SCHEMA = "pocketchat-task-policy.v1"
 
 MIN_STEPS = 1
@@ -35,7 +37,7 @@ DEFAULT_MEMORY_RESULTS = 20
 MIN_CHILDREN = 1
 MAX_CHILDREN = 8
 
-TOOLS = ("read_file", "write_file", "memory_search")
+TOOLS = contract_names()
 _TOOL_KEYS = {
     "read_file": ("allow_paths",),
     "write_file": ("allow_paths", "create_only"),

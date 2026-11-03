@@ -74,11 +74,13 @@ execute or network operation.
 Automatic model tool calls are off by default. A profile offers only the local
 tools it explicitly enables (`read_file`, create-only `write_file` or read-only
 `memory_search`), paths come from explicit allowlists, and calls/results are
-bounded. Disabled or unknown tools, invalid arguments and guard refusals return
-bounded failure results so the model can correct; underlying I/O/store errors,
-oversized results and exhausted budgets end the run. Tool schemas and call ids
-are recorded in the run trace; shell, execute and network tools remain
-unavailable.
+bounded. The provider schema, trace summary, task policy and host validator all
+come from one closed contract in `pocketchat.tool_contracts`; unknown arguments
+are refused before file or memory I/O. Disabled or unknown tools, invalid
+arguments and guard refusals return bounded failure results so the model can
+correct; underlying I/O/store errors, oversized results and exhausted budgets
+end the run. Tool schemas and call ids are recorded in the run trace; shell,
+execute and network tools remain unavailable.
 
 When `tool_write_enabled` is enabled, `write_file` is create-only. The model
 cannot request overwrite or delete, and every target must be explicitly

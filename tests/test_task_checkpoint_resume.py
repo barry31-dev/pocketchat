@@ -13,6 +13,8 @@ from pocketchat.task_checkpoint import resume_from_checkpoint
 from pocketchat.request import write_request_snapshot
 from pocketchat.task_exec import EXECUTION_REPORT_SCHEMA
 
+from tests import _helpers as hp
+
 
 def _sha_json(value):
     data = json.dumps(value, ensure_ascii=False, sort_keys=True,
@@ -112,6 +114,9 @@ class ResumeTests(unittest.TestCase):
         self.assertEqual(["s1", "s2"], resolved["completed_step_ids"])
         self.assertEqual(["s3"], resolved["pending_step_ids"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_checkpoint_binds_context_artifacts_and_budget_ledger(self):
         binding = context_binding(self.root)
         payload = json.loads(self.report_path.read_text())
@@ -131,6 +136,9 @@ class ResumeTests(unittest.TestCase):
         self.assertEqual(checkpoint["task_budget_sha256"],
                          resolved["task_budget_sha256"])
 
+    @unittest.skipUnless(
+        hp.SECURE_DESCRIPTOR_READS,
+        "requires secure descriptor-relative reads")
     def test_checkpoint_context_binding_rejects_missing_or_changed_artifacts(self):
         binding = context_binding(self.root)
         payload = json.loads(self.report_path.read_text())
