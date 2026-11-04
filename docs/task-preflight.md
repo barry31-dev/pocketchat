@@ -70,7 +70,8 @@ unknowns and omissions, a path count, and explicit limits. Its status is:
 The context-snapshot schema is checked and its canonical body digest is
 recomputed with the existing snapshot helper. A body/digest mismatch or a
 mismatch with the observation is `refused`; a missing snapshot digest is
-`unknown`. Git object IDs accept 40- or 64-character lowercase hexadecimal;
+`unknown`. A missing snapshot schema is also `unknown` with an omission;
+an explicitly different schema is `refused`. Git object IDs accept 40- or 64-character lowercase hexadecimal;
 document digests remain SHA-256 only. A missing `plan_sha256`, spec digest or
 HEAD is likewise `unknown`. Path scope checks reject ancestor/descendant
 overlap and case collisions before plan-membership checks, and dirty or

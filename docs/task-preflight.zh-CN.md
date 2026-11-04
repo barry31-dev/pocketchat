@@ -42,7 +42,8 @@ TaskSpec 按动作区分的 allowlist 仍是最终授权边界。
 
 快照必须使用现有 context snapshot schema，且复用现有 helper 重算正文的 canonical
 摘要；正文/摘要或摘要/观察不一致为 `refused`，缺失摘要为 `unknown`。Git 提交号支持
-40/64 位小写十六进制，文档摘要仍只接受 SHA-256。缺
+40/64 位小写十六进制，文档摘要仍只接受 SHA-256。快照 schema 缺失返回
+`unknown` 和 omission，明确提供错误 schema 才是 `refused`。缺
 `plan_sha256`、spec 摘要或 HEAD 也是 `unknown`。范围检查拒绝祖先/后代重叠和
 大小写冲突，dirty / untracked 路径越出声明写范围时给出具名拒绝原因。
 

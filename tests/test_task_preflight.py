@@ -210,6 +210,24 @@ class TaskPreflightTests(unittest.TestCase):
         self.assertEqual("refused", report["status"])
         self.assertNotIn("SENTINEL-SNAPSHOT-BODY", str(report))
 
+    def test_missing_snapshot_schema_remains_unknown_not_a_contradiction(self):
+        task_spec = spec()
+        task_plan = plan(task_spec)
+        missing_schema = copy.deepcopy(SNAPSHOT_BODY)
+        del missing_schema["schema_version"]
+        missing_schema["snapshot_sha256"] = _snapshot_digest(missing_schema)
+        for value in ({}, missing_schema):
+            with self.subTest(has_body=bool(value)):
+                report = check_task_preflight(
+                    task_spec, task_plan, value,
+                    observation(task_spec, task_plan,
+                                snapshot_sha256=value.get("snapshot_sha256", SNAPSHOT)))
+                self.assertEqual("unknown", report["status"])
+                self.assertEqual([], report["refusals"])
+                self.assertIn("missing_snapshot_schema",
+                              {item["reason"] for item in report["unknowns"]})
+                self.assertIn("snapshot", {item["id"] for item in report["omissions"]})
+
     def test_wrong_snapshot_schema_is_not_a_verified_snapshot(self):
         task_spec = spec()
         task_plan = plan(task_spec)

@@ -226,7 +226,12 @@ def check_task_preflight(spec: TaskSpec, plan: TaskPlan, snapshot: Any,
             elif observed_plan != plan_sha256(plan):
                 refusals.append(_finding("plan", "plan_digest_mismatch",
                                          "observed plan digest differs"))
-        if isinstance(snapshot, dict) and snapshot.get("schema_version") != CONTEXT_SNAPSHOT_SCHEMA:
+        if "schema_version" not in snapshot:
+            unknowns.append(_finding("snapshot", "missing_snapshot_schema",
+                                     "snapshot schema is absent"))
+            omissions.append(_finding("snapshot", "incomplete_observation",
+                                      "snapshot schema was not supplied"))
+        elif snapshot["schema_version"] != CONTEXT_SNAPSHOT_SCHEMA:
             refusals.append(_finding("snapshot", "snapshot_schema_mismatch",
                                      "snapshot does not use the context snapshot schema"))
         snapshot_digest = snapshot.get("snapshot_sha256") if isinstance(snapshot, dict) else None
