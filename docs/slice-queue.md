@@ -144,6 +144,25 @@ and sidecar/preview binding as a separate slice.
 - **Approved by**: User directive of 2026-11-03 to continue PocketChat
   foundational work; MyWork planner recorded the approved design at `9496c235`.
 
+#### `PC-RDOCTOR-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-doctor-runtime`
+- **Write scope**: `pocketchat/doctor.py`, `pocketchat/cli.py`,
+  `tests/test_doctor.py`, `docs/cli.md`, `docs/cli.zh-CN.md`,
+  `docs/review-doctor-runtime-v1.json`
+- **Depends on**: `PC-RCAP-1` (delivered at `5ce3586`)
+- **Done when**: An explicit `doctor --runtime` adds one bounded runtime
+  capability field while the default doctor JSON, three existing checks,
+  `ok` value and exit code remain unchanged; missing no-follow support is
+  reported as a capability limit without claiming tool or workspace safety.
+- **Evidence**: `tests/test_doctor.py`, `pocketchat/doctor.py`,
+  `pocketchat/cli.py`, both CLI docs, and
+  `docs/review-doctor-runtime-v1.json`.
+- **Approved by**: User directive of 2026-11-03 to continue PocketChat
+  foundational work; MyWork planner recorded the design at `9496c235` and the
+  delivered dependency `PC-RCAP-1`.
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.
