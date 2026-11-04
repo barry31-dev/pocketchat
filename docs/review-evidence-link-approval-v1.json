@@ -1,0 +1,31 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/review-evidence-link-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-evidence-link-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main baseline c5a295ff4bfe1d5eb0d037d928741dd8027c2f77; successful fetch and git rev-parse read this exact SHA before the task branch was created.",
+    "C: product origin/main docs/slice-queue.md has no PC-EVIDENCE-LINK-1 row and no ready row; the last foundational row PC-SFILE-FENCE-1 is delivered.",
+    "C: product origin/main has no pocketchat/evidence_links.py, tests/test_evidence_links.py, docs/evidence-links.md or docs/evidence-links.zh-CN.md; product remote has no task/pocketchat-evidence-link-core branch.",
+    "C: MyWork 系统/草案/pocketchat基础能力接续规划.md §5.2, §8.6 and §8.7 name PC-EVIDENCE-LINK-1 as the next P0 pure-core approval and define the closed descriptor, relation, tri-state and quota contract frozen in the row.",
+    "C: the row's execution write scope is disjoint from the planning paths and from the pushed but not main-reachable PC-SFILE-FENCE-2 approval candidate; it does not include CHANGELOG.md or shared CLI docs.",
+    "C: the private task pool schema is v2, lease was null before the exact claim, and the planner card PC-EVIDENCE-LINK-1-PLANNER was added and claimed as a single lease with token 0403d2a716fd4403a8cbb1104c9c58b2.",
+    "Docs-only diff review checked state, unique branch, write scope, dependency, frozen interface and budgets, done_when, evidence, approved_by, non-publication boundary and absence of ready-row batching."
+  ],
+  "unverified_scope": "Planning-only change: no product source, product tests, CI, real provider, package build, tag, Release or package upload was run. This candidate freezes a ready row that becomes claimable only after the planning branch is integrated and the row is read back from product origin/main. Product main reachability, exact reviewed SHA, post-push CI, independent fresh-context review and the later execution slice are not claimed."
+}

@@ -187,6 +187,54 @@ and sidecar/preview binding as a separate slice.
   foundational work; MyWork planner recorded the design at `9496c235` and the
   delivered dependency `PC-SFILE-READ-1`.
 
+#### `PC-EVIDENCE-LINK-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-evidence-link-core`
+- **Write scope**: `pocketchat/evidence_links.py`,
+  `tests/test_evidence_links.py`, `docs/evidence-links.md`,
+  `docs/evidence-links.zh-CN.md`, `docs/review-evidence-link-v1.json`
+- **Depends on**: none
+- **Done when**: A pure `verify_evidence_links(artifacts, relations)` returns
+  `schema_version=1` and `complete`, `partial` or `refused` without I/O. Every
+  artifact descriptor carries a unique ID, one of the six allowed kinds,
+  a workspace-relative path, declared and observed whole-file SHA-256, the
+  semantic digest and its scope, run/task/spec/plan identity, and complete or
+  partial read coverage. Every relation names two existing artifact IDs, a
+  relation kind and the fields compared; there is no link conclusion without
+  an explicit edge. Whole-file hashes, request-body canonical digests and
+  semantic digests are never interchangeable. A same-hash/different-run-ID
+  observation, wrong identity or digest, duplicate ID, orphan relation or
+  unsafe path is `refused`; a missing optional artifact or incomplete but
+  explicit observation is `partial`; only bounded, fully covered required
+  relations with no contradiction are `complete`. The report names unknowns
+  and omissions, excludes request/message/credential text, and refuses above
+  256 artifacts, 1024 relations or a 64 KiB report rather than truncating.
+  Focused tests cover the three fixed observations
+  session→trace→request, comparison→run and
+  report→spec/plan/checkpoint, input immutability, stable order and zero
+  open/socket/provider calls. This slice does not read files, add a CLI,
+  repair artifacts, call a provider, publish, or claim that a `complete`
+  report re-read the original files.
+- **Evidence**: `pocketchat/evidence_links.py`,
+  `tests/test_evidence_links.py`, `docs/evidence-links.md`,
+  `docs/evidence-links.zh-CN.md`, `CHANGELOG.md` and
+  `docs/review-evidence-link-v1.json`.
+- **Approved by**: User directive of 2026-11-04 to add missing tasks and
+  finish required functionality first; the MyWork planner froze this
+  evidence-link core contract in the `PC-EVIDENCE-LINK-1-PLANNER` record.
+  Exact candidate landing remains gated by the implementation review record
+  and its required human sign-off. This approval is limited to the pure core
+  above; it does not authorize a CLI, second evidence schema, provider call,
+  tag, Release or package upload.
+- **Approval evidence**: This row and
+  `docs/review-evidence-link-approval-v1.json` are the approval record; the
+  row is ready only after this planning branch is integrated and reachable
+  from `main`. The exact reviewed SHA and merge readback belong to the
+  integration record. The execution branch remains uncreated by this
+  planning change; `CHANGELOG.md` and the exact implementation SHA belong to
+  the later implementation and delivery records.
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.
