@@ -1,0 +1,32 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/review-evidence-link-delivered-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "CHANGELOG.md",
+    "docs/review-evidence-link-delivered-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main 797a7e6c007e176e0ae331d8c64e31e4aabed117 is a merge commit whose ordered parents are 4220dd5d9b1bee213ee8d823e21112001536151d and f0cd4629eb0b96817fbb953ea6ecc1d8f1debced; the reviewed candidate is an ancestor of main.",
+    "C: PR #14 reads MERGED at 2026-11-04T12:47:47Z and names merge commit 797a7e6c007e176e0ae331d8c64e31e4aabed117.",
+    "V: GitHub Actions run 41831133989 is attached to f0cd4629eb0b96817fbb953ea6ecc1d8f1debced and reports seven completed successful jobs: Linux, macOS and Windows on CPython 3.9/3.13 plus release smoke.",
+    "C: docs/review-evidence-link-v1.json records a medium/standard review with no open blocker or major, an independent fresh-context review and an agent sign-off under the user's 2026-11-04 delegation.",
+    "V: CPython 3.13.9 locally ran the evidence-link focused tests for the delivered core from origin/main: 11 tests OK; ruff E9/F, JSON parsing, review-record validation and git diff --check passed.",
+    "Docs-only diff review checked that only the PC-EVIDENCE-LINK-1 state/evidence, one Unreleased changelog entry and this delivery record changed; no source, test or unrelated queue row changed."
+  ],
+  "unverified_scope": "This delivery record covers queue and changelog maintenance only. It did not run the product suite, source behavior, a real provider, package build, wheel, clean install, tag, Release or package upload. Post-push CI for this docs-only branch and remote queue readback remain separate evidence."
+}
