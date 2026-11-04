@@ -1,0 +1,102 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "pocketchat/evidence_links.py",
+    "tests/test_evidence_links.py",
+    "docs/evidence-links.md",
+    "docs/evidence-links.zh-CN.md",
+    "docs/review-evidence-link-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "artifact-findings-not-projected",
+      "reason": "Artifact-level findings were not attached to sorted artifact rows; fixed by projecting status/reason before sorting."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "optional-absence-complete",
+      "reason": "A missing optional artifact could remain complete; fixed to partial with a named omission and added a regression."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "same-run-turn-endpoint-field",
+      "reason": "The turn comparison incorrectly required both endpoints to carry turn; fixed to require it on the request target."
+    },
+    {
+      "id": "F4",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "external-review-and-ci",
+      "reason": "Independent fresh-context review completed without new blocker/major findings; exact-SHA GitHub Actions run 41813337446 passed all seven check jobs for candidate bb7b1c7."
+    },
+    {
+      "id": "F5",
+      "severity": "blocker",
+      "status": "fixed",
+      "fingerprint": "identity-canary-echo",
+      "reason": "The initial report copied every identity key, allowing caller-supplied message/credential text into the report. Fixed with a closed identity field set and a regression canary."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "pocketchat/evidence_links.py",
+    "tests/test_evidence_links.py",
+    "docs/evidence-links.md",
+    "docs/evidence-links.zh-CN.md",
+    "docs/review-evidence-link-v1.json"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main baseline 4220dd5d9b1bee213ee8d823e21112001536151d contains the main-reachable PC-EVIDENCE-LINK-1 ready row and its planning review record.",
+    "V: CPython 3.9.6, `python3 -B -m unittest discover -s tests -p test_evidence_links.py -v`, 11 tests OK, exit 0.",
+    "V: The initial focused run failed because pocketchat.evidence_links did not exist (1 error, exit 1); the observed red was the expected module import failure, not a green-after-implementation substitute.",
+    "C: tests cover the three fixed observations, same-hash/different-run-ID refusal, digest-scope confusion, duplicate/orphan/unsafe/digest-drift refusal, optional partial, required refusal, input immutability, secret canary exclusion, limits and mocked open/socket calls.",
+    "C: source review confirms the module performs no filesystem, socket, provider or process I/O and emits only bounded descriptor/edge findings, not input request/message/credential bodies.",
+    "C: the write scope exactly matches the approved row; CHANGELOG.md and shared queue were not edited by this implementation branch.",
+    "V: A canary placed in an unexpected identity field was first reproduced in the report, then refused without echo after the closed identity-field fix; focused tests remained green.",
+    "V: Independent fresh-context review at candidate bb7b1c751ddca22ca25ebbde838273153891e833 read the full five-file diff, the frozen slice contract and focused tests; targeted probes confirmed a missing request turn and a same-hash/different-run comparison are refused, with no new blocker or major finding.",
+    "V: GitHub Actions run 41813337446 is attached to candidate bb7b1c751ddca22ca25ebbde838273153891e833 and reports 7/7 successful jobs (Linux, macOS and Windows; CPython 3.9 and 3.13 plus release-smoke); PR #14 read back OPEN/CLEAN/MERGEABLE with no reviews."
+  ],
+  "unverified_scope": "No CLI, filesystem reader, real artifact bytes, provider, package build, wheel, clean install, publication action, tag, Release or package upload is claimed. Local runs cover macOS CPython 3.13.9 only; exact-SHA GitHub Actions covers Linux, macOS and Windows on CPython 3.9/3.13 for the pre-sign-off candidate. The report proves only consistency of caller-supplied observations.",
+  "review_context": {
+    "why": [
+      "PC-EVIDENCE-LINK-1 was the only main-reachable ready PocketChat row after the previous fence work, and its execution branch was absent."
+    ],
+    "not_doing": [
+      "No CLI, artifact reader, repair, provider call, publication action, queue mutation or shared CLI documentation."
+    ],
+    "diff_walk": [
+      "pocketchat/evidence_links.py adds a pure descriptor/relation validator with closed kinds/scopes and bounded deterministic tri-state output.",
+      "tests/test_evidence_links.py covers the fixed observations, refusal cases, partial/optional behavior, limits, input immutability and zero-I/O boundary.",
+      "Bilingual docs freeze the interface and state that complete is not a filesystem reread.",
+      "The identity projection is explicitly allowlisted so arbitrary caller text cannot enter the public report."
+    ],
+    "static_checks": [
+      "No private path, token, credential, request body or message body appears in the public diff.",
+      "JSON and git diff --check are run separately from focused tests."
+    ],
+    "review_notes": [
+      "Medium-risk Python behavior requires standard review; the fresh-context review and exact-candidate CI evidence are recorded above."
+    ],
+    "gaps": []
+  },
+  "landing_sign_off": {
+    "status": "approved",
+    "scope": "Agent (delegated by user 2026-11-04 16:34) approves landing the exact PC-EVIDENCE-LINK-1 candidate only after this sign-off commit receives a green seven-job CI run on its exact SHA. The sign-off is bound to pocketchat/evidence_links.py, tests/test_evidence_links.py, docs/evidence-links.md, docs/evidence-links.zh-CN.md and docs/review-evidence-link-v1.json. It does not authorize a tag, Release, package upload, provider call or a different SHA."
+  }
+}
