@@ -146,7 +146,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-RDOCTOR-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-doctor-runtime`
 - **Write scope**: `pocketchat/doctor.py`, `pocketchat/cli.py`,
   `tests/test_doctor.py`, `docs/cli.md`, `docs/cli.zh-CN.md`,
@@ -158,10 +158,34 @@ and sidecar/preview binding as a separate slice.
   reported as a capability limit without claiming tool or workspace safety.
 - **Evidence**: `tests/test_doctor.py`, `pocketchat/doctor.py`,
   `pocketchat/cli.py`, both CLI docs, and
-  `docs/review-doctor-runtime-v1.json`.
+  `docs/review-doctor-runtime-v1.json`; merged to `main` as `b3ca703`.
 - **Approved by**: User directive of 2026-11-03 to continue PocketChat
   foundational work; MyWork planner recorded the design at `9496c235` and the
   delivered dependency `PC-RCAP-1`.
+
+#### `PC-SFILE-FENCE-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-session-writer-fence`
+- **Write scope**: `pocketchat/session_writer.py`, `pocketchat/sessions.py`,
+  `pocketchat/session.py`, `tests/test_session_writer.py`,
+  `docs/session-writer.md`, `docs/session-writer.zh-CN.md`,
+  `docs/compatibility.md`, `docs/compatibility.zh-CN.md`,
+  `docs/review-session-writer-v1.json`
+- **Depends on**: `PC-SFILE-READ-1` (delivered at `c97fe8e`); no other
+  `session.py` writer may be active in the same branch.
+- **Done when**: Two stale in-memory views can no longer append duplicate
+  identities to one explicit session; an independent-process barrier shows
+  only one writer entering I/O for one path while different paths remain
+  independent; initialization, cancellation and exception release only the
+  owner's claim; foreign-owner and path-replacement cases fail closed.
+- **Evidence**: `tests/test_session_writer.py`,
+  `docs/review-session-writer-v1.json`, a bounded two-process fixture, a stub
+  request counter proving the refused writer sends zero requests, and an
+  unchanged historical file hash.
+- **Approved by**: User directive of 2026-11-03 to continue PocketChat
+  foundational work; MyWork planner recorded the design at `9496c235` and the
+  delivered dependency `PC-SFILE-READ-1`.
 
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
