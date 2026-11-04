@@ -264,7 +264,9 @@ pocketchat run "and about the retry policy?" --session notes
 会话文件带有自己的身份。header 记录它所属的 conversation 与 branch，每条消息行带一个
 由它在文件中的位置推导出的 `turn_id`。因此一段对话在追加它的多次 run 之间保持同一个
 身份，读同一份字节的两个读者指的是同一次往来。这两个字段出现之前写下的文件照原样读取、
-显示 `not recorded`，不会为了补上没有的键而被改写。
+显示 `not recorded`，不会为了补上没有的键而被改写。会话文件里的 UTF-8 损坏同样是
+`session_file` 拒绝：`show --json` 以 2 退出、stdout 只输出一个稳定错误对象，
+输入字节保持不变，也不会漏出 traceback。
 
 `branch` 从某一次已完成的往来划出第二条路径。它会写出一个新的会话文件：沿用父文件的
 conversation id，复制到指定 turn 为止的往来，并记下 `parent_branch_id` 与

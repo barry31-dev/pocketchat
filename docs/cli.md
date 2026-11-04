@@ -328,7 +328,9 @@ name the same exchange. Files written before these fields existed read
 unchanged and report `not recorded`; they are never rewritten to gain keys
 they did not have. New session files also carry a `schema_version` naming
 the file format itself, and a reader that meets a version it does not
-understand refuses with the version named. Every file this package writes —
+understand refuses with the version named. Malformed UTF-8 in a session file
+is a `session_file` refusal too: `show --json` exits 2 with one stable error
+object, leaves the input bytes untouched, and never leaks a traceback. Every file this package writes —
 session, trace, request snapshot, comparison manifest, selection record and
 the derived index — is described, with its version key and compatibility
 rules, in [`formats.md`](formats.md).
