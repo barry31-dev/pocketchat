@@ -1,0 +1,30 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/review-task-preflight-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-task-preflight-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main 9cbac9168f7080cee39b3967e8e9fe58e48a4d5a was fetched and read before this planning branch.",
+    "C: current queue has no PC-TASK-PREFLIGHT-1 row and no ready row; no equivalent task/pocketchat-task-preflight or task/pocketchat-preflight-approval branch exists.",
+    "C: the row binds one pure core to existing parsed TaskSpec/TaskPlan and task-snapshot digest contracts; it adds no Git/file/provider I/O, CLI, execution authorization or publication action.",
+    "C: existing parsed TaskSpec/TaskPlan canonical digest helpers and the task-snapshot canonical digest/schema are the named reuse boundary; no second parser or snapshot format is introduced.",
+    "C: the selected write scope is disjoint from the delivered evidence-link source, tests and docs; the new branch is not the evidence-link delivery branch and does not touch CHANGELOG.",
+    "Docs-only diff review checked the closed input/output contract, stable ordering and report limits, input immutability, the 4096/64-KiB bounds, the negative observations required for the execution card, and explicitly leaves implementation and CLI work out of this planning change."
+  ],
+  "unverified_scope": "Planning only: no product implementation, tests, CI, real Git observation, provider, build/install, tag or Release. Main reachability of this approval is a separate readback; exact implementation candidate review is not claimed. The row's `ready` state becomes claimable only after this branch is integrated and read back from product origin/main."
+}

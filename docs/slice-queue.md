@@ -238,6 +238,46 @@ and sidecar/preview binding as a separate slice.
   planning change; `CHANGELOG.md` and the exact implementation SHA belong to
   the later implementation and delivery records.
 
+#### `PC-TASK-PREFLIGHT-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-task-preflight`
+- **Write scope**: `pocketchat/task_preflight.py`, `tests/test_task_preflight.py`,
+  `docs/task-preflight.md`, `docs/task-preflight.zh-CN.md`,
+  `docs/review-task-preflight-v1.json`
+- **Depends on**: none
+- **Done when**: A pure `check_task_preflight(spec, plan, snapshot, observation)`
+  reuses the parsed TaskSpec/TaskPlan and snapshot digest contracts and returns
+  `schema_version=1` with `allow`, `refused` or `unknown`, without Git, filesystem,
+  command, network or provider I/O. The caller supplies closed observations for
+  workspace identity, base and head commit, tracked/untracked/dirty paths,
+  read coverage and the declared spec/plan/snapshot digests. `allow` requires all
+  required observations complete and bound to the same workspace and plan, a
+  stable head, and every planned read/write input contained by the TaskSpec
+  allowlists; any undeclared dirty/foreign/out-of-scope write or digest/identity/
+  head contradiction is `refused`; a non-Git or explicitly partial dirty/source
+  observation is `unknown` rather than a clean workspace. The report has stable
+  order, names unknowns/omissions and rejects rather than truncates beyond 4096
+  path observations or a 64 KiB canonical report. Input mapping/list objects
+  remain unchanged, the report never echoes free-form objectives, request bodies,
+  messages or credentials, and focused tests cover clean/dirty, HEAD/source drift,
+  untracked out-of-scope writes, ancestor/descendant scope overlap, case collisions,
+  non-Git and zero open/socket/provider/command calls. This slice adds no CLI,
+  real workspace reader, executor authorization change, file mutation, provider
+  call, publication or claim that a pure fixture is a real Git preflight.
+- **Evidence**: `pocketchat/task_preflight.py`, `tests/test_task_preflight.py`,
+  `docs/task-preflight.md`, `docs/task-preflight.zh-CN.md` and
+  `docs/review-task-preflight-v1.json`.
+- **Approved by**: agent (user 2026-11-04 16:34 PocketChat delegation); this row
+  and the planning review record freeze the existing `PC-TASK-PREFLIGHT-1`
+  contract in MyWork `系统/草案/pocketchat基础能力接续规划.md` §8.6. This is not
+  an execution authorization and does not authorize a CLI, real Git observation,
+  second task model, provider call, tag, Release or package upload.
+- **Approval evidence**: This row and `docs/review-task-preflight-approval-v1.json`
+  are the approval record; the row becomes claimable only after this planning
+  branch is reachable from `main`. The implementation branch and exact reviewed
+  candidate remain separate; this planning change does not create or claim them.
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.
