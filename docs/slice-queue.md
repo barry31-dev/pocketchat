@@ -114,7 +114,9 @@ and sidecar/preview binding as a separate slice.
 - **State**: `ready`
 - **Branch**: `task/pocketchat-session-read-errors`
 - **Write scope**: `pocketchat/sessions.py`, `tests/test_session_read_errors.py`,
-  `docs/session-read-errors.md`, `docs/session-read-errors.zh-CN.md`
+  `docs/session-read-errors.md`, `docs/session-read-errors.zh-CN.md`,
+  `docs/cli.md`, `docs/cli.zh-CN.md`, `CHANGELOG.md`,
+  `docs/review-session-read-errors-v1.json`
 - **Depends on**: none
 - **Done when**: A malformed UTF-8 session file is rejected as the existing typed
   session-file error, and `show --json` returns the existing `session_file`
