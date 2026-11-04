@@ -164,6 +164,17 @@ class TaskPreflightTests(unittest.TestCase):
         self.assertEqual("allow", report["status"])
         self.assertEqual(before, (spec_value, plan_value, snap, obs))
 
+    def test_observation_is_closed_and_never_echoes_free_text(self):
+        spec_value = spec()
+        plan_value = plan(spec_value)
+        canary = "sk-private-message-canary"
+        changed = observation(spec_value, plan_value,
+                              message_body=canary, credential=canary)
+        report = check_task_preflight(spec_value, plan_value, snapshot(), changed)
+        self.assertEqual("refused", report["status"])
+        self.assertEqual("unexpected_field", report["refusals"][0]["reason"])
+        self.assertNotIn(canary, repr(report))
+
     def test_report_is_bounded_and_stable(self):
         spec_value = spec()
         plan_value = plan(spec_value)

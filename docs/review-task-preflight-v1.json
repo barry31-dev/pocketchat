@@ -14,10 +14,17 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 2,
-  "round_decision": "review",
-  "round_scope": "full",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
   "findings": [
+    {
+      "id": "F4",
+      "severity": "blocker",
+      "status": "fixed",
+      "fingerprint": "observation-not-closed",
+      "reason": "The initial observation mapping accepted unknown keys, so caller-supplied message or credential text could enter through an unobserved field even though the report projection was bounded. The mapping is now closed and a canary regression proves the report refuses without echoing the value."
+    },
     {
       "id": "F3",
       "severity": "major",
@@ -51,7 +58,7 @@
   ],
   "reviewed_evidence": [
     "C: product origin/main 9f3336389132fa58e1e25511eab404e4eb898fdb contains the main-reachable PC-TASK-PREFLIGHT-1 ready row and its approval record.",
-    "V: CPython 3.13.9 ran `python3 -B -m unittest discover -s tests -p test_task_preflight.py -v`: 12 tests OK, exit 0.",
+    "V: CPython 3.13.9 ran `python3 -B -m unittest discover -s tests -p test_task_preflight.py -v`: 13 tests OK, exit 0.",
     "V: The first focused run failed because pocketchat.task_preflight did not exist; the red failure was an import error, not a post-implementation green substitute.",
     "V: The release-process and package-independence guards ran 23 tests OK after removing the private planning path from the public queue.",
     "V: `ruff check --select E9,F pocketchat tests`, JSON parsing, review_record validation and `git diff --check` passed.",

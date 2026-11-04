@@ -18,6 +18,12 @@ SCHEMA_VERSION = 1
 REPORT_SCHEMA = "pocketchat-task-preflight.v1"
 MAX_PATH_OBSERVATIONS = 4096
 MAX_REPORT_BYTES = 64 * 1024
+OBSERVATION_FIELDS = frozenset({
+    "workspace_id", "workspace_roots", "base_commit", "head_commit", "is_git",
+    "tracked_paths", "untracked_paths", "dirty_paths", "write_paths",
+    "dirty_coverage", "source_coverage", "spec_sha256", "plan_sha256",
+    "snapshot_sha256",
+})
 
 
 def _digest(value: Any) -> bool:
@@ -105,6 +111,11 @@ def check_task_preflight(spec: TaskSpec, plan: TaskPlan, snapshot: Any,
         if not isinstance(snapshot, dict) or not isinstance(observation, dict):
             refusals.append(_finding("inputs", "invalid_inputs",
                                      "snapshot and observation must be objects"))
+        else:
+            unexpected = sorted(set(observation) - OBSERVATION_FIELDS)
+            if unexpected:
+                refusals.append(_finding("observation", "unexpected_field",
+                                         "observation contains a field outside the closed set"))
         if not observation.get("is_git", False):
             unknowns.append(_finding("workspace", "not_a_git_workspace",
                                      "workspace is not observed as a Git repository"))
