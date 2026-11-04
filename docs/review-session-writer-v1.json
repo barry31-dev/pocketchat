@@ -15,11 +15,11 @@
     "docs",
     "python-tools"
   ],
-  "tier": "high",
-  "review_depth": "deep",
+  "tier": "medium",
+  "review_depth": "standard",
   "rounds": 3,
-  "round_decision": "review",
-  "round_scope": "full",
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
   "findings": [
     {
       "id": "F1",
@@ -78,7 +78,13 @@
     "ruff check --select E9,F pocketchat tests passed; compileall and git diff --check passed.",
     "The review walked the claim lifecycle, release-only-own-claim paths, existing session format compatibility and the untracked-file boundary.",
     "Exact-SHA CI run 41754871088 failed the same replacement test on Python 3.9 and 3.13 Linux; after holding the file descriptor, the full 1240-test suite and focused 32-test gate passed again locally.",
-    "Exact-SHA Windows jobs 126331664882 and 126331664849 failed with WinError 32 while temporary session directories were cleaned. After the platform split, the full 1240-test suite and focused fence tests passed locally; Windows behavior remains pending the next exact-SHA matrix."
+    "Exact-SHA Windows jobs 126331664882 and 126331664849 failed with WinError 32 while temporary session directories were cleaned. After the platform split, the full 1240-test suite and focused fence tests passed locally; Windows behavior remains pending the next exact-SHA matrix.",
+    "Round 3 reviewed only the new Windows descriptor-lifetime diff. No new finding was opened; the existing F5 was fixed before the exact-SHA matrix.",
+    "Exact-SHA CI run 41756844356 succeeded 7/7 for d539b73d7a260a821c52c92a37dcae4f1ea64573: Linux, macOS and Windows on Python 3.9/3.13 plus release smoke. This is CI evidence for that SHA, not a local platform run or a release."
   ],
-  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. CPython 3.9, Linux and Windows behavior; platform CI for this exact SHA; real provider traffic; package build/install; clean-room scan; tag and Release were not run."
+  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. CPython 3.9, Linux and Windows behavior were covered by exact-SHA CI run 41756844356; they were not run locally. Real provider traffic, package build/install, clean-room scan, tag and Release were not run.",
+  "landing_sign_off": {
+    "status": "pending",
+    "scope": "No explicit human sign-off for this candidate or its successor exists in the task record. Green CI is machine evidence only; landing remains blocked."
+  }
 }
