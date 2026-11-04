@@ -1,0 +1,30 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/review-secondary-session-writers-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-secondary-session-writers-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main baseline c5a295ff4bfe1d5eb0d037d928741dd8027c2f77; PC-SFILE-FENCE-1 is delivered at 4877e5e.",
+    "C: the delivered fence wires acquire_session_writer, bind_session_file and require_session_writer into Session and SessionFile.append; direct write paths remain in pocketchat/selection.py and the shared create_branch used by pocketchat/branching.py and pocketchat/recovery.py.",
+    "C: git grep found the direct paths: selection.py lines around 258-261 open and append without a writer; branching.py around 140 and recovery.py around 316 call create_branch, whose sessions.py body writes the header and inherited lines without a writer.",
+    "C: the proposed write scope includes every direct session write path found at this baseline and no product implementation files outside that boundary.",
+    "C: no candidate or branch named PC-SFILE-FENCE-2 / task/pocketchat-secondary-session-writers exists on product origin/main.",
+    "Docs-only diff review checked row contract fields, dependency, exact write scope, evidence locations, queue placement and explicit non-publication boundary."
+  ],
+  "unverified_scope": "Planning-only change: no product source, tests, CI, real provider, package build, tag, Release or package upload was run. The execution slice remains ready, not implemented or delivered. Main reachability and exact reviewed SHA must be read back after landing."
+}

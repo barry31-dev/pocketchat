@@ -187,6 +187,42 @@ and sidecar/preview binding as a separate slice.
   foundational work; MyWork planner recorded the design at `9496c235` and the
   delivered dependency `PC-SFILE-READ-1`.
 
+#### `PC-SFILE-FENCE-2`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-secondary-session-writers`
+- **Write scope**: `pocketchat/selection.py`, `pocketchat/branching.py`,
+  `pocketchat/recovery.py`, `pocketchat/sessions.py`,
+  `tests/test_select.py`, `tests/test_branching.py`, `tests/test_recovery.py`,
+  `tests/test_session_writer.py`, `docs/session-writer.md`,
+  `docs/session-writer.zh-CN.md`, `docs/compatibility.md`,
+  `docs/compatibility.zh-CN.md`, `CHANGELOG.md`,
+  `docs/review-secondary-session-writers-v1.json`
+- **Depends on**: `PC-SFILE-FENCE-1` (delivered at `4877e5e`)
+- **Done when**: Every product path that creates or appends a session outside a
+  `Session` lifecycle acquires the existing host-local writer claim before its
+  first session byte, binds the created or adopted file, and releases only its
+  own claim. `select --into` sends zero provider requests and leaves existing
+  files unchanged when the claim is foreign; a simultaneous branch/select or
+  branch/recovery target is refused rather than both writing; replacing the
+  claimed path fails closed. Existing successful branch, select and rewind
+  behavior remains available when no foreign claim exists.
+- **Evidence**: `tests/test_session_writer.py`, `tests/test_select.py`,
+  `tests/test_branching.py`, `tests/test_recovery.py`, both session-writer
+  pages, both compatibility pages, `CHANGELOG.md` and
+  `docs/review-secondary-session-writers-v1.json`.
+- **Approved by**: Product approval recorded in the merged queue-maintenance
+  commit named below. Exact candidate landing remains gated by the recorded
+  human sign-off and CI on that SHA. This approval is limited to the
+  `PC-SFILE-FENCE-1` follow-on boundary above; it does not authorize a new lock
+  mechanism, a distributed lock, `Session` rewrite, tag, Release, package
+  upload or real provider call.
+- **Approval evidence**: This row and
+  `docs/review-secondary-session-writers-approval-v1.json` are the
+  main-reachable approval after integration. Exact reviewed SHA and merge
+  readback belong to the integration record; this planning change does not run
+  or claim the execution slice.
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.
