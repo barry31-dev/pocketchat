@@ -369,6 +369,7 @@ class SessionFile:
         self._branch_id = branch_id
         self._parent_branch_id = parent_branch_id
         self._parent_turn_id = parent_turn_id
+        self._file_descriptor: Optional[int] = None
         self._file_identity = None
         self._file_size = None
 
@@ -509,35 +510,79 @@ class SessionFile:
         store._remember_file_state()
         return store
 
+    def _close_file_descriptor(self) -> None:
+        descriptor = self._file_descriptor
+        self._file_descriptor = None
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
     def _remember_file_state(self) -> None:
-        """Bind this view to the exact regular file and bytes it just read."""
+        """Hold the exact file open so a reused inode cannot spoof identity."""
+        self._close_file_descriptor()
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
         try:
-            info = self.path.lstat()
+            descriptor = os.open(str(self.path), flags)
         except OSError as exc:
             raise SessionFileError("cannot inspect %s: %s" % (self.path, exc))
-        if not stat.S_ISREG(info.st_mode):
+        try:
+            info = os.fstat(descriptor)
+            path_info = self.path.lstat()
+            if not stat.S_ISREG(info.st_mode) or not stat.S_ISREG(path_info.st_mode):
+                raise SessionFileError(
+                    "%s is not a regular session file" % self.path)
+            identity = (info.st_dev, info.st_ino)
+            if identity != (path_info.st_dev, path_info.st_ino):
+                raise SessionFileError(
+                    "%s was replaced while it was opened" % self.path)
+            self._file_descriptor = descriptor
+            self._file_identity = identity
+            self._file_size = info.st_size
+        except Exception:
+            os.close(descriptor)
+            raise
+
+    def _current_file_state(self):
+        if self._file_descriptor is None:
+            raise SessionFileError("%s is not bound to a session file" % self.path)
+        try:
+            info = os.fstat(self._file_descriptor)
+            path_info = self.path.lstat()
+        except OSError as exc:
+            raise SessionFileError("cannot inspect %s: %s" % (self.path, exc))
+        if not stat.S_ISREG(info.st_mode) or not stat.S_ISREG(path_info.st_mode):
             raise SessionFileError(
                 "%s is not a regular session file" % self.path)
-        self._file_identity = (info.st_dev, info.st_ino)
-        self._file_size = info.st_size
+        identity = (info.st_dev, info.st_ino)
+        if identity != (path_info.st_dev, path_info.st_ino) or \
+                identity != self._file_identity:
+            raise SessionFileError(
+                "%s was replaced since it was opened" % self.path)
+        return info
 
     def _verify_file_state(self) -> None:
         """Refuse a stale or replaced view before it can append another id."""
         if self._file_identity is None or self._file_size is None:
             raise SessionFileError("%s is not bound to a session file" % self.path)
-        try:
-            info = self.path.lstat()
-        except OSError as exc:
-            raise SessionFileError("cannot inspect %s: %s" % (self.path, exc))
-        if not stat.S_ISREG(info.st_mode):
-            raise SessionFileError(
-                "%s was replaced by a non-regular file" % self.path)
-        if (info.st_dev, info.st_ino) != self._file_identity:
-            raise SessionFileError(
-                "%s was replaced since it was opened" % self.path)
+        info = self._current_file_state()
         if info.st_size != self._file_size:
             raise SessionFileError(
                 "%s changed since this view read it" % self.path)
+
+    def _advance_file_state_after_write(self) -> None:
+        """Update our size only after checking the held file is still the path."""
+        info = self._current_file_state()
+        self._file_size = info.st_size
+
+    def __del__(self) -> None:
+        try:
+            self._close_file_descriptor()
+        except Exception:
+            pass
 
     def _write_header(self) -> None:
         record = {
@@ -600,7 +645,7 @@ class SessionFile:
                 os.fsync(handle.fileno())
         except OSError as exc:
             raise SessionFileError("cannot append to %s: %s" % (self.path, exc))
-        self._remember_file_state()
+        self._advance_file_state_after_write()
         self.messages.append(copy.deepcopy(record))
 
 
