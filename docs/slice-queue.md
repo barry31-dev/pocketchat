@@ -221,9 +221,9 @@ and sidecar/preview binding as a separate slice.
   `docs/evidence-links.zh-CN.md`, `CHANGELOG.md` and
   `docs/review-evidence-link-v1.json`.
 - **Approved by**: User directive of 2026-11-04 to add missing tasks and
-  finish required functionality first; the MyWork planner froze this
-  evidence-link core contract in the `PC-EVIDENCE-LINK-1-PLANNER` record.
-  Exact candidate landing remains gated by the implementation review record
+  finish required functionality first; this row and the planning review
+  record freeze the evidence-link core contract. Exact candidate landing
+  remains gated by the implementation review record
   and its required human sign-off. This approval is limited to the pure core
   above; it does not authorize a CLI, second evidence schema, provider call,
   tag, Release or package upload.
