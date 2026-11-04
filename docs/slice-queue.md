@@ -165,7 +165,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-SFILE-FENCE-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-session-writer-fence`
 - **Write scope**: `pocketchat/session_writer.py`, `pocketchat/sessions.py`,
   `pocketchat/session.py`, `tests/test_session_writer.py`,
@@ -182,7 +182,7 @@ and sidecar/preview binding as a separate slice.
 - **Evidence**: `tests/test_session_writer.py`,
   `docs/review-session-writer-v1.json`, a bounded two-process fixture, a stub
   request counter proving the refused writer sends zero requests, and an
-  unchanged historical file hash.
+  unchanged historical file hash; merged to `main` as `4877e5e`.
 - **Approved by**: User directive of 2026-11-03 to continue PocketChat
   foundational work; MyWork planner recorded the design at `9496c235` and the
   delivered dependency `PC-SFILE-READ-1`.
