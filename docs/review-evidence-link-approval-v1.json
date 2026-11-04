@@ -1,0 +1,54 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/review-evidence-link-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-evidence-link-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main baseline c5a295ff4bfe1d5eb0d037d928741dd8027c2f77; successful fetch and git rev-parse read this exact SHA before the planning branch was created.",
+    "C: product origin/main docs/slice-queue.md has no PC-EVIDENCE-LINK-1 row and no ready row; the last foundational row PC-SFILE-FENCE-1 is delivered.",
+    "C: product origin/main has no pocketchat/evidence_links.py, tests/test_evidence_links.py, docs/evidence-links.md or docs/evidence-links.zh-CN.md; product remote has no task/pocketchat-evidence-link-core branch.",
+    "C: docs/development-and-release.md §2.1 and §5.1 and docs/slice-queue.md §1 require a main-reachable approval with branch, write_scope, depends_on, done_when, evidence and approved_by before an implementation branch is created; this row freezes one bounded pure core and does not widen the CLI-only product boundary.",
+    "C: the row's execution write scope is disjoint from the planning paths and from any other pushed but not main-reachable approval candidate; it does not include CHANGELOG.md or shared CLI docs.",
+    "C: the private operational coordinator held one valid lease for this planning change; its exact token and receipt stay in the private delivery record and are not copied into this public review record.",
+    "Docs-only diff review checked state, unique branch, write scope, dependency, frozen interface and budgets, done_when, evidence, approved_by, non-publication boundary, absence of private paths and absence of ready-row batching."
+  ],
+  "unverified_scope": "Planning-only change: no product source, product tests, CI at record creation, real provider, package build, tag, Release or package upload was run. An independent fresh-context review was not run when this record was written; the low-tier recorded machine review covers the docs-only diff, links, terminology, status ownership and review-record validation. This candidate freezes a ready row that becomes claimable only after the planning branch is integrated and the row is read back from product origin/main. Product main reachability, exact reviewed SHA, post-push CI and the later execution slice are not claimed.",
+  "review_context": {
+    "why": [
+      "No main-reachable ready row remained after PC-SFILE-FENCE-1 was delivered; the next bounded pure evidence-link core needs one frozen approval."
+    ],
+    "not_doing": [
+      "No product implementation, CLI wiring, publication action, or claim of independent fresh-context review."
+    ],
+    "diff_walk": [
+      "docs/slice-queue.md adds one ready row with a unique branch, disjoint write scope, closed descriptor/relation contract, tri-state result, quotas, done condition, evidence and approver.",
+      "docs/review-evidence-link-approval-v1.json records the docs-only low-tier review and its unverified scope."
+    ],
+    "static_checks": [
+      "No duplicate PC-EVIDENCE-LINK-1 row or execution branch exists on product origin/main.",
+      "The execution scope excludes CHANGELOG.md and shared CLI docs.",
+      "No private path, token or worktree path appears in the public diff."
+    ],
+    "review_notes": [
+      "The planning review is machine-recorded and does not substitute for the implementation slice's own red/green tests and review record."
+    ],
+    "gaps": [
+      "Independent fresh-context review and exact-SHA post-push CI are separate from this record; the PR readback must be checked before merge."
+    ]
+  }
+}
