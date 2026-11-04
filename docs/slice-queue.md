@@ -189,7 +189,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-EVIDENCE-LINK-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-evidence-link-core`
 - **Write scope**: `pocketchat/evidence_links.py`,
   `tests/test_evidence_links.py`, `docs/evidence-links.md`,
@@ -219,7 +219,10 @@ and sidecar/preview binding as a separate slice.
 - **Evidence**: `pocketchat/evidence_links.py`,
   `tests/test_evidence_links.py`, `docs/evidence-links.md`,
   `docs/evidence-links.zh-CN.md`, `CHANGELOG.md` and
-  `docs/review-evidence-link-v1.json`.
+  `docs/review-evidence-link-v1.json`; exact reviewed candidate
+  `f0cd4629eb0b96817fbb953ea6ecc1d8f1debced` merged by PR #14 as
+  `797a7e6c007e176e0ae331d8c64e31e4aabed117`, with exact-SHA CI run
+  `41831133989` reporting seven successful jobs.
 - **Approved by**: User directive of 2026-11-04 to add missing tasks and
   finish required functionality first; this row and the planning review
   record freeze the evidence-link core contract. Exact candidate landing
