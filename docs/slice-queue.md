@@ -111,7 +111,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-SFILE-READ-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-session-read-errors`
 - **Write scope**: `pocketchat/sessions.py`, `tests/test_session_read_errors.py`,
   `docs/session-read-errors.md`, `docs/session-read-errors.zh-CN.md`,
@@ -122,13 +122,14 @@ and sidecar/preview binding as a separate slice.
   session-file error, and `show --json` returns the existing `session_file`
   refusal with exit 2 and no traceback while the input bytes remain unchanged.
 - **Evidence**: `tests/test_session_read_errors.py`, `tests/test_sessions.py`,
-  both session-read error docs, and `docs/review-session-read-errors-v1.json`.
+  both session-read error docs, and `docs/review-session-read-errors-v1.json`;
+  merged to `main` as `c97fe8e`.
 - **Approved by**: User directive of 2026-11-03 to continue PocketChat
   foundational work; MyWork planner recorded the approved design at `9496c235`.
 
 #### `PC-RCAP-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-runtime-capabilities`
 - **Write scope**: `pocketchat/runtime_capabilities.py`,
   `tests/test_runtime_capabilities.py`, `docs/review-runtime-capabilities-v1.json`
@@ -138,7 +139,8 @@ and sidecar/preview binding as a separate slice.
   I/O, and fixed `not_checked` names keep provider, workspace and concurrency
   claims out of the result.
 - **Evidence**: `tests/test_runtime_capabilities.py`,
-  `pocketchat/runtime_capabilities.py`.
+  `pocketchat/runtime_capabilities.py`, and
+  `docs/review-runtime-capabilities-v1.json`; merged to `main` as `5ce3586`.
 - **Approved by**: User directive of 2026-11-03 to continue PocketChat
   foundational work; MyWork planner recorded the approved design at `9496c235`.
 
