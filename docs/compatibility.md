@@ -42,6 +42,7 @@ The following formats are versioned and readable across `v1.0.x`:
 | Artifact | Version key | Rule |
 |---|---|---|
 | Session | `schema_version: "1"` | Old files remain readable; completed assistant lines may carry additive `tool_context`; unknown newer versions are refused |
+| Session writer claim | adjacent `<session>.writer` file | One live host-local owner per explicit canonical session path; ownership is never inferred from PID/TTL and is released only by its holder |
 | Trace | Agent Trace Doctor schema `"1"` | Event shape is not silently rewritten |
 | Request snapshot | `schema_version: "1"` | Exact body, no headers, hash checked by replay |
 | Comparison manifest | `schema_version: "1"` | Exclusive-create index of evidence |

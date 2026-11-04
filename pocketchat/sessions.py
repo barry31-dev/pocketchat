@@ -25,6 +25,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import stat
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -368,6 +369,8 @@ class SessionFile:
         self._branch_id = branch_id
         self._parent_branch_id = parent_branch_id
         self._parent_turn_id = parent_turn_id
+        self._file_identity = None
+        self._file_size = None
 
     @property
     def conversation_id(self) -> Optional[str]:
@@ -497,11 +500,44 @@ class SessionFile:
             if isinstance(parent_turn_value, str) and parent_turn_value.strip()
             else None
         )
-        return cls(path, stored_id, trace,
-                   created if isinstance(created, str) else utc_now(),
-                   str(header.get("pocketchat_version") or version),
-                   messages, True, existing_conversation_id, existing_branch_id,
-                   existing_parent_branch_id, existing_parent_turn_id)
+        store = cls(
+            path, stored_id, trace,
+            created if isinstance(created, str) else utc_now(),
+            str(header.get("pocketchat_version") or version),
+            messages, True, existing_conversation_id, existing_branch_id,
+            existing_parent_branch_id, existing_parent_turn_id)
+        store._remember_file_state()
+        return store
+
+    def _remember_file_state(self) -> None:
+        """Bind this view to the exact regular file and bytes it just read."""
+        try:
+            info = self.path.lstat()
+        except OSError as exc:
+            raise SessionFileError("cannot inspect %s: %s" % (self.path, exc))
+        if not stat.S_ISREG(info.st_mode):
+            raise SessionFileError(
+                "%s is not a regular session file" % self.path)
+        self._file_identity = (info.st_dev, info.st_ino)
+        self._file_size = info.st_size
+
+    def _verify_file_state(self) -> None:
+        """Refuse a stale or replaced view before it can append another id."""
+        if self._file_identity is None or self._file_size is None:
+            raise SessionFileError("%s is not bound to a session file" % self.path)
+        try:
+            info = self.path.lstat()
+        except OSError as exc:
+            raise SessionFileError("cannot inspect %s: %s" % (self.path, exc))
+        if not stat.S_ISREG(info.st_mode):
+            raise SessionFileError(
+                "%s was replaced by a non-regular file" % self.path)
+        if (info.st_dev, info.st_ino) != self._file_identity:
+            raise SessionFileError(
+                "%s was replaced since it was opened" % self.path)
+        if info.st_size != self._file_size:
+            raise SessionFileError(
+                "%s changed since this view read it" % self.path)
 
     def _write_header(self) -> None:
         record = {
@@ -521,6 +557,9 @@ class SessionFile:
             record[PARENT_BRANCH_KEY] = self._parent_branch_id
         if self._parent_turn_id:
             record[PARENT_TURN_KEY] = self._parent_turn_id
+        if self._file_identity is not None:
+            raise SessionFileError(
+                "%s already has a session header" % self.path)
         try:
             with open_appending(self.path) as handle:
                 handle.write(json.dumps(record, sort_keys=True) + "\n")
@@ -528,10 +567,16 @@ class SessionFile:
                 os.fsync(handle.fileno())
         except OSError as exc:
             raise SessionFileError("cannot write %s: %s" % (self.path, exc))
+        self._remember_file_state()
 
     def append(self, role: str, content: str,
-               tool_context: Optional[List[Dict[str, Any]]] = None) -> None:
+               tool_context: Optional[List[Dict[str, Any]]] = None,
+               writer: Any = None) -> None:
         """Append one message. This is the only write that happens per turn."""
+        if writer is not None:
+            from .session_writer import require_session_writer
+            require_session_writer(self.path, writer)
+        self._verify_file_state()
         if role not in MESSAGE_ROLES:
             raise SessionFileError(
                 "a session file records %s messages, got %r"
@@ -555,6 +600,7 @@ class SessionFile:
                 os.fsync(handle.fileno())
         except OSError as exc:
             raise SessionFileError("cannot append to %s: %s" % (self.path, exc))
+        self._remember_file_state()
         self.messages.append(copy.deepcopy(record))
 
 

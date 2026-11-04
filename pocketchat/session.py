@@ -41,6 +41,8 @@ from .request import (CredentialInRequestError, canonical_bytes,
                      next_request_turn, request_digest,
                      request_snapshot_path, write_request_snapshot)
 from .sessions import SessionFile, SessionFileError
+from .session_writer import (SessionWriterBusy, acquire_session_writer,
+                             require_session_writer)
 from .trace import TraceRecorder, utc_now
 
 import pocketchat
@@ -195,15 +197,23 @@ class Session:
         self.task_budget_request_id = ""
 
         self.session_file: Optional[SessionFile] = None
+        self._session_writer = None
         if session_path is not None:
             try:
+                self._session_writer = acquire_session_writer(
+                    Path(session_path), owner=run_id or None)
+                # SessionFile may resolve a relative trace against the file's
+                # own parent. Use that same canonical session path everywhere
+                # so a relative alias cannot bypass the lifetime claim.
                 self.session_file = SessionFile.open(
                     Path(session_path),
                     run_id or new_run_id(),
                     Path(trace_path),
                     pocketchat.__version__,
                 )
-            except SessionFileError as exc:
+                self._session_writer.bind_session_file(self.session_file.path)
+            except (SessionFileError, SessionWriterBusy) as exc:
+                self._release_session_writer()
                 raise ConfigError(str(exc))
         if self.session_file is not None:
             # The existing file decides: a resumed run keeps its original run id
@@ -353,8 +363,16 @@ class Session:
         finally:
             self.last_error = error
             self.last_reason = reason
-            self._close(status, error, reason, started["event_id"])
+            try:
+                self._close(status, error, reason, started["event_id"])
+            finally:
+                self._release_session_writer()
         return status
+
+    def _release_session_writer(self) -> None:
+        if self._session_writer is not None:
+            self._session_writer.release()
+            self._session_writer = None
 
     def _describe_input(self, prompts: List[str]) -> str:
         """Describe where the prompts came from, not how many there are.
@@ -1062,13 +1080,19 @@ class Session:
         if self.session_file is None:
             return
         try:
-            self.session_file.append("user", prompt)
-            self.session_file.append("assistant", reply, tool_context=tool_context)
+            require_session_writer(self.session_file.path, self._session_writer)
+            self.session_file.append(
+                "user", prompt, writer=self._session_writer)
+            self.session_file.append(
+                "assistant", reply, tool_context=tool_context,
+                writer=self._session_writer)
         except SessionFileError:
             # A conversation that cannot be written is not the same as a
             # conversation that did not happen, and the trace already carries
-            # it. Failing the run here would lose a turn that succeeded.
+            # it. Keep the successful run result, but never continue appending
+            # through a claim this process no longer owns.
             self.session_file = None
+            self._release_session_writer()
 
     def _memory_recall_projection(self, prompt: str):
         """Build one explicit opt-in recall message and its evidence metadata."""

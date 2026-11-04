@@ -1,0 +1,65 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/review-session-writer-v1.json",
+    "docs/session-writer.md",
+    "docs/session-writer.zh-CN.md",
+    "pocketchat/session.py",
+    "pocketchat/session_writer.py",
+    "pocketchat/sessions.py",
+    "tests/test_session_writer.py"
+  ],
+  "categories": ["docs", "python-tools"],
+  "tier": "high",
+  "review_depth": "deep",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "detail": "The first cut checked the new claim but let a second stale SessionFile view append from its own ordinal under the same owner. SessionFile now binds the file identity and size and refuses a view whose bytes changed.",
+      "fingerprint": "stale-view-duplicate-turn"
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "detail": "The first cut attempted to bind a not-yet-created session in the claim constructor. Empty-session initialization now leaves identity unset until the header write and keeps that identity across appends.",
+      "fingerprint": "empty-session-unbound"
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "detail": "The second review pass found symlink and hard-link aliases could bypass the path-local claim. Both aliases now fail closed before the target is read or changed.",
+      "fingerprint": "session-alias-bypass"
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/review-session-writer-v1.json",
+    "docs/session-writer.md",
+    "docs/session-writer.zh-CN.md",
+    "pocketchat/session.py",
+    "pocketchat/session_writer.py",
+    "pocketchat/sessions.py",
+    "tests/test_session_writer.py"
+  ],
+  "reviewed_evidence": [
+    "Red first: tests/test_session_writer.py failed at import because pocketchat.session_writer did not exist, after the append boundary was wired to require it.",
+    "After implementation: 16 focused ownership tests passed, including two-process exclusion, one-path independence from a different path, stale claim, symlink and hard-link aliases, path replacement, cancellation, failure, initialization cleanup and zero provider requests for a refused writer.",
+    "Session, session-identity and kernel suites ran 129 tests OK.",
+    "Release/process documentation guard plus the writer tests ran 32 tests OK.",
+    "The repository full suite ran 1240 tests OK with CPython 3.13.9.",
+    "ruff check --select E9,F pocketchat tests passed; compileall and git diff --check passed.",
+    "The review walked the claim lifecycle, release-only-own-claim paths, existing session format compatibility and the untracked-file boundary."
+  ],
+  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. CPython 3.9, Linux and Windows behavior; platform CI for this exact SHA; real provider traffic; package build/install; clean-room scan; tag and Release were not run."
+}
