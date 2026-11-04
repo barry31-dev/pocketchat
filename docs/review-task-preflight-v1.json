@@ -1,0 +1,79 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/review-task-preflight-v1.json",
+    "docs/slice-queue.md",
+    "docs/task-preflight.md",
+    "docs/task-preflight.zh-CN.md",
+    "pocketchat/task_preflight.py",
+    "tests/test_task_preflight.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "F4",
+      "severity": "blocker",
+      "status": "fixed",
+      "fingerprint": "observation-not-closed",
+      "reason": "The initial observation mapping accepted unknown keys, so caller-supplied message or credential text could enter through an unobserved field even though the report projection was bounded. The mapping is now closed and a canary regression proves the report refuses without echoing the value."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "workspace-identity-not-bound",
+      "reason": "The initial pure core checked only that workspace_id was non-empty. A new explicit workspace_roots observation now refuses a missing or foreign workspace binding, and multi-root observations are refused as foreign rather than merged."
+    },
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "private-planning-path-in-public-queue",
+      "reason": "The approval row named a private planning file in the public product queue. The row now references only the public package contract; the private authorization remains in MyWork and is not copied into the product tree."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "unused-preflight-import",
+      "reason": "Ruff E9/F found an unused hashlib import in the initial module implementation; it was removed before the recorded green run."
+    },
+    {
+      "id": "F5",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "branch-push-ci-unavailable",
+      "reason": "The branch push produced no GitHub workflow run and workflow_dispatch returned HTTP 403 Resource not accessible. Exact-SHA platform CI is therefore unverified; it must not be inferred from local tests or an older SHA."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-task-preflight-v1.json",
+    "docs/slice-queue.md",
+    "docs/task-preflight.md",
+    "docs/task-preflight.zh-CN.md",
+    "pocketchat/task_preflight.py",
+    "tests/test_task_preflight.py"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main 9f3336389132fa58e1e25511eab404e4eb898fdb contains the main-reachable PC-TASK-PREFLIGHT-1 ready row and its approval record.",
+    "V: CPython 3.13.9 ran `python3 -B -m unittest discover -s tests -p test_task_preflight.py -v`: 13 tests OK, exit 0.",
+    "V: The first focused run failed because pocketchat.task_preflight did not exist; the red failure was an import error, not a post-implementation green substitute.",
+    "V: The release-process and package-independence guards ran 23 tests OK after removing the private planning path from the public queue.",
+    "V: `ruff check --select E9,F pocketchat tests`, JSON parsing, review_record validation and `git diff --check` passed.",
+    "C: the module is pure: it validates supplied parsed spec/plan/snapshot and observation mappings without open, socket, subprocess or provider calls; the focused no-I/O test mocks those call sites.",
+    "C: the report’s `allow`, `refused` and `unknown` meanings, explicit coverage rule, path scope checks, stable sorting, input immutability and 4096/64-KiB limits match the approved row.",
+    "C: the diff is limited to the one approved implementation scope plus the shared queue wording correction; it adds no CLI, reader, executor authorization, CHANGELOG or other queue row changes.",
+    "V: CPython 3.13.9 ran the full local product suite: 1264 tests OK, exit 0.",
+    "C: GitHub check-runs for 87df0a740ff4eb17786cd09eec10de4d33e3f16f returned total_count 0; this branch has no exact-SHA CI evidence. workflow_dispatch failed with HTTP 403 before creating a run."
+  ],
+  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. Exact-SHA GitHub CI is unavailable for this branch: the push produced no workflow run, check-runs total_count is 0, and workflow_dispatch returned HTTP 403. Linux, Windows, CPython 3.9, real Git observations, a live workspace reader, CLI wiring, real provider traffic, package build/install, tag, Release and publication were not run. A green pure-core test is not a real Git preflight and does not authorize execution."
+}

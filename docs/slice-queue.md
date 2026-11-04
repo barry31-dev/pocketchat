@@ -270,8 +270,8 @@ and sidecar/preview binding as a separate slice.
   `docs/review-task-preflight-v1.json`.
 - **Approved by**: agent (user 2026-11-04 16:34 PocketChat delegation); this row
   and the planning review record freeze the existing `PC-TASK-PREFLIGHT-1`
-  contract in MyWork `系统/草案/pocketchat基础能力接续规划.md` §8.6. This is not
-  an execution authorization and does not authorize a CLI, real Git observation,
+  contract of this public package. This is not an execution authorization and
+  does not authorize a CLI, real Git observation,
   second task model, provider call, tag, Release or package upload.
 - **Approval evidence**: This row and `docs/review-task-preflight-approval-v1.json`
   are the approval record; the row becomes claimable only after this planning
