@@ -48,6 +48,13 @@
       "status": "fixed",
       "detail": "The first exact-SHA CI matrix exposed that a replaced session could reuse the same inode, so dev+ino alone did not detect it on Linux. SessionFile now holds the original descriptor and compares fstat with the current path lstat before append.",
       "fingerprint": "inode-reuse-session-replacement"
+    },
+    {
+      "id": "F5",
+      "severity": "major",
+      "status": "fixed",
+      "detail": "The second exact-SHA CI run showed Windows could not delete temporary session directories while the replacement guard held a read descriptor. POSIX keeps the descriptor for an open-file race check; Windows opens only long enough to read platform identity and closes before returning.",
+      "fingerprint": "windows-open-handle-cleanup"
     }
   ],
   "commit_or_candidate_sha": "self",
@@ -70,7 +77,8 @@
     "The repository full suite ran 1240 tests OK with CPython 3.13.9.",
     "ruff check --select E9,F pocketchat tests passed; compileall and git diff --check passed.",
     "The review walked the claim lifecycle, release-only-own-claim paths, existing session format compatibility and the untracked-file boundary.",
-    "Exact-SHA CI run 41754871088 failed the same replacement test on Python 3.9 and 3.13 Linux; after holding the file descriptor, the full 1240-test suite and focused 32-test gate passed again locally."
+    "Exact-SHA CI run 41754871088 failed the same replacement test on Python 3.9 and 3.13 Linux; after holding the file descriptor, the full 1240-test suite and focused 32-test gate passed again locally.",
+    "Exact-SHA Windows jobs 126331664882 and 126331664849 failed with WinError 32 while temporary session directories were cleaned. After the platform split, the full 1240-test suite and focused fence tests passed locally; Windows behavior remains pending the next exact-SHA matrix."
   ],
   "unverified_scope": "Only macOS CPython 3.13.9 was run locally. CPython 3.9, Linux and Windows behavior; platform CI for this exact SHA; real provider traffic; package build/install; clean-room scan; tag and Release were not run."
 }

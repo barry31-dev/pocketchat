@@ -520,7 +520,7 @@ class SessionFile:
                 pass
 
     def _remember_file_state(self) -> None:
-        """Hold the exact file open so a reused inode cannot spoof identity."""
+        """Bind to the exact file; hold it open only where deletion permits."""
         self._close_file_descriptor()
         flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
         if hasattr(os, "O_NOFOLLOW"):
@@ -529,6 +529,7 @@ class SessionFile:
             descriptor = os.open(str(self.path), flags)
         except OSError as exc:
             raise SessionFileError("cannot inspect %s: %s" % (self.path, exc))
+        keep_descriptor = os.name != "nt"
         try:
             info = os.fstat(descriptor)
             path_info = self.path.lstat()
@@ -539,19 +540,25 @@ class SessionFile:
             if identity != (path_info.st_dev, path_info.st_ino):
                 raise SessionFileError(
                     "%s was replaced while it was opened" % self.path)
-            self._file_descriptor = descriptor
+            if keep_descriptor:
+                self._file_descriptor = descriptor
             self._file_identity = identity
             self._file_size = info.st_size
         except Exception:
-            os.close(descriptor)
             raise
+        finally:
+            if not keep_descriptor or self._file_descriptor != descriptor:
+                os.close(descriptor)
 
     def _current_file_state(self):
-        if self._file_descriptor is None:
+        if self._file_identity is None:
             raise SessionFileError("%s is not bound to a session file" % self.path)
         try:
-            info = os.fstat(self._file_descriptor)
             path_info = self.path.lstat()
+            if self._file_descriptor is None:
+                info = path_info
+            else:
+                info = os.fstat(self._file_descriptor)
         except OSError as exc:
             raise SessionFileError("cannot inspect %s: %s" % (self.path, exc))
         if not stat.S_ISREG(info.st_mode) or not stat.S_ISREG(path_info.st_mode):
