@@ -1,0 +1,90 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/review-session-writer-v1.json",
+    "docs/session-writer.md",
+    "docs/session-writer.zh-CN.md",
+    "pocketchat/session.py",
+    "pocketchat/session_writer.py",
+    "pocketchat/sessions.py",
+    "tests/test_session_writer.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "detail": "The first cut checked the new claim but let a second stale SessionFile view append from its own ordinal under the same owner. SessionFile now binds the file identity and size and refuses a view whose bytes changed.",
+      "fingerprint": "stale-view-duplicate-turn"
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "detail": "The first cut attempted to bind a not-yet-created session in the claim constructor. Empty-session initialization now leaves identity unset until the header write and keeps that identity across appends.",
+      "fingerprint": "empty-session-unbound"
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "detail": "The second review pass found symlink and hard-link aliases could bypass the path-local claim. Both aliases now fail closed before the target is read or changed.",
+      "fingerprint": "session-alias-bypass"
+    },
+    {
+      "id": "F4",
+      "severity": "major",
+      "status": "fixed",
+      "detail": "The first exact-SHA CI matrix exposed that a replaced session could reuse the same inode, so dev+ino alone did not detect it on Linux. SessionFile now holds the original descriptor and compares fstat with the current path lstat before append.",
+      "fingerprint": "inode-reuse-session-replacement"
+    },
+    {
+      "id": "F5",
+      "severity": "major",
+      "status": "fixed",
+      "detail": "The second exact-SHA CI run showed Windows could not delete temporary session directories while the replacement guard held a read descriptor. POSIX keeps the descriptor for an open-file race check; Windows opens only long enough to read platform identity and closes before returning.",
+      "fingerprint": "windows-open-handle-cleanup"
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/review-session-writer-v1.json",
+    "docs/session-writer.md",
+    "docs/session-writer.zh-CN.md",
+    "pocketchat/session.py",
+    "pocketchat/session_writer.py",
+    "pocketchat/sessions.py",
+    "tests/test_session_writer.py"
+  ],
+  "reviewed_evidence": [
+    "Red first: tests/test_session_writer.py failed at import because pocketchat.session_writer did not exist, after the append boundary was wired to require it.",
+    "After implementation: 16 focused ownership tests passed, including two-process exclusion, one-path independence from a different path, stale claim, symlink and hard-link aliases, path replacement, cancellation, failure, initialization cleanup and zero provider requests for a refused writer.",
+    "Session, session-identity and kernel suites ran 129 tests OK.",
+    "Release/process documentation guard plus the writer tests ran 32 tests OK.",
+    "The repository full suite ran 1240 tests OK with CPython 3.13.9.",
+    "ruff check --select E9,F pocketchat tests passed; compileall and git diff --check passed.",
+    "The review walked the claim lifecycle, release-only-own-claim paths, existing session format compatibility and the untracked-file boundary.",
+    "Exact-SHA CI run 41754871088 failed the same replacement test on Python 3.9 and 3.13 Linux; after holding the file descriptor, the full 1240-test suite and focused 32-test gate passed again locally.",
+    "Exact-SHA Windows jobs 126331664882 and 126331664849 failed with WinError 32 while temporary session directories were cleaned. After the platform split, the full 1240-test suite and focused fence tests passed locally; Windows behavior remains pending the next exact-SHA matrix.",
+    "Round 3 reviewed only the new Windows descriptor-lifetime diff. No new finding was opened; the existing F5 was fixed before the exact-SHA matrix.",
+    "Exact-SHA CI run 41756844356 succeeded 7/7 for d539b73d7a260a821c52c92a37dcae4f1ea64573: Linux, macOS and Windows on Python 3.9/3.13 plus release smoke. This is CI evidence for that SHA, not a local platform run or a release."
+  ],
+  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. CPython 3.9, Linux and Windows behavior were covered by exact-SHA CI run 41756844356; they were not run locally. Real provider traffic, package build/install, clean-room scan, tag and Release were not run.",
+  "landing_sign_off": {
+    "status": "approved",
+    "scope": "User directive of 2026-11-04: “批准，给你全权授权”, approving merge of the exact final PC-SFILE-FENCE-1 PR candidate after this sign-off commit and a green seven-job CI run on that exact SHA. This does not authorize a tag, Release, package upload, or real provider call."
+  }
+}
