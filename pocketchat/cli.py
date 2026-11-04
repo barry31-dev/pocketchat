@@ -213,6 +213,8 @@ def _parser() -> argparse.ArgumentParser:
                         help="profile to check (default: the config's default_profile)")
     doctor.add_argument("--json", action="store_true", dest="as_json",
                         help="print one JSON object instead of human-readable lines")
+    doctor.add_argument("--runtime", action="store_true",
+                        help="include a bounded runtime capability report")
 
     run = subparsers.add_parser("run", help="run one or more prompts non-interactively")
     add_common(run)
@@ -2466,6 +2468,9 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             check["fix"] for check in report["checks"]
             if check["status"] == "failed" and check.get("fix")
         ]
+        if args.runtime:
+            from .runtime_capabilities import collect_runtime_capabilities
+            payload["runtime"] = collect_runtime_capabilities()
         print(json.dumps(payload, sort_keys=True))
     else:
         for line in render_doctor_lines(report):

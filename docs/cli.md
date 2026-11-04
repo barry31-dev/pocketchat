@@ -69,6 +69,14 @@ check name to status, and `next_actions` — the ordered `fix` strings of failed
 checks. A ready report has an empty `next_actions` array. A ready report does
 not claim that the provider endpoint is reachable.
 
+`doctor --runtime --json` adds one bounded `runtime` field with schema version
+`1`: interpreter and OS identity, explicit booleans for
+`dir_fd_open`, `nofollow_open_flag` and `directory_open_flag`, and the fixed
+`not_checked` names `provider_reachability`, `workspace_permissions` and
+`concurrency_atomicity`. Missing no-follow support is a capability limit, not
+a claim that memory or workspace operations are safe. The default report,
+three existing checks, `ok` value and exit code are unchanged.
+
 ## Profiles
 
 ```bash

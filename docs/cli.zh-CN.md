@@ -52,6 +52,14 @@ pocketchat doctor --profile hosted --json
 并报告该 profile 的凭据环境变量是否已设置。它不打印凭据值，不打开 socket，不创建
 trace 或会话，也不写配置文件。
 
+`doctor --runtime --json` 额外增加一个有界的 `runtime` 字段（schema 版本
+`1`）：解释器与 OS 身份、`dir_fd_open` / `nofollow_open_flag` /
+`directory_open_flag` 三个显式布尔值，以及固定的
+`not_checked` 名称 `provider_reachability`、`workspace_permissions` 与
+`concurrency_atomicity`。缺 no-follow 支持只是能力限制，不表示 memory
+或工作区操作安全。默认报告、现有三项检查、`ok` 与退出码不变。
+
+
 报告就绪时 exit 0。配置缺失或无效、profile 不存在或凭据缺失时 exit 2，并给出下一
 步动作。`--json` 返回一个对象，包含 `ok`、`schema_version`、选中的 `profile`、
 `model`、`api_key_env`、稳定的 `checks` 列表、由检查名到状态派生出的

@@ -1,0 +1,33 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-doctor-runtime-v1.json",
+    "pocketchat/cli.py",
+    "tests/test_doctor.py"
+  ],
+  "categories": ["docs", "python-tools"],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-doctor-runtime-v1.json",
+    "pocketchat/cli.py",
+    "tests/test_doctor.py"
+  ],
+  "reviewed_evidence": [
+    "Red first: the new --runtime tests failed because argparse did not recognize the option.",
+    "After implementation: doctor ran 24 tests OK, including default-output compatibility, explicit runtime schema, missing-config runtime evidence and a missing no-follow fixture.",
+    "Release/process documentation and package independence guards ran 23 tests OK.",
+    "Ruff E9/F and git diff --check passed.",
+    "pocketchat/doctor.py was not changed; PC-RCAP-1's pure collector supplies the runtime field."
+  ],
+  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. Linux/Windows CI for this exact branch, real provider reachability, workspace permissions, concurrency atomicity, packaging/install, tag and Release were not run."
+}

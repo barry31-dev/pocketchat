@@ -202,6 +202,53 @@ class DoctorTests(unittest.TestCase):
         self.assertIn("fix", payload["checks"][0])
         self.assertNotIn("Traceback", result.stderr)
 
+    def test_default_doctor_json_has_no_runtime_field(self):
+        result = self._doctor("--json", env={"POCKETCHAT_API_KEY": "test-key"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = self._json(result)
+        self.assertNotIn("runtime", payload)
+
+    def test_runtime_doctor_adds_one_bounded_capability_field(self):
+        result = self._doctor("--runtime", "--json",
+                              env={"POCKETCHAT_API_KEY": "test-key"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = self._json(result)
+        runtime = payload["runtime"]
+        self.assertEqual(runtime["schema_version"], "1")
+        self.assertEqual(
+            {"dir_fd_open", "nofollow_open_flag", "directory_open_flag"},
+            set(runtime["primitives"]),
+        )
+        self.assertEqual(
+            ["provider_reachability", "workspace_permissions",
+             "concurrency_atomicity"],
+            runtime["not_checked"],
+        )
+        self.assertNotIn("memory_is_safe", json.dumps(runtime))
+        self.assertNotIn("function_verified", json.dumps(runtime))
+
+    def test_runtime_doctor_still_reports_capabilities_without_config(self):
+        self.config.unlink()
+        result = self._doctor("--runtime", "--json",
+                              env={"POCKETCHAT_API_KEY": None})
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        payload = self._json(result)
+        self.assertFalse(payload["ok"])
+        self.assertIn("runtime", payload)
+
+    def test_runtime_doctor_reports_missing_nofollow_as_a_limit(self):
+        with mock.patch(
+                "pocketchat.runtime_capabilities._capability_source",
+                return_value={"dir_fd_open": False,
+                              "nofollow_open_flag": False,
+                              "directory_open_flag": False}):
+            result = self._doctor("--runtime", "--json",
+                                  env={"POCKETCHAT_API_KEY": "test-key"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        runtime = self._json(result)["runtime"]
+        self.assertFalse(runtime["primitives"]["nofollow_open_flag"])
+        self.assertNotIn("memory_is_safe", json.dumps(runtime))
+
     def test_doctor_is_read_only_and_opens_no_socket(self):
         before = {}
         for path in sorted(self.base.rglob("*")):
