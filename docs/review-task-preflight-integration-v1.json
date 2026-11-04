@@ -1,0 +1,153 @@
+{
+  "schema": "mywork-review-record.v1",
+  "paths": [
+    "docs/review-task-preflight-integration-v1.json",
+    "docs/review-task-preflight-v1.json",
+    "docs/slice-queue.md",
+    "docs/task-preflight.md",
+    "docs/task-preflight.zh-CN.md",
+    "pocketchat/task_preflight.py",
+    "tests/test_task_preflight.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "N1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "preflight-cross-spec-plan",
+      "reason": "Revalidate the mutable TaskSpec source and bind both TaskPlan spec digest representations to it before accepting individual observed digests."
+    },
+    {
+      "id": "N2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "preflight-action-erased-path-scope",
+      "reason": "Revalidate file steps with the action-specific parser grants; only write_file steps derive writes, and an explicit empty or incomplete write list is a contradiction."
+    },
+    {
+      "id": "N3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "preflight-missing-path-sets-allow",
+      "reason": "Absent tracked/untracked/dirty fields add unknown and omission records; non-list values refuse and is_git requires a boolean."
+    },
+    {
+      "id": "N4",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "preflight-raw-budget-after-dedup",
+      "reason": "Enforce the aggregate count of raw tracked/untracked/dirty/write observations before deduplication, including duplicate entries."
+    },
+    {
+      "id": "R1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "preflight-git-commit-id-document-digest-confusion",
+      "reason": "Accept Git SHA-1 and SHA-256 object IDs for base/head only; document digests remain SHA-256 and 40-character head drift refuses."
+    },
+    {
+      "id": "R2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "preflight-unbound-snapshot-body",
+      "reason": "Recompute the canonical snapshot body digest with the existing helper and reject observed contradictions without echoing the body."
+    },
+    {
+      "id": "R3",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "preflight-missing-snapshot-schema-classified-as-contradiction",
+      "reason": "A missing schema is unknown with an omission; an explicitly foreign schema refuses. The new two-case test failed before the fix and passes after it."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-task-preflight-integration-v1.json",
+    "docs/review-task-preflight-v1.json",
+    "docs/slice-queue.md",
+    "docs/task-preflight.md",
+    "docs/task-preflight.zh-CN.md",
+    "pocketchat/task_preflight.py",
+    "tests/test_task_preflight.py"
+  ],
+  "original_candidate_sha": "db4d1c8ef9154c935bcfa4f0c0a7e659fe43c40e",
+  "base_sha": "9f3336389132fa58e1e25511eab404e4eb898fdb",
+  "reviewed_fix_sha": "3d5812a1060c7ee539e92e5520ed6dacf8846a5b",
+  "schema_followup_sha": "ca2ff0b10a201d446512e4a2a110420e32d9c5da",
+  "review_scope_note": "The original review record is historical and unchanged. Its three-round limit led to reconsideration; only concrete integration gaps and their new fix diffs were reviewed here. An interrupted reviewer attempt read no source and is not counted as completed review.",
+  "review_sessions": [
+    {
+      "reviewer": "Pauli",
+      "source_type": "current code/tests/schema (C) + local run (V)",
+      "verification": "verified",
+      "scope": "Exact original candidate task_preflight.py and relevant parser/fixtures; three narrow in-memory probes found N1-N4; no full-suite duplication."
+    },
+    {
+      "reviewer": "Mendel",
+      "source_type": "current code/tests/schema (C) + local run (V)",
+      "verification": "verified",
+      "scope": "Exact db4d1c8..3d5812a new diff in core, tests and bilingual docs; one old/new probe found R3; no full suite."
+    },
+    {
+      "reviewer": "Mendel",
+      "source_type": "current code/tests/schema (C)",
+      "verification": "verified",
+      "scope": "Only 3d5812a..ca2ff0b four-file new delta; R3 closed by static review. No concrete remaining defect within that delta; no additional tests, lint or broad exploration."
+    }
+  ],
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "verification": "verified",
+      "environment": "macOS / CPython 3.11.16",
+      "command": "python3.11 -B -m unittest discover -s tests -p test_task_preflight.py -v",
+      "result": "Recovered 26-test run had 11 failing assertions before the remaining integration fixes; then 26 passed. R3 targeted test later failed two subcases; final focused run: 27 tests OK, exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "verification": "verified",
+      "environment": "ruff 0.17.3",
+      "command": "ruff check --select E9,F pocketchat/task_preflight.py tests/test_task_preflight.py",
+      "result": "All checks passed, exit 0 after the final source fix."
+    },
+    {
+      "source_type": "local run (V)",
+      "verification": "verified",
+      "environment": "macOS / CPython 3.11.16",
+      "command": "python3.11 -B -m unittest discover -s tests -p test_release_process_docs.py -q; python3.11 -B -m unittest discover -s tests -p test_package_independence.py -q",
+      "result": "16 and 7 tests OK, both exit 0 on the integration candidate before the final missing-schema wording clarification; not repeated for that wording-only delta."
+    },
+    {
+      "source_type": "current code/tests/schema (C)",
+      "verification": "verified",
+      "scope": "Six-path original candidate plus one integration record; no CLI, reader, executor or provider changes; original queue wording correction retained without marking delivered."
+    }
+  ],
+  "delivery_hold": {
+    "status": "blocked_before_public_action",
+    "source_type": "local run (V) + current code/tests/schema (C)",
+    "verification": "verified",
+    "scope": "Read-only publication gate diagnostics; no push or history rewrite.",
+    "reasons": [
+      "Observed main already contains twelve commits with service committer GitHub <noreply@github.com>, which the existing identity gate rejects. All commits introduced by this recovery use the configured published identity.",
+      "The current candidate content scan rejects nine review metadata files already on main and one historical original-candidate review record; no policy exemptions were added.",
+      "No exact-candidate CI was created or inherited. Local source checks do not override the publication gates."
+    ],
+    "next_action": "Resolve the established repository identity/content-policy mismatch under explicit authority, then revalidate this exact candidate, push the task branch, obtain exact-SHA CI and finish integration. Do not force-rewrite main or bypass a failed gate."
+  },
+  "unverified_scope": "No real workspace/Git observation, CLI wiring, provider calls, local cross-platform matrix, exact-candidate CI, build/install, tag, Release or upload. This pure check establishes consistency of supplied observations only. No delivered queue status or remote publication is claimed.",
+  "technical_review": {
+    "status": "reviewed_no_open_code_findings_in_recorded_scope",
+    "reviewed_sha": "ca2ff0b10a201d446512e4a2a110420e32d9c5da",
+    "not_a_publication_approval": true
+  }
+}
