@@ -6,7 +6,7 @@
     "docs/review-runtime-capabilities-v1.json"
   ],
   "categories": [
-    "python-tools"
+    "docs"
   ],
   "tier": "medium",
   "review_depth": "standard",
@@ -25,7 +25,13 @@
     "After implementation: four focused tests pass, covering schema 1 JSON, explicit primitive booleans, fixed not_checked names and no I/O/environment enumeration.",
     "Adjacent release/process documentation and package-independence guards ran 23 tests OK.",
     "Ruff E9/F and git diff --check passed.",
-    "The report contains no provider, workspace or concurrency safety conclusion."
+    "The report contains no provider, workspace or concurrency safety conclusion.",
+    "Exact pre-sign-off candidate 98c8d56: GitHub Actions run for the PR passed release-smoke and Linux/macOS/Windows on CPython 3.9/3.13 (7/7); mergeStateStatus was CLEAN.",
+    "The frozen schema is interpreter{implementation,version,executable}, os{name,platform,release}, primitives{dir_fd_open,nofollow_open_flag,directory_open_flag}, and the three fixed not_checked names."
   ],
-  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. Linux/Windows CI for this exact branch, real provider reachability, workspace permissions and concurrency atomicity were not run. The slice does not add a CLI surface or claim a new capability level."
+  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. Linux/Windows CI for this exact branch, real provider reachability, workspace permissions and concurrency atomicity were not run. The slice does not add a CLI surface or claim a new capability level.",
+  "landing_sign_off": {
+    "status": "approved",
+    "scope": "User directive of 2026-11-04: “你自行决定”, interpreted as approval for the exact PC-RCAP-1 schema and candidate. Land only after this sign-off SHA receives a green seven-job CI run; no tag, Release, package upload or real provider call is authorized."
+  }
 }
