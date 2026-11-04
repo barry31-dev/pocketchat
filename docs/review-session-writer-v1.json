@@ -84,7 +84,7 @@
   ],
   "unverified_scope": "Only macOS CPython 3.13.9 was run locally. CPython 3.9, Linux and Windows behavior were covered by exact-SHA CI run 41756844356; they were not run locally. Real provider traffic, package build/install, clean-room scan, tag and Release were not run.",
   "landing_sign_off": {
-    "status": "pending",
-    "scope": "No explicit human sign-off for this candidate or its successor exists in the task record. Green CI is machine evidence only; landing remains blocked."
+    "status": "approved",
+    "scope": "User directive of 2026-11-04: “批准，给你全权授权”, approving merge of the exact final PC-SFILE-FENCE-1 PR candidate after this sign-off commit and a green seven-job CI run on that exact SHA. This does not authorize a tag, Release, package upload, or real provider call."
   }
 }
