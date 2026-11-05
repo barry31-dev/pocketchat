@@ -1,0 +1,63 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/json-input.md",
+    "docs/json-input.zh-CN.md",
+    "docs/review-json-input-v1.json",
+    "pocketchat/json_input.py",
+    "tests/test_json_input.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "unbounded-depth-vs-stdlib-recursion",
+      "reason": "The first frozen wording accepted any positive max_depth, but a CPython 3.9.6 probe showed the standard-library decoder raises RecursionError at about 1000 nested arrays before a post-parse bound can run. Issue #17 was amended before the candidate to cap max_depth at 64; a focused regression first failed when 65 was accepted, then passed after the implementation enforced the cap, while a 64-level value remains accepted."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "approval-depth-semantics-divergence",
+      "reason": "The first issue draft described every root at depth 1, diverging from the reviewed planner contract. Issue #17 was corrected before implementation so scalar roots have depth 0 and root containers depth 1; focused boundary tests now bind the implementation to that definition."
+    },
+    {
+      "id": "F3",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "independent-fresh-context-review",
+      "reason": "This candidate was produced and reviewed in one interactive session. The author completed a bounded second-pass contract, source, test and documentation review, but an independent fresh-context reviewer was not dispatched. Landing must not infer that missing review from focused tests or author review."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/json-input.md",
+    "docs/json-input.zh-CN.md",
+    "docs/review-json-input-v1.json",
+    "pocketchat/json_input.py",
+    "tests/test_json_input.py"
+  ],
+  "reviewed_evidence": [
+    "C: product issue #17, authored by barry31-dev, is the repository-reachable ready approval record for PC-JSON-CORE-1 and freezes the unique branch, five-path write scope, dependency-free pure-core contract and stop boundary.",
+    "C: issue #17 records that this scope is disjoint from active PC-TASK-DEADLINE-1 and the memory-doctor planner, and that the unmerged queue candidate is not a second live approval source.",
+    "V: CPython 3.9.6 first ran `python3 -m unittest tests.test_json_input -v` before implementation; collection failed with ModuleNotFoundError for pocketchat.json_input, exit 1.",
+    "V: after the first green implementation, the new max_depth=65 regression failed because no JSONInputError was raised; after the bound fix, the complete focused file ran 12 tests OK, exit 0.",
+    "V: CPython 3.9.6 directly probed the standard json decoder at nested array depths 100, 500, 900, 950, 990, 1000, 1100 and 2000; 1000 and above raised RecursionError on this environment. This supports the fixed public ceiling but is not a cross-version parser guarantee.",
+    "V: Ruff 0.17.3 ran `ruff check --select E9,F pocketchat/json_input.py tests/test_json_input.py`: all checks passed, exit 0.",
+    "C: the source review confirms byte limits precede UTF-8 decoding; duplicate members and named non-finite constants are rejected by the decoder hooks; overflowed floats, node counts and container depth are checked iteratively after parsing; only fixed error metadata is exposed.",
+    "C: focused tests cover exact bytes and limit types, byte/depth/node inclusive boundaries, the depth-64 ceiling, scalars, objects, arrays, CJK and emoji, nested duplicate keys, named and overflowed non-finite numbers, invalid UTF-8, malformed/trailing input, structural paths, input immutability and zero file/environment/socket/command/provider calls.",
+    "C: the English and Chinese contract pages describe the same API, limit arithmetic, error types/categories, structural path format and non-goals.",
+    "C: the full diff is limited to issue #17's five paths and adds no current reader or CLI integration, shared queue edit, serializer, schema migration, CHANGELOG entry, tag, Release or package upload."
+  ],
+  "unverified_scope": "Only macOS CPython 3.9.6 focused tests and Ruff E9/F were run locally. The full product suite, package build/install, exact-SHA GitHub Actions on Linux/macOS/Windows or other Python versions, independent fresh-context review, real session/task/replay/memory reader integration, provider traffic, tag, Release and publication were not run. A green pure-core test does not prove later reader wiring or compatibility."
+}
