@@ -34,8 +34,21 @@ def _load(path: Path) -> Dict[str, Any]:
     if not isinstance(data, dict):
         raise TaskRecoveryError("execution report is not an object")
     _closed(data, {"schema_version", "report_id", "spec_sha256", "plan_sha256",
-                   "task_ids", "steps", "changes", "evidence_issues", "error", "recovery"},
+                   "task_ids", "steps", "changes", "evidence_issues", "error", "recovery",
+                   "cancellation", "task_budget"},
             "execution report")
+    if "cancellation" in data:
+        from .tasking import TaskError, validate_cancellation_report
+        try:
+            validate_cancellation_report(data)
+        except TaskError as exc:
+            raise TaskRecoveryError(str(exc)) from exc
+    if "task_budget" in data:
+        from .task_budget import TaskBudget, TaskBudgetError
+        try:
+            TaskBudget.from_dict(data["task_budget"])
+        except TaskBudgetError as exc:
+            raise TaskRecoveryError("execution report has an invalid task budget") from exc
     if data.get("schema_version") != REPORT_SCHEMA:
         raise TaskRecoveryError("execution report has the wrong schema")
     if (not isinstance(data.get("task_ids"), list)

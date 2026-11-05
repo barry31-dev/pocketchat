@@ -410,7 +410,7 @@ class CancellationExecutionTests(unittest.TestCase):
         payload["steps"][1]["evidence"]["archive_sha256"] = "e" * 64
         path.write_text(json.dumps(payload), encoding="utf-8")
         with self.assertRaisesRegex(CheckpointError,
-                                    "command archive digest declarations disagree"):
+                                    "cancelled completed command has contradictory evidence"):
             create_checkpoint(payload, report_path=path,
                               expected_report_sha256=digest(path))
 
@@ -419,6 +419,44 @@ class CancellationExecutionTests(unittest.TestCase):
         payload = json.loads((self.root / results[0]["execution_report"]).read_text())
         self.assertNotIn("cancellation", payload)
         self.assertEqual(["completed"] * 3, [r["status"] for r in results])
+
+    def test_existing_side_effect_readers_keep_the_cancelled_completed_prefix(self):
+        from pocketchat.task_recovery import completed_side_effects, recovery_remaining_steps
+        _, _, _, results = self.cancel_after_command()
+        planned = [step.id for step in self.execution.steps]
+        observed = completed_side_effects(self.root, results[0]["task_id"], planned=planned)
+        self.assertEqual("completed", observed["state"])
+        self.assertEqual(["write_report", "count_once"],
+                         [step["step_id"] for step in observed["steps"]])
+        self.assertEqual(["finish"], observed["remaining_steps"])
+        self.assertEqual(["finish"], recovery_remaining_steps(
+            self.root, results[0]["task_id"], planned))
+        self.assertEqual([], observed["evidence_issues"])
+        self.assertEqual(1, self.runner.call_count)
+
+    def test_completed_command_contradictions_are_refused_by_report_and_checkpoint(self):
+        _, path, original, _ = self.cancel_after_command()
+        mutations = (
+            lambda row: (row.update(exit_code=3), row["evidence"].update(exit_code=3)),
+            lambda row: row.update(exit_code=True),
+            lambda row: row["evidence"].update(timed_out=True),
+            lambda row: row["evidence"].update(timed_out=0),
+            lambda row: row.update(archive_sha256="e" * 64),
+            lambda row: row["evidence"].update(archive_sha256="e" * 64),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                altered = copy.deepcopy(original)
+                mutation(altered["steps"][1])
+                path.write_text(json.dumps(altered), encoding="utf-8")
+                with self.assertRaisesRegex(task_exec.TaskExecutionError,
+                                            "cancelled completed command has contradictory evidence"):
+                    task_exec._parse_execution_report(altered, path.name)
+                with self.assertRaisesRegex(CheckpointError,
+                                            "cancelled completed command has contradictory evidence"):
+                    create_checkpoint(altered, report_path=path,
+                                      expected_report_sha256=digest(path))
+        self.assertEqual(1, self.runner.call_count)
 
     def test_cancellation_metadata_is_closed_and_consistent_in_all_readers(self):
         owner = self.owner()

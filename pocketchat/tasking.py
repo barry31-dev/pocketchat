@@ -161,6 +161,17 @@ def validate_cancellation_report(report: Any) -> Dict[str, Any]:
                     or any(not _cancellation_hex(value, 64)
                            for value in hashes.values())):
                 raise TaskError("cancelled prefix lacks confirmed step evidence")
+            if row["action"] == "run_command":
+                evidence = row.get("evidence")
+                if (not isinstance(evidence, dict)
+                        or type(row.get("exit_code")) is not int or row["exit_code"] != 0
+                        or type(evidence.get("exit_code")) is not int
+                        or evidence["exit_code"] != 0
+                        or evidence.get("timed_out") is not False
+                        or row.get("archive_sha256") != hashes["archive"]
+                        or ("archive_sha256" in evidence
+                            and evidence["archive_sha256"] != hashes["archive"])):
+                    raise TaskError("cancelled completed command has contradictory evidence")
         elif (set(row) != {"step_id", "action", "status", "reason"}
               or row.get("status") != "not_executed"
               or row.get("reason") != "task_cancelled"):
