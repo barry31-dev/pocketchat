@@ -39,7 +39,7 @@
       "reason": "This candidate was produced and reviewed in one interactive session. The author completed a bounded second-pass contract, source, test and documentation review, but an independent fresh-context reviewer was not dispatched. Landing must not infer that missing review from focused tests or author review."
     }
   ],
-  "commit_or_candidate_sha": "self",
+  "commit_or_candidate_sha": "e375f917db13d1005a64396b92d1e95c3e26daf6",
   "changed_paths": [
     "docs/json-input.md",
     "docs/json-input.zh-CN.md",
