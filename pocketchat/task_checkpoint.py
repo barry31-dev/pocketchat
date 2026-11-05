@@ -351,11 +351,26 @@ def _step_id(value: Any, what: str) -> str:
     return value
 
 
+def _command_archive(step: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+    """Accept the current top-level hash and the legacy nested declaration."""
+    archive = step.get("archive_sha256", evidence.get("archive_sha256"))
+    nested = evidence.get("archive_sha256")
+    if nested is not None and nested != archive:
+        raise CheckpointError("command archive digest declarations disagree")
+    return _sha(archive, "command archive hash")
+
+
 def create_checkpoint(report: Any, *, report_path, checkpoint_id=None,
                       expected_report_sha256=None,
                       context_bindings=None) -> Dict[str, Any]:
     """Derive one closed checkpoint from a validated execution report."""
     payload = _object(report, "execution report")
+    if "cancellation" in payload:
+        from .tasking import TaskError, validate_cancellation_report
+        try:
+            validate_cancellation_report(payload)
+        except TaskError as exc:
+            raise CheckpointError(str(exc)) from exc
     for field in ("schema_version", "report_id", "spec_sha256", "plan_sha256",
                   "steps", "changes", "evidence_issues"):
         if field not in payload:
@@ -418,7 +433,7 @@ def create_checkpoint(report: Any, *, report_path, checkpoint_id=None,
             continue
         evidence = row.get("evidence")
         if isinstance(evidence, dict) and evidence.get("template_id"):
-            archive = evidence.get("archive_sha256")
+            archive = _command_archive(row, evidence)
             command_ids.append(step_id)
             if not _sha(archive, "command archive hash"):
                 raise CheckpointError(
@@ -458,7 +473,7 @@ def create_checkpoint(report: Any, *, report_path, checkpoint_id=None,
             "template_id": evidence.get("template_id"),
             "exit_code": evidence.get("exit_code"),
             "timed_out": evidence.get("timed_out"),
-            "archive_sha256": evidence.get("archive_sha256"),
+            "archive_sha256": _command_archive(raw, evidence),
         })
     commands = _command_effects(sorted(commands, key=lambda item: item["step_id"]))
 
@@ -547,6 +562,12 @@ def resume_from_checkpoint(root: Path, checkpoint_path: Path, *,
         report_record = json.loads(candidate.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, ValueError) as exc:
         raise CheckpointError("checkpoint report is invalid JSON: %s" % exc) from exc
+    if "cancellation" in report_record:
+        from .tasking import TaskError, validate_cancellation_report
+        try:
+            validate_cancellation_report(report_record)
+        except TaskError as exc:
+            raise CheckpointError(str(exc)) from exc
     report_budget = report_record.get("task_budget")
     if record.get("task_budget_sha256"):
         if not isinstance(report_budget, dict):

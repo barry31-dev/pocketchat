@@ -355,7 +355,7 @@ def _unused_output(root, value):
 
 
 def prepare_recovery(execution, root, report_path, expected_sha256, *,
-                     trace_dir, session_dir):
+                     trace_dir, session_dir, cancellation=None):
     """Validate an exact report before any new task, command or report write.
 
     Only an explicit completed-prefix / never-started-suffix boundary can be
@@ -381,6 +381,17 @@ def prepare_recovery(execution, root, report_path, expected_sha256, *,
             or report["spec_sha256"] != execution.spec_sha256
             or report["plan_sha256"] != execution.plan_sha256):
         raise TaskRecoveryError("execution report identity does not match this plan")
+    cancelled = report.get("cancellation")
+    if cancelled is not None:
+        from .tasking import TaskCancellation, TaskError
+        if not isinstance(cancellation, TaskCancellation):
+            raise TaskRecoveryError("cancelled recovery requires a fresh owner")
+        try:
+            cancellation.validate_for(execution.spec_sha256, execution.plan_sha256)
+        except TaskError as exc:
+            raise TaskRecoveryError(str(exc)) from exc
+        if cancellation.requested or cancellation.owner_sha256 == cancelled["owner_sha256"]:
+            raise TaskRecoveryError("cancelled recovery requires a fresh uncancelled owner")
     if report["evidence_issues"] or "error" in report:
         raise TaskRecoveryError("execution report has unresolved evidence or an error")
     if len(report["steps"]) != len(execution.steps):
@@ -393,7 +404,7 @@ def prepare_recovery(execution, root, report_path, expected_sha256, *,
             _check_completed(root, expected, step, report["changes"])
             completed.append(step)
         elif (step.get("status") == "not_executed"
-              and step.get("reason") == "step_boundary"
+              and step.get("reason") == ("task_cancelled" if cancelled else "step_boundary")
               and set(step) == {"step_id", "action", "status", "reason"}):
             pending.append(expected)
         else:

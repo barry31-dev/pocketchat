@@ -1,0 +1,56 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-task-cancel-v1.json",
+    "docs/task-cancel.md",
+    "docs/task-cancel.zh-CN.md",
+    "pocketchat/task_checkpoint.py",
+    "pocketchat/task_exec.py",
+    "pocketchat/task_recovery.py",
+    "pocketchat/tasking.py",
+    "tests/test_task_cancel.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "major",
+      "status": "open",
+      "fingerprint": "independent-review-pending",
+      "reason": "The first fresh-context review is still running. No clean review conclusion is inferred from local tests."
+    }
+  ],
+  "slice_id": "PC-TASK-CANCEL-1",
+  "approval_source": "https://github.com/barry31-dev/pocketchat/issues/31",
+  "base_sha": "7fcb197351e10b7e8dab87e32ed52964fb1193ac",
+  "changed_paths": [
+    "docs/review-task-cancel-v1.json",
+    "docs/task-cancel.md",
+    "docs/task-cancel.zh-CN.md",
+    "pocketchat/task_checkpoint.py",
+    "pocketchat/task_exec.py",
+    "pocketchat/task_recovery.py",
+    "pocketchat/tasking.py",
+    "tests/test_task_cancel.py"
+  ],
+  "landing_sign_off": "hold",
+  "reviewed_evidence": [
+    "V: CPython 3.9.6 owner regression ran red before implementation: 1 test FAIL, exit 1 because TaskCancellation was absent.",
+    "V: CPython 3.9.6 focused cancellation suite: 15 tests OK, exit 0 after correcting test plans and the existing command archive top-level/nested checkpoint reader mismatch.",
+    "V: CPython 3.14.10 focused cancellation suite: 15 tests OK, exit 0.",
+    "V: CPython 3.9.6 existing executor/report/checkpoint/recovery/task-budget regressions: 106 tests OK, exit 0.",
+    "V: CPython 3.9.6 current CLI callers/model repair/task-state/package independence regressions: 65 tests OK, exit 0.",
+    "V: Ruff 0.17.3 E9/F, compileall and git diff --check passed, exit 0.",
+    "C: Changes are confined to the eight issue-approved paths. No CLI, provider, session writer, task deadline, shared queue, changelog, schema or package file changed.",
+    "F: Fresh-context review is pending; no independent approval, public push, PR, exact-SHA CI or main landing is claimed."
+  ],
+  "unverified_scope": "Local deterministic provider stub and a real bounded local Python command fixture only. Full product suite, remote CI, public push/PR/main integration, cross-platform operation, real provider, signals or process/thread termination, arbitrary-crash exactly-once, deadline wiring, tag/Release and package upload were not run."
+}

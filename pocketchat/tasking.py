@@ -56,6 +56,118 @@ class TaskError(ValueError):
     """The task cannot be described, transitioned, recorded or read."""
 
 
+CANCELLATION_SCHEMA = "pocketchat-task-cancellation.v1"
+_CANCELLATION_FIELDS = frozenset({
+    "schema_version", "state", "spec_sha256", "plan_sha256", "owner_sha256",
+    "boundary_index",
+})
+
+
+def _cancellation_hex(value: Any, length: int) -> bool:
+    return (isinstance(value, str) and len(value) == length
+            and all(char in "0123456789abcdef" for char in value))
+
+
+class TaskCancellation:
+    """One in-process owner can request cancellation of one authorized plan.
+
+    The token is a caller capability, not a process lease or authentication
+    credential. Polling occurs only at the executor's confirmed boundaries;
+    this object never interrupts, executes or persists anything.
+    """
+
+    __slots__ = ("_spec_sha256", "_plan_sha256", "_owner_token", "_requested")
+
+    def __init__(self, spec_sha256: str, plan_sha256: str, *, owner_token=None):
+        if (not _cancellation_hex(spec_sha256, 64)
+                or not _cancellation_hex(plan_sha256, 64)):
+            raise TaskError("cancellation needs valid spec and plan digests")
+        token = uuid4().hex if owner_token is None else owner_token
+        if not _cancellation_hex(token, 32):
+            raise TaskError("cancellation owner token must be 32 lowercase hex characters")
+        self._spec_sha256 = spec_sha256
+        self._plan_sha256 = plan_sha256
+        self._owner_token = token
+        self._requested = False
+
+    @property
+    def spec_sha256(self) -> str:
+        return self._spec_sha256
+
+    @property
+    def plan_sha256(self) -> str:
+        return self._plan_sha256
+
+    @property
+    def owner_token(self) -> str:
+        return self._owner_token
+
+    @property
+    def owner_sha256(self) -> str:
+        return hashlib.sha256(self._owner_token.encode("ascii")).hexdigest()
+
+    @property
+    def requested(self) -> bool:
+        return self._requested
+
+    def validate_for(self, spec_sha256: str, plan_sha256: str) -> None:
+        if (spec_sha256 != self._spec_sha256
+                or plan_sha256 != self._plan_sha256):
+            raise TaskError("cancellation owner does not match the authorized plan")
+
+    def request(self, *, spec_sha256: str, plan_sha256: str,
+                owner_token: str) -> bool:
+        """Request once; invalid owners cannot change the pending state."""
+        self.validate_for(spec_sha256, plan_sha256)
+        if owner_token != self._owner_token:
+            raise TaskError("cancellation owner token does not match")
+        changed = not self._requested
+        self._requested = True
+        return changed
+
+
+def validate_cancellation_report(report: Any) -> Dict[str, Any]:
+    """Validate the optional cancelled boundary using only supplied facts."""
+    metadata = report.get("cancellation") if isinstance(report, dict) else None
+    if (not isinstance(metadata, dict) or set(metadata) != _CANCELLATION_FIELDS
+            or metadata.get("schema_version") != CANCELLATION_SCHEMA
+            or metadata.get("state") != "cancelled"
+            or not _cancellation_hex(metadata.get("owner_sha256"), 64)
+            or any(not _cancellation_hex(metadata.get(key), 64)
+                   or metadata[key] != report.get(key)
+                   for key in ("spec_sha256", "plan_sha256"))):
+        raise TaskError("execution report has invalid cancellation metadata")
+    boundary = metadata["boundary_index"]
+    steps = report.get("steps")
+    if (isinstance(boundary, bool) or not isinstance(boundary, int)
+            or not isinstance(steps, list) or not 0 <= boundary <= len(steps)
+            or "error" in report or report.get("evidence_issues") != []):
+        raise TaskError("cancelled report has no confirmed boundary")
+    seen = set()
+    for index, row in enumerate(steps):
+        if (not isinstance(row, dict) or not isinstance(row.get("step_id"), str)
+                or not row["step_id"] or len(row["step_id"]) > 64
+                or row["step_id"] in seen
+                or row.get("action") not in (
+                    "read_file", "write_file", "memory_search", "run_command")):
+            raise TaskError("cancelled report has invalid step identities")
+        seen.add(row["step_id"])
+        if index < boundary:
+            required = ({"trace", "archive"} if row["action"] == "run_command"
+                        else {"record", "trace", "session"})
+            hashes = row.get("evidence_hashes")
+            if (row.get("status") != "completed" or row.get("path_issue")
+                    or not isinstance(hashes, dict) or set(hashes) != required
+                    or any(not _cancellation_hex(value, 64)
+                           for value in hashes.values())):
+                raise TaskError("cancelled prefix lacks confirmed step evidence")
+        elif (set(row) != {"step_id", "action", "status", "reason"}
+              or row.get("status") != "not_executed"
+              or row.get("reason") != "task_cancelled"):
+            raise TaskError("cancelled suffix is not an unstarted boundary")
+    return dict(metadata)
+
+
 def policy_digest(payload: Mapping[str, Any]) -> str:
     """SHA-256 over the canonical policy bytes.
 
