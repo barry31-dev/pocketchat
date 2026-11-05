@@ -1,0 +1,92 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    ".github/workflows/ci.yml",
+    "docs/ci-matrix.md",
+    "docs/ci-matrix.zh-CN.md",
+    "docs/review-ci-matrix-names-v1.json",
+    "tests/test_ci_matrix_names.py"
+  ],
+  "categories": [
+    "links",
+    "docs",
+    "python-tools",
+    "release"
+  ],
+  "tier": "high",
+  "review_depth": "deep",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "CI-NAMES-1",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "server-required-check-policy-unreadable",
+      "reason": "The planning credential received HTTP 403 from the branch-protection API and the repository returned no rulesets. The workflow and its exact check names can be reviewed and exercised on the task branch, but any server-side required-check consumer remains unknown and must be checked by an authorized maintainer before landing."
+    },
+    {
+      "id": "CI-NAMES-2",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "fresh-context-and-human-signoff-pending",
+      "reason": "This implementation session performed the red-green cycle, full diff review and local verification. The required independent fresh-context review and human sign-off for a high-risk workflow change are intentionally left pending, so this candidate must not be merged automatically."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    ".github/workflows/ci.yml",
+    "docs/ci-matrix.md",
+    "docs/ci-matrix.zh-CN.md",
+    "docs/review-ci-matrix-names-v1.json",
+    "tests/test_ci_matrix_names.py"
+  ],
+  "reviewed_evidence": [
+    "C: PocketChat origin/main f30f7f34bf5816ed7721c3c059fd9bcaf1233a69 was fetched before branch creation; product issue #29 is the repository approval record for this exact branch and five-path scope under the process issue-or-queue rule.",
+    "C: before branch creation there was no equivalent issue, PR, local or remote task/pocketchat-ci-matrix-names branch, active worktree overlap or unmerged task-branch overlap. The old migration/from-mywork-m04 workflow diff is 137 commits behind main, has no PR/worktree and is not an active writer.",
+    "V: CPython 3.9.6 focused RED ran tests.test_ci_matrix_names before the workflow edit and failed for the expected reason: the current template expanded to only pocketchat-ci (python 3.9) and pocketchat-ci (python 3.13), exit 1.",
+    "V: CPython 3.9.6 focused GREEN ran the new matrix-name guard plus the two adjacent release-smoke workflow guards: 3 tests OK, exit 0.",
+    "V: CPython 3.13.9 ran python -B -m unittest discover -s tests -v: 1304 tests OK in 52.799 seconds, exit 0.",
+    "V: Ruff 0.17.3 ran python -m ruff check --select E9,F pocketchat tests and passed. CPython 3.13.9 compileall for tests/test_ci_matrix_names.py passed; both changed documentation links resolved; git diff --check passed.",
+    "C: full diff review confirms the workflow change is one name-template line. The guard freezes exactly the existing three OS values, two Python values, six unique expansions and the unchanged pocketchat-release-smoke name. The bilingual docs do not claim a matrix, runner, server-policy, release or publication change.",
+    "E: GitHub branch-protection readback returned HTTP 403 and the repository rulesets endpoint returned an empty list. This is recorded as unknown policy coverage, not evidence that no required-check consumer exists."
+  ],
+  "unverified_scope": "Exact-candidate GitHub Actions has not run yet because the branch and PR are not yet pushed. Linux, Windows and hosted macOS execution for this candidate, server-side branch-protection/required-check consumers, independent fresh-context review and human landing sign-off remain unverified. No main merge, tag, Release, package upload or other publication action is authorized or claimed.",
+  "landing_sign_off": {
+    "status": "pending",
+    "scope": "The branch may be pushed and opened as a PR candidate for exact-SHA Actions. Landing this high-risk workflow-name change requires an independent fresh-context review with no open blocker/major, an authorized maintainer's check of any required-check consumer, exact-candidate CI evidence actually observed, and human sign-off. No tag, Release or package upload is authorized."
+  },
+  "review_context": {
+    "why": [
+      "The existing six-cell workflow used only the Python version in its job name, so three operating systems collapsed into two displayed identities.",
+      "Current evidence-verify, memory-doctor, session-audit, context, task-diff, JSON-input and deadline work uses disjoint paths; this slice changes only workflow identity and dedicated guards/docs."
+    ],
+    "not_doing": [
+      "No matrix cell, runner, Python version, step, action pin, permission, trigger, concurrency, timeout, retry, skip, product behavior, branch-protection setting, tag, Release or package upload change."
+    ],
+    "diff_walk": [
+      ".github/workflows/ci.yml adds matrix.os to the existing test job name and changes no other workflow field.",
+      "tests/test_ci_matrix_names.py expands the committed inline matrix and requires the exact six OS/Python names plus the unchanged release-smoke identity.",
+      "The bilingual docs define the stable names, evidence boundary and unknown branch-protection readback without claiming hosted execution.",
+      "This review record preserves the observed red-green cycle, proportional local checks, external readback gap and landing hold."
+    ],
+    "static_checks": [
+      "All five changed paths match product issue #29.",
+      "The template contains both matrix.os and matrix.python; the declared matrix remains three by two and max-parallel remains unchanged.",
+      "No credential, private path, product payload, release status or publication claim appears in the changed files."
+    ],
+    "red_green": [
+      "Before the workflow edit, the new guard observed two unique Python-only names and failed against the six expected OS/Python identities.",
+      "After the one-line workflow edit, the guard and adjacent workflow tests passed without any test relaxation."
+    ],
+    "review_notes": [
+      "The full diff was reviewed in round one. No blocker or major implementation finding was observed locally; two external landing requirements remain deferred and explicit."
+    ],
+    "gaps": [
+      "Exact-SHA GitHub Actions and hosted-platform behavior are pending the pushed PR.",
+      "Branch-protection required-check consumers are unreadable with the planning credential.",
+      "Independent fresh-context review and human landing sign-off are pending."
+    ]
+  }
+}

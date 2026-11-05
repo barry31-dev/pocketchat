@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test:
-    name: pocketchat-ci (python ${{ matrix.python }})
+    name: pocketchat-ci (${{ matrix.os }}, python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
