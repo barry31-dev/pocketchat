@@ -1,0 +1,63 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/session_integrity.py",
+    "tests/test_session_integrity.py",
+    "docs/session-integrity.md",
+    "docs/session-integrity.zh-CN.md",
+    "docs/review-session-integrity-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "tests",
+    "source"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "unused-terminal-flag",
+      "reason": "Ruff 0.17.3 E9/F found F841 saw_terminal assigned but unused. Removed the dead assignment; focused tests and Ruff then passed."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "fresh-context-review-unavailable",
+      "reason": "The earlier reviewer transports failed, but a separate user-directed closeout review then read issue #28, the exact five-path diff, implementation, tests and contract and found no blocker or major finding. The failed transports are retained as history, not as the closing evidence."
+    }
+  ],
+  "commit_or_candidate_sha": "24bea6cc86a8e1de3ad60a722b1c27aacb490800",
+  "changed_paths": [
+    "pocketchat/session_integrity.py",
+    "tests/test_session_integrity.py",
+    "docs/session-integrity.md",
+    "docs/session-integrity.zh-CN.md",
+    "docs/review-session-integrity-v1.json"
+  ],
+  "reviewed_evidence": [
+    "C: the product queue row PC-SFILE-AUDIT-1 is reachable from origin/main at f30f7f3 and explicitly depends only on delivered PC-SFILE-READ-1.",
+    "C: the implementation is a pure in-memory audit and does not open files, execute commands, contact sockets or call a provider.",
+    "V: CPython 3.9.6 ran the focused unittest module: 10 tests OK, exit 0, after the initial ModuleNotFoundError red run.",
+    "V: CPython 3.9.6 ran python3 -m unittest discover -s tests -v: 1313 tests OK, exit 0.",
+    "F: Ruff 0.17.3 E9/F found F841 saw_terminal assigned but unused; removed the dead assignment and re-ran the matching lint after the fix.",
+    "C: the five-path implementation scope does not overlap the active package-manifest, profile-explain, session-audit, memory-doctor, JSON-input, deadline, task-diff or context branches.",
+    "F: independent fresh-context review is not complete; three reviewer transports failed with explicit errors and no review output. See F2/open blocker.",
+    "V: GitHub Actions run 42002841536 is attached to candidate 24bea6cc86a8e1de3ad60a722b1c27aacb490800 and completed with 7/7 successful jobs (Linux/macOS/Windows, CPython 3.9/3.13, plus release-smoke). Draft PR #28 remains open with no reviews.",
+    "C: A separate user-directed closeout review session read the frozen approval record, exact task diff, implementation, tests and contract without adopting the author conclusion; no blocker or major finding remained. The failed external Codex transport attempt is not counted as review evidence.",
+    "V: GitHub Actions run 42003912267 is bound to exact head 79a26c60e4d6653e6d75752e9192b4d781cd35f8 and completed 7/7 jobs successfully across Linux/macOS/Windows, CPython 3.9/3.13 and release-smoke."
+  ],
+  "unverified_scope": "The independent review and exact-head GitHub Actions are recorded above. The real session-file reader, CLI, repair/writer integration, provider/network behavior, packaging, tag, Release and publication were not run or remain outside this slice.",
+  "landing_sign_off": {
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly directed manual closeout of all pending work. This authorizes landing the reviewed draft candidates into product main only; it does not authorize a tag, Release, package upload, or any other publication action."
+  }
+}
