@@ -1,0 +1,32 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-session-repair-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-session-repair-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main f30f7f34bf5816ed7721c3c059fd9bcaf1233a69 was fetched before this planning branch; PC-SFILE-READ-1 and PC-TASK-PREFLIGHT-1 are delivered, PC-SFILE-AUDIT-1 is an open draft candidate and is not a settled dependency, and the queue contains no PC-SFILE-REPAIR-PLAN-1 row.",
+    "C: the new row is `queued`, not `ready`; it may become `ready` only after PC-SFILE-AUDIT-1 and its session-integrity report contract are delivered on product main. The row does not treat an open candidate or an unmerged approval as a settled dependency.",
+    "C: before branch creation, product remote had no task/pocketchat-session-repair* branch, GitHub had no PC-SFILE-REPAIR-PLAN-1 issue or repair-plan PR, and no active product writer claimed pocketchat/session_repair.py, tests/test_session_repair.py or docs/session-repair*.",
+    "C: the execution scope is limited to one new pure module, one focused test module, two dedicated docs and one review record; it does not edit the session reader/writer, CLI, service, memory, context, package, runtime, provider, CHANGELOG.md or release paths.",
+    "C: the contract consumes already-read records and the main-reachable session-integrity report contract, preserves both unchanged, and binds them to a caller-supplied source digest; it does not re-audit with a second semantics, read or hash a path, or infer missing history from an incomplete report.",
+    "C: the planning output is a digest-bound prefix plan with closed statuses, stable reason codes, an explicit unsafe boundary and bounded omissions; it never returns repaired bodies, free-form objectives, session/message/credential text, file paths or tool arguments/results.",
+    "C: malformed, contradictory, non-prefix, unprovable and budget-limited cases are separated from a recoverable tail; limits refuse rather than truncate, and the slice does not authorize repair/copy, in-place edits, writer ownership or publication.",
+    "Docs-only diff review checked dependency closure, branch and write-scope uniqueness, the queued-to-ready condition, input/report binding, status distinctions, prefix and schema boundaries, bounded output, input immutability, zero-I/O guarantees, focused negative cases, rollback scope and explicit publication exclusions."
+  ],
+  "unverified_scope": "Planning only: no session-repair implementation, focused or full product tests, real session/file read, source hashing, repair/copy operation, in-place mutation, writer acquisition, CLI subprocess, provider/network call, Ruff, compile check, CI, packaging, product main integration, tag, Release, package upload or publication. The execution branch is not created; PC-SFILE-AUDIT-1 remains an open draft candidate, so this row stays `queued` and cannot start until the audit and its report contract are delivered on product main and a fresh write-scope conflict check passes."
+}

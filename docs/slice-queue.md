@@ -332,6 +332,65 @@ and sidecar/preview binding as a separate slice.
   start only after this row is integrated and read back from product `main`,
   and only if its write scope remains free of an active writer.
 
+#### `PC-SFILE-REPAIR-PLAN-1`
+
+- **State**: `queued`
+- **Branch**: `task/pocketchat-session-repair-plan`
+- **Write scope**: `pocketchat/session_repair.py`,
+  `tests/test_session_repair.py`, `docs/session-repair.md`,
+  `docs/session-repair.zh-CN.md`, `docs/review-session-repair-v1.json`
+- **Depends on**: `PC-SFILE-AUDIT-1` and its main-reachable session-integrity
+  report contract. The audit candidate is still an open draft and is not a
+  settled dependency; this queued row becomes `ready` only after the audit
+  delivery is recorded on product `main`. No repair/copy writer, CLI,
+  session-reader, memory, provider or runtime dependency.
+- **Done when**: A pure
+  `plan_session_repair(records, audit_report, *, max_plan_bytes=65536)`
+  consumes caller-supplied, already-read session records and the matching
+  audit report, binds them through a caller-supplied source SHA-256 and returns
+  a deterministic, closed `pocketchat-session-repair-plan.v1` with status
+  `complete`, `partial` or `refused`. The plan names the longest proven
+  complete record prefix that can be retained, the first unsafe boundary,
+  bounded reason codes, the target session schema, and explicit omissions; it
+  never emits repaired record bodies, inferred conversation text, paths,
+  credentials or tool arguments/results. A complete plan requires matching
+  report and source identity, a readable header, and an explicit audit finding
+  that identifies a recoverable tail failure. Contradictory report/source
+  bindings, unknown schemas, malformed records, duplicate identities, binary
+  or unreadable input, a non-prefix finding, or a boundary that cannot be
+  proven are `refused`; incomplete coverage or budget-limited evidence is
+  `partial`. Empty input, an empty valid session, a clean audit, an audit with
+  only non-repairable findings, source-hash drift and report drift remain
+  distinct. Reports use stable ordering and refuse rather than silently
+  truncate when the minimal envelope cannot fit. Inputs remain unchanged. The
+  core never reads a path, hashes file contents, repairs or copies records,
+  writes or truncates a file, acquires a writer, executes a command, calls a
+  provider, or authorizes an in-place edit. Focused tests cover a valid
+  recoverable tail, tampered report/source digests, unknown and legacy
+  schemas, duplicate identities, non-prefix failures, binary/unreadable
+  records, incomplete coverage, exact plan bounds, stable bytes, secret
+  canaries, input immutability and zero filesystem/command/socket/provider
+  calls. This slice adds no CLI, file observation, repair/copy operation,
+  migration, writer change, tag, Release or publication.
+- **Evidence**: `pocketchat/session_repair.py`,
+  `tests/test_session_repair.py`, `docs/session-repair.md`,
+  `docs/session-repair.zh-CN.md` and
+  `docs/review-session-repair-v1.json`; the implementation review records the
+  observed red, focused tests, lint/compile/diff evidence and exact candidate
+  SHA. Delivery is recorded only after that candidate is reviewed against this
+  row and integrated.
+- **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
+  delegation and the user 2026-11-05 request for a non-conflicting PocketChat
+  task. This approval covers the bounded pure planning core only; it does not
+  authorize a CLI, real session/file observation, repair/copy mutation,
+  migration, writer change, provider/network access, tag, Release or package
+  upload.
+- **Approval evidence**: This row and
+  `docs/review-session-repair-approval-v1.json` are the product approval
+  record. The execution branch is not created by this planning change; it may
+  start only after this row is integrated and read back from product `main`,
+  and only if its five-path write scope remains free of an active writer.
+
 #### `PC-CONTEXT-EXPLAIN-1`
 
 - **State**: `ready`
