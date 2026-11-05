@@ -53,7 +53,7 @@
       "reason": "Required independent fresh-context review did not produce a verdict. The default review route failed after five 403/503 retries; the bounded model-specific review and exec retry read the diff but were terminated after repeated telemetry/provider stalls without a conclusion. Landing remains held."
     }
   ],
-  "commit_or_candidate_sha": "self",
+  "commit_or_candidate_sha": "37def6625ee147c3249ab71ac293ec931456b67b",
   "changed_paths": [
     "pocketchat/context_explain.py",
     "tests/test_context_explain.py",
@@ -73,7 +73,8 @@
     "C: tests cover all five layers, exact source/projection digest binding, closed descriptors, duplicate/missing/unexpected descriptors, memory/tool classification, sensitive-source redaction, finding/omission/report limits, malformed and unknown schemas, missing sidecar metadata, unmatched sidecar evidence, empty valid input, deterministic ordering, input immutability and mocked zero open/socket/subprocess calls.",
     "C: source review confirms the module imports no filesystem, command, socket, provider or model surface and reports only source ids, locators, reason codes, byte counts and safe flags; no request, message, session, credential, memory or omitted body is emitted.",
     "C: the write scope exactly matches the approved row; docs/slice-queue.md, CHANGELOG.md, pyproject.toml, context_projection.py, schemas, CLI, provider/runtime code, workflows and release state were not edited.",
-    "V: Independent review was attempted three times but did not produce a verdict: default codex review ended after five 403/503 retries; model-specific review and codex exec read the scoped diff but were terminated after repeated telemetry/provider stalls. This is recorded as not run, not passed."
+    "V: Independent review was attempted three times but did not produce a verdict: default codex review ended after five 403/503 retries; model-specific review and codex exec read the scoped diff but were terminated after repeated telemetry/provider stalls. This is recorded as not run, not passed.",
+    "V: reviewed implementation candidate 37def6625ee147c3249ab71ac293ec931456b67b is the exact five-file test/docs/code tree evaluated by the local matrix; this metadata-only sign-off does not change that candidate tree."
   ],
   "unverified_scope": "No independent fresh-context verdict, GitHub Actions/CI, cross-platform matrix, real file observation, CLI/reader integration, model/provider/network/credential call, wheel build, clean install, tag, Release, package upload or publication is claimed. Local runs cover macOS CPython 3.9.6 only. Full-repository Ruff has 2268 unrelated historical findings and is not green; only the two changed Python files are Ruff-clean. The open review gap prevents landing this candidate to product main.",
   "review_context": {
@@ -103,6 +104,6 @@
   },
   "landing_sign_off": {
     "status": "hold",
-    "scope": "The exact PC-CONTEXT-EXPLAIN-1 implementation candidate may be pushed only as a task-branch candidate. Landing to product main is held until a fresh-context reviewer returns a recorded verdict and the open F5 finding is closed. This record does not authorize a different SHA, tag, Release, package upload or publication."
+    "scope": "The exact PC-CONTEXT-EXPLAIN-1 implementation candidate 37def6625ee147c3249ab71ac293ec931456b67b may be pushed only as a task-branch candidate. Landing to product main is held until a fresh-context reviewer returns a recorded verdict and the open F5 finding is closed. This record does not authorize a different SHA, tag, Release, package upload or publication."
   }
 }
