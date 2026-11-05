@@ -110,11 +110,12 @@
     "V: python -m py_compile and git diff --check passed after the Windows portability fix. Exact-SHA CI for this candidate remains separate evidence."
   ],
   "landing_sign_off": {
-    "status": "not_landed",
-    "authority": "agent under existing routine technical delegation",
-    "scope": "technical review only; no public push bypass or release authorization"
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly requested closeout of all pending PocketChat submissions and merges on 2026-11-05. This authorizes landing the reviewed evidence-verification CLI candidate on product main only; it does not authorize a tag, Release, package upload, provider call, or any other publication action."
   },
-  "unverified_scope": "Exact-SHA CI for the Windows portability candidate, live original-artifact reread/freshness, the full current product suite, real provider/model/credentials, task execution, clean-wheel build/install, product-main integration, tag, Release and package upload remain unverified. The prior Linux and Windows exact-SHA failures are recorded and were not relabeled green.",
+  "unverified_scope": "Exact-SHA CI run 42032886525 is green 7/7 for this candidate, including Linux/macOS/Windows CPython 3.9/3.13 and release-smoke. Live original-artifact reread/freshness, real provider/model/credentials, task execution, clean-wheel build/install outside CI, tag, Release and package upload remain outside this slice or unverified. The implementation verifies supplied observations only and does not claim the underlying files were re-read.",
   "review_history": [
     {
       "round": 1,
