@@ -332,6 +332,60 @@ and sidecar/preview binding as a separate slice.
   start only after this row is integrated and read back from product `main`,
   and only if its write scope remains free of an active writer.
 
+#### `PC-CONTEXT-EXPLAIN-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-context-explain`
+- **Write scope**: `pocketchat/context_explain.py`,
+  `tests/test_context_explain.py`, `docs/context-explain.md`,
+  `docs/context-explain.zh-CN.md`, `docs/review-context-explain-v1.json`
+- **Depends on**: `PC-CTXPROJ-1` (delivered on `main`); no context-drift,
+  evidence-link, preflight, memory, provider, CLI or session-writer dependency.
+- **Done when**: A pure
+  `explain_context_projection(projection, *, max_findings=64, max_omissions=64,
+  max_bytes=65536)` consumes one closed explanation input containing the exact
+  `project_context` source payload, its selection parameters and result, plus
+  bounded source descriptors whose stable source ids map entries to the fixed,
+  recent, task, memory and tool layers. It returns deterministic
+  `pocketchat-context-explain.v1` data with `complete`, `partial` or `refused`
+  status, a closed budget account and ordered observations for selected and
+  omitted entries. The function verifies the existing
+  `pocketchat-context-projection.v1` source and projection digests, explains
+  what the existing sidecar records and names unavailable reasons as explicit
+  omissions; it never recomputes or changes selection. Fixed instructions and
+  task state, complete recent turns, and memory/tool evidence are reported with
+  source id, layer, bounded record index, stable reason code and byte count.
+  Duplicate or missing source ids, malformed or unknown input schema, digest
+  drift, sensitive evidence, budget exhaustion and missing sidecar metadata are
+  distinct observations; sensitive or omitted request, message, session,
+  credential and memory bodies are never returned. Reports use stable ordering
+  and refuse rather than silently truncate when the minimal envelope cannot fit
+  within `max_findings`, `max_omissions` or `max_bytes`. Inputs remain unchanged.
+  Focused tests cover all five layers, exact digest binding, duplicate and
+  missing source ids, memory/tool classification, sensitive summaries, fixed
+  and per-entry budget boundaries, malformed sidecars, empty valid projection,
+  explicit partial coverage, stable bytes and zero filesystem, command, socket
+  or provider calls. This slice adds no projection rewrite, reader or CLI
+  integration, file observation, repair, migration, model/provider call, tag,
+  Release or publication.
+- **Evidence**: `pocketchat/context_explain.py`,
+  `tests/test_context_explain.py`, `docs/context-explain.md`,
+  `docs/context-explain.zh-CN.md` and
+  `docs/review-context-explain-v1.json`; the implementation review records the
+  observed red, focused tests, lint/compile/diff evidence and exact candidate
+  SHA. Delivery is recorded only after that candidate is reviewed against this
+  row and integrated.
+- **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
+  delegation and the user 2026-11-05 request for a non-conflicting PocketChat
+  task. This approval covers the bounded read-only explanation core only; it
+  does not authorize projection mutation, a CLI, real file observation, repair,
+  provider/network access, tag, Release or package upload.
+- **Approval evidence**: This row and
+  `docs/review-context-explain-approval-v1.json` are the product approval
+  record. The execution branch is not created by this planning change; it may
+  start only after this row is integrated and read back from product `main`,
+  and only if its five-path write scope remains free of an active writer.
+
 #### `PC-PACKAGE-MANIFEST-1`
 
 - **State**: `ready`
