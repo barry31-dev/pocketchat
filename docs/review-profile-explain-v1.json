@@ -1,0 +1,56 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/profile-explain.md",
+    "docs/profile-explain.zh-CN.md",
+    "docs/review-profile-explain-v1.json",
+    "pocketchat/profile_explain.py",
+    "tests/test_profile_explain.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools",
+    "tests"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "PE-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "normalized-config-provenance-treated-every-present-default-as-explicit",
+      "reason": "The first implementation inferred provenance from the normalized config record, so an omitted timeout was reported as explicit. The final implementation checks whether the field was present in the raw profile; the focused provenance test now distinguishes omitted defaults from explicit values."
+    },
+    {
+      "id": "PE-2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "unknown-explicit-profile-propagated-instead-of-a-closed-refusal",
+      "reason": "The first draft raised through the raw-profile lookup for an absent explicit profile. The lookup now distinguishes an absent CLI selection from malformed configuration and returns a closed unknown_profile refusal without echoing the requested name."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/profile-explain.md",
+    "docs/profile-explain.zh-CN.md",
+    "docs/review-profile-explain-v1.json",
+    "pocketchat/profile_explain.py",
+    "tests/test_profile_explain.py"
+  ],
+  "reviewed_evidence": [
+    "C: product baseline 62de0285ea2e59f2bdaaa2263c1bde15e7c064b0 contains the PC-PROFILE-EXPLAIN-1 ready row and approval record; the execution scope matches exactly these five paths.",
+    "C: the pure module consumes caller-supplied mappings and a closed credential observation; imports do not read the environment, open files, start commands, open sockets or call provider code.",
+    "C: raw schema-1 and schema-2 selection, explicit/default precedence, profile-name validation, raw/resolved consistency, credential requirement consistency and malformed/secret-bearing observations are checked before a trusted report is emitted.",
+    "C: endpoint output is limited to scheme, host and optional port; query, path, user information, profile body, system prompt, environment values and raw error values are excluded from reports.",
+    "V: the first focused run failed with ModuleNotFoundError: No module named 'pocketchat.profile_explain' before implementation, which is the expected red reason.",
+    "V: after implementation, CPython 3.13.9 ran python3 -B -m unittest tests.test_profile_explain -v; 15 tests passed with exit 0 after the two findings above were fixed.",
+    "V: CPython 3.13.9 ran python3 -B -m unittest discover -s tests -v: 1293 tests passed in 52.768s with exit 0.",
+    "V: the implementation remains a new pure module plus tests and bilingual standalone docs; no shared CLI, config, runtime, provider, session, memory, queue or CHANGELOG path was edited.",
+    "V: CPython 3.13.9 with Ruff 0.17.3 passed python3 -m ruff check --select E9,F on the new module and test, python3 -m compileall on both, and git diff --check with exit 0; tests.test_release_process_docs passed 16 tests."
+  ],
+  "unverified_scope": "Local macOS CPython 3.13.9 and Ruff 0.17.3 are the only execution environment. No exact-SHA GitHub CI, Linux/Windows matrix, CPython 3.9 run, real config or environment read, CLI subprocess, live credential validation, provider/network call, package build/install, tag, Release or publication was performed. The core can explain only the supplied observation; it cannot prove a provider accepts a credential or that a real configuration is healthy."
+}
