@@ -188,7 +188,7 @@ class ArtifactAuditTests(unittest.TestCase):
 
     def test_report_limit_refuses_compactly_without_clean_truncation(self):
         rows = [
-            artifact("A" * 255, path=f"a-{index}.json", content=b"secret")
+            artifact("A" * 250 + str(index), path=f"a-{index}.json", content=b"secret")
             for index in range(4)
         ]
         report = audit_artifacts(
@@ -196,6 +196,8 @@ class ArtifactAuditTests(unittest.TestCase):
         self.assertEqual("refused", report["status"])
         self.assertEqual(0, report["match_count"])
         self.assertEqual([], report["matches"])
+        self.assertEqual(
+            [{"reason": "report_limit", "count": 1}], report["omissions"])
         self.assertLessEqual(canonical_size(report), 512)
 
     def test_invalid_invocation_limits_raise_typed_error(self):
