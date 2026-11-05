@@ -33,7 +33,7 @@
       "reason": "The medium-risk slice requires a fresh-context review, but Codex failed with transport timeout/401, Claude Code with ECONNREFUSED, and Gemini with untrusted-workspace/no-auth exit 41. No independent review conclusion exists; author self-review is not substituted."
     }
   ],
-  "commit_or_candidate_sha": "pending",
+  "commit_or_candidate_sha": "24bea6cc86a8e1de3ad60a722b1c27aacb490800",
   "changed_paths": [
     "pocketchat/session_integrity.py",
     "tests/test_session_integrity.py",
@@ -48,7 +48,8 @@
     "V: CPython 3.9.6 ran python3 -m unittest discover -s tests -v: 1313 tests OK, exit 0.",
     "F: Ruff 0.17.3 E9/F found F841 saw_terminal assigned but unused; removed the dead assignment and re-ran the matching lint after the fix.",
     "C: the five-path implementation scope does not overlap the active package-manifest, profile-explain, session-audit, memory-doctor, JSON-input, deadline, task-diff or context branches.",
-    "F: independent fresh-context review is not complete; three reviewer transports failed with explicit errors and no review output. See F2/open blocker."
+    "F: independent fresh-context review is not complete; three reviewer transports failed with explicit errors and no review output. See F2/open blocker.",
+    "V: GitHub Actions run 42002841536 is attached to candidate 24bea6cc86a8e1de3ad60a722b1c27aacb490800 and completed with 7/7 successful jobs (Linux/macOS/Windows, CPython 3.9/3.13, plus release-smoke). Draft PR #28 remains open with no reviews."
   ],
-  "unverified_scope": "Local CPython 3.9.6 focused and full unittest evidence only. Exact-SHA CI, Linux/Windows/CPython 3.13, real session-file reader, CLI, repair/writer integration, provider/network behavior, packaging and publication were not run or not covered by this slice. Fresh-context review is not complete; landing remains blocked."
+  "unverified_scope": "Local CPython 3.9.6 focused and full unittest evidence only. Independent fresh-context review remains incomplete. The real session-file reader, CLI, repair/writer integration, provider/network behavior, packaging and publication were not run or not covered by this slice. Fresh-context review is not complete; landing remains blocked."
 }
