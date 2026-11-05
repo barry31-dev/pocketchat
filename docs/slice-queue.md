@@ -332,6 +332,60 @@ and sidecar/preview binding as a separate slice.
   start only after this row is integrated and read back from product `main`,
   and only if its write scope remains free of an active writer.
 
+#### `PC-PACKAGE-MANIFEST-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-package-manifest`
+- **Write scope**: `scripts/release_smoke.py`, `tests/test_release_smoke.py`,
+  `docs/package-manifest.md`, `docs/package-manifest.zh-CN.md`,
+  `docs/review-package-manifest-v1.json`
+- **Depends on**: the delivered release-smoke surface in `SLICE-PREP-2`; no
+  runtime, provider, session, memory, task-diff or shared CLI dependency.
+- **Done when**: The existing release-smoke module exposes
+  `build_package_manifest(source, *, source_kind, max_members=2048,
+  max_member_bytes=8388608, max_total_bytes=67108864,
+  max_report_bytes=262144)` for an explicitly selected wheel or installed
+  `site-packages` root. It returns deterministic canonical JSON data with
+  `schema=pocketchat-package-manifest.v1`, `schema_version=1`, source kind,
+  package/version/entry-point identity, stable module/schema/metadata groups,
+  and a sorted record for every admitted regular member containing only its
+  normalized logical path, category, byte length and SHA-256. Wheel and
+  installed-tree inspection share one classification and validation path.
+  Exactly one `pocketchat/` package and one matching
+  `pocketchat-<version>.dist-info/` tree are admitted; the five shipped schemas,
+  existing release-critical modules, `METADATA`, `WHEEL`, `RECORD` and the
+  `pocketchat = pocketchat.cli:main` declaration must be present and consistent.
+  Archive duplicates, absolute/backslash/parent paths, case or Unicode-normalized
+  collisions, encrypted entries, symlinks, non-regular installed entries,
+  unknown source kinds, version/entry-point mismatch, missing required resources
+  and member/count/total/report limit overflow are refused rather than skipped or
+  truncated. The manifest contains no absolute path or file body and does not
+  mutate inputs. `run_release_smoke` includes the wheel manifest and verifies a
+  clean installed-tree manifest before its existing import/version and complete
+  `task ... --help` smoke; it reuses the current build/install path and adds no
+  second builder, package upload, tag, network/provider/credential access or
+  arbitrary workspace scan. Focused tests create two bounded fixture wheels and
+  one installed tree, cover stable bytes, wheel/install agreement, unsafe and
+  missing resources, every limit boundary, input immutability and the existing
+  installed import/help surface. This slice does not change package contents,
+  version, CLI commands, schemas, CI workflow, tag, Release or package-index
+  state.
+- **Evidence**: `scripts/release_smoke.py`, `tests/test_release_smoke.py`, both
+  package-manifest docs and `docs/review-package-manifest-v1.json`; the
+  implementation review records the observed red, focused/full tests, Ruff,
+  compile and diff checks plus the exact candidate SHA. Delivery is recorded
+  only after that candidate is reviewed and integrated.
+- **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
+  delegation and the user 2026-11-05 request for a non-conflicting PocketChat
+  task. This approval covers the bounded package-evidence slice only; it does
+  not authorize a tag, Release, package upload, version change or publication.
+- **Approval evidence**: This row and
+  `docs/review-package-manifest-approval-v1.json` are the product approval
+  record. The execution branch is not created by this planning change; it may
+  start only after this row is integrated and read back from product `main`,
+  and only if its five-path write scope remains free of an active writer.
+
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.
