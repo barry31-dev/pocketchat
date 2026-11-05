@@ -433,6 +433,10 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
             cancellation.validate_for(execution.spec_sha256, execution.plan_sha256)
         except TaskError as exc:
             raise TaskExecutionError(str(exc)) from exc
+    if cancellation is not None and model_repair == "model":
+        # Repair retry archives use a separate run identity. Until that evidence
+        # chain supports recovery, refuse this combination before any effect.
+        raise TaskExecutionError("cancellation cannot be combined with model repair")
     if model_repair not in (None, "model"):
         raise TaskExecutionError("model_repair must be 'model' when supplied")
     if model_repair == "model":

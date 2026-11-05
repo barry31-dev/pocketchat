@@ -31,6 +31,19 @@ command archive 和文件变更保持不变，未开始后缀记为 `not_execute
 checkpoint schema 不变，精确 report hash 绑定取消对象。创建 checkpoint 兼容当前顶层和旧嵌套
 command archive hash；两处声明不同则拒绝。
 
+不支持同时传 cancellation owner 与 `model_repair="model"`：不论 owner 是否已请求取消，
+执行器都在读取 artifact、调用 provider/command 或写 execution report 前以固定
+`TaskExecutionError`（`cancellation cannot be combined with model repair`）拒绝。
+成功 repair retry 的证据身份与原失败 archive 不同，本切片不放松成功核对来冒充可恢复。
+不传 cancellation 的既有 model repair 行为不变；两者组合须另行批准完整 retry/repair 证据链契约。
+
+最终模型响应期间收到取消也不能抹去预算失败：已写入的 bytes 不撤销，unknown usage 不当作零，
+已报告的超限消耗不退款。恢复耗尽的账本不能新调 provider，已确认命令不再执行。
+checkpoint 可以把失败步骤登记为 pending；该盘点不代表它已获准恢复。
+
+取消和恢复不重验、不替换历史 acceptance receipt。已完成子任务上的失败验收在 execution report
+形成累积后继后仍为 failed；执行完成本身不是验收通过。
+
 ## 显式恢复与不重复副作用
 
 取消报告的恢复必须新建同 Spec/Plan 的、尚未请求取消的 owner。遗漏 owner、重用旧 token，

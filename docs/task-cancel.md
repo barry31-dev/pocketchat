@@ -79,6 +79,28 @@ optional cancellation metadata. Checkpoint creation accepts both the current
 top-level command archive digest and the old nested declaration; conflicting
 declarations are refused, not silently preferred.
 
+Supplying both a cancellation owner and `model_repair="model"` is explicitly
+unsupported. The executor raises `TaskExecutionError` with
+`cancellation cannot be combined with model repair` before any artifact read,
+provider/command call or execution report write, whether or not the owner has
+requested cancellation. Successful repair retries have a separate evidence
+identity; this slice does not pretend that the original failed archive proves
+a recoverable retry. Model repair without a cancellation owner retains its
+existing behavior. Combining these features requires a separately approved
+retry/repair evidence-chain contract, not relaxation of the success checks.
+
+Budget failure remains execution failure even when an owner is requested during
+the final model response. Already-written bytes are not undone, unknown usage
+is not zero, and reported over-limit consumption is not refunded. Restoring an
+exhausted ledger can admit no new provider request; a previously confirmed
+command is retained instead of run again. A checkpoint may inventory a failed
+step as pending, but that inventory does not authorize its recovery.
+
+Cancellation and resume do not re-evaluate or replace historical acceptance
+receipts. A failed receipt attached to a completed subtask remains failed after
+its execution report gains a cumulative successor; execution completion alone
+is never an acceptance pass.
+
 ## Explicit resume without repetition
 
 Read [execution recovery](task-recovery.md) for the original evidence checks.

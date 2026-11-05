@@ -16,9 +16,9 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 2,
-  "round_decision": "review",
-  "round_scope": "new-diff",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
   "findings": [
     {
       "id": "F1",
@@ -44,14 +44,21 @@
     {
       "id": "R4",
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "fingerprint": "new-diff-review-and-unreviewed-combinations",
-      "reason": "Independent round 2 reviewed e34f4dd..6332a72 and explicitly closed both reader majors with no new blocker/major in that new diff. The original stop_after/model-repair combinations, cumulative acceptance-failure combinations and exhausted/unknown-usage cancellation combinations remain unreviewed; full landing remains on hold."
+      "reason": "The third bounded follow-up reviewed the previously unreviewed stop_after/model-repair branches and the added cumulative-acceptance/exhausted-or-unknown-usage tests. Seven reviewer in-memory assertions and the author-owned runtime checks close only that named combination scope. R5 was found and closed by explicit early refusal; no fourth complete review or overall product acceptance is claimed."
+    },
+    {
+      "id": "R5",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "model-repair-success-binds-original-failed-command-evidence",
+      "reason": "Independent third-round in-memory probe observed a successful repair retry binding the original failed command archive; cancellation then failed completed-evidence validation. Fixed by early refusal instead of support: supplying cancellation with model_repair=model now raises a fixed TaskExecutionError before artifact reads, provider/command calls or report writes. Two pending/requested owner regressions ran red (2 failures, 0 errors) then green. Reviewer statically closed the four-line guard and two negative tests; original retry evidence behavior without cancellation is not fixed or certified."
     }
   ],
   "slice_id": "PC-TASK-CANCEL-1",
   "approval_source": "https://github.com/barry31-dev/pocketchat/issues/31",
-  "base_sha": "7fcb197351e10b7e8dab87e32ed52964fb1193ac",
+  "base_sha": "b42fa5b5d1119040be850ddfce072a5b84621c47",
   "changed_paths": [
     "docs/review-task-cancel-v1.json",
     "docs/task-cancel.md",
@@ -80,8 +87,33 @@
     "V: Original lease expired and release was refused; the same existing task card was legally re-claimed before any new product change. No old token was reused or duplicate task created.",
     "V: Independent second-round new-diff review e34f4dd..6332a72 confirmed R2/R3 fixed and no new blocker/major in that limited diff; it performed static code/test review, not another suite run. Remaining combinations are explicitly not reviewed.",
     "V: In-memory AST mutation removing only the completed-command consistency guard makes all six matching contradictory-command subtests fail; zero errors and no persistent product edits.",
-    "V: Final source candidate 6332a72 has 20 focused cancellation tests green on macOS CPython 3.9.6 and 3.14.10, and 47 affected reader/report/checkpoint regressions green on CPython 3.9.6."
+    "V: Final source candidate 6332a72 has 20 focused cancellation tests green on macOS CPython 3.9.6 and 3.14.10, and 47 affected reader/report/checkpoint regressions green on CPython 3.9.6.",
+    "C: Candidate was merged with current product main b42fa5b without source overlap; relative task diff remains exactly the eight issue-approved paths. No shared queue, changelog, session or provider edits.",
+    "V: Four added budget/acceptance characterizations passed on CPython 3.9.6 and 3.14.10. Initial fixture/checkpoint assumptions were corrected; these are not claimed as production red/green fixes.",
+    "V: In-memory removal of execute_plan task_budget=restored makes the exhausted-ledger cancellation-resume regression fail exactly one assertion, zero errors; production disk source was unchanged.",
+    "V: Fresh-context third-round probe observed one new repair/cancellation major and seven other named combination assertions. It used in-memory evidence/provider/command/overwrite doubles, not real provider or disk checkpoint IO.",
+    "V: Two new early-refusal negative tests ran red on CPython 3.9.6 (2 failures, zero errors, exit 1), then green after four production lines (2 OK, exit 0). They assert no provider/command calls, no report and an unchanged file snapshot for pending and requested owners.",
+    "V: After the new production admission guard, tests.test_task_cancel: 26 OK on CPython 3.9.6 and 3.14.10, both exit 0; tests.test_task_model_repair plus tests.test_task_exec: 36 OK on CPython 3.9.6, exit 0. The new guard justifies these reruns; no full-suite rerun.",
+    "V: Ruff 0.17.3 E9,F on the two changed Python files and git diff --check passed, exit 0; three local links in the changed bilingual cancellation pages exist.",
+    "C: Third-round new-diff closure independently confirmed early refusal instead of support; no archive success checks were weakened. Total rounds 3, reconsider/new-diff-only, no fourth complete review.",
+    "V: Remote main readback remains b42fa5b and remote task/pocketchat-task-cancel is absent; there is no external complete receipt. Previous history-gate evidence is retained rather than retried or labeled current."
   ],
-  "unverified_scope": "Current 20 cancellation tests passed on local macOS CPython 3.9.6 and 3.14.10, including real bounded command-template and deterministic provider-stub paths; 47 affected legacy reader/report/checkpoint tests passed after reader fixes. Existing 106 related and 65 caller regressions passed earlier, and are not relabeled current full-suite results. Independent rounds 1/2 covered the bounded diff and fixes but did not finish stop_after/model-repair, cumulative acceptance-failure, or exhausted/unknown-usage cancellation combinations; landing stays hold. Public push is blocked by inherited history policy. Full product suite, exact-SHA CI, public PR/main integration, Linux/Windows execution, real provider, process/thread/signal termination, arbitrary-crash exactly-once, deadline wiring, tag/Release and upload were not run.",
-  "commit_or_candidate_sha": "6332a72b6e41311655bb8008b5c0b83435efd972"
+  "original_approval_base_sha": "7fcb197351e10b7e8dab87e32ed52964fb1193ac",
+  "previous_candidate_sha": "1be64a1a9a076b6d074f91511ce30bc697dc44b0",
+  "reviewed_candidate_base_sha": "d7738089829209120670be558d3029df0e0e3c8f",
+  "commit_or_candidate_sha": "self",
+  "technical_followup": "Named third-round combination scope closed; overall product acceptance and public integration are not certified.",
+  "reconsidered_approach": "Do not expand this additive cancellation slice into a repair archive/overwrite recovery rewrite. Refuse the unsupported combination before effects; a future approved retry/repair evidence-chain contract is required to support it.",
+  "reviewed_followup_blobs": {
+    "pocketchat/task_exec.py": "2a2b654c6152184171bcb6a8510d68b9f3eddb6a",
+    "tests/test_task_cancel.py": "9f36f7ee19bcd0fe3a82cb2cf6b3cf409cedeb2e",
+    "docs/task-cancel.md": "1c9e725a66a6e9e180598fd66455dce0a8cfb5b1",
+    "docs/task-cancel.zh-CN.md": "ce51c6031a7962d775bfc3633808f81229183055"
+  },
+  "publication_hold": [
+    "Task permissions publish=deny remain unchanged.",
+    "Existing inherited historical-message policy blocker is unresolved; the earlier 16-hit diagnostic is not a final-candidate gate result.",
+    "No exact-candidate external-action authorization is claimed."
+  ],
+  "unverified_scope": "Current cancellation suite: 26 tests passed on local macOS CPython 3.9.6 and 3.14.10; legacy model-repair/executor compatibility: 36 tests passed on CPython 3.9.6. Real bounded local command fixture keeps confirmed effect count one; provider remains a deterministic stub. Third-round review closes only the named previously unreviewed combinations and new early-refusal diff, not all combinations or overall acceptance. No-cancellation repair retry archive/recovery behavior remains unchanged and unverified. Earlier 20/47/106/65 results are historical, not current full-suite results. Full product suite, exact-SHA CI, public PR/main integration, Linux/Windows runtime, real provider, process/thread/signal termination, arbitrary-crash exactly-once, deadline wiring, packaging, tag/Release and upload were not run. Public landing stays hold."
 }

@@ -405,6 +405,164 @@ class CancellationExecutionTests(unittest.TestCase):
         later = {row["request_id"]: row for row in successor["task_budget"]["requests"]}
         self.assertTrue(all(later[key] == value for key, value in previous.items()))
 
+    def _assert_model_repair_cancellation_refused_before_effects(self, *, requested):
+        owner = self.owner()
+        if requested:
+            self.request(owner)
+        before = files(self.root)
+        with self.assertRaisesRegex(task_exec.TaskExecutionError,
+                                    "cancellation cannot be combined with model repair") as caught:
+            self.execute(cancellation=owner, model_repair="model",
+                         spec=self.spec, plan=self.plan)
+        self.assertNotIsInstance(caught.exception, task_exec.TaskCancelledError)
+        self.assertIsNone(caught.exception.report)
+        self.assertEqual(before, files(self.root))
+        self.assertEqual([], self.adapter.calls)
+        self.runner.assert_not_called()
+
+    def test_pending_owner_with_model_repair_is_refused_before_any_effect(self):
+        self._assert_model_repair_cancellation_refused_before_effects(requested=False)
+
+    def test_requested_owner_with_model_repair_creates_no_cancellation_report(self):
+        self._assert_model_repair_cancellation_refused_before_effects(requested=True)
+
+    def _assert_budget_failure_is_not_safe_cancellation(self, *, reported):
+        from pocketchat.task_budget import TaskBudget
+        self.select_steps(stop=2)
+        owner = self.owner()
+        self.adapter.responses[1]["usage_reported"] = reported
+        if reported:
+            self.adapter.responses[1]["usage"]["input_tokens"] = 100000
+        complete = self.adapter.complete
+
+        def request_on_final_response(*args, **kwargs):
+            response = complete(*args, **kwargs)
+            if response["finish_reason"] == "stop":
+                self.request(owner)
+            return response
+
+        self.adapter.complete = request_on_final_response
+        results = self.execute(cancellation=owner,
+                               task_budget=TaskBudget(limit_tokens=100000))
+        self.assertTrue(owner.requested)
+        self.assertEqual("failed", results[0]["status"])
+        self.assertEqual(["not_executed"],
+                         [row["status"] for row in results[1:]])
+        path = self.root / results[0]["execution_report"]
+        payload = json.loads(path.read_text())
+        self.assertNotIn("cancellation", payload)
+        self.assertEqual("first\n", (self.root / "report.md").read_text())
+        ledger = payload["task_budget"]
+        self.assertEqual(2, len(ledger["requests"]))
+        if reported:
+            self.assertGreater(ledger["reserved_tokens"], ledger["limit_tokens"])
+            self.assertTrue(all(row["usage_known"] for row in ledger["requests"]))
+        else:
+            self.assertEqual(1, sum(row["state"] == "unknown"
+                                    for row in ledger["requests"]))
+            self.assertGreater(ledger["reserved_tokens"], 3)
+        _, checkpoint = self.checkpoint(path, payload)
+        self.assertEqual([row["step_id"] for row in results],
+                         checkpoint["pending_step_ids"])
+        before = files(self.root)
+        with self.assertRaises(TaskRecoveryError):
+            self.execute(cancellation=self.owner("2" * 32),
+                         task_budget=TaskBudget(limit_tokens=100000),
+                         resume_report=path, expected_report_sha256=digest(path))
+        self.assertEqual(before, files(self.root))
+        self.assertEqual(2, len(self.adapter.calls))
+        self.runner.assert_not_called()
+
+    def test_unknown_final_usage_with_cancel_keeps_failure_and_existing_effect(self):
+        self._assert_budget_failure_is_not_safe_cancellation(reported=False)
+
+    def test_over_limit_final_usage_with_cancel_keeps_failure_and_consumption(self):
+        self._assert_budget_failure_is_not_safe_cancellation(reported=True)
+
+    def test_cancelled_command_resume_does_not_refund_an_exhausted_ledger(self):
+        from pocketchat.task_budget import TaskBudget
+        self.select_steps(start=1)
+        owner = self.owner()
+        budget = TaskBudget(limit_tokens=10000)
+        budget.reserve(10000, request_id="prior-request")
+        budget.settle("prior-request", input_tokens=9999, output_tokens=1,
+                      reported=True)
+
+        def runner(template_id, trace, run_id):
+            command = run_command_template(self.root, self.template,
+                                           trace_path=trace, run_id=run_id)
+            self.request(owner)
+            return command
+
+        self.runner.side_effect = runner
+        path, payload, _ = self.cancelled(owner, task_budget=budget)
+        self.assertEqual(1, payload["cancellation"]["boundary_index"])
+        self.assertEqual([], self.adapter.calls)
+        original = path.read_bytes()
+        results = self.execute(cancellation=self.owner("2" * 32),
+                               task_budget=TaskBudget(limit_tokens=10000),
+                               resume_report=path,
+                               expected_report_sha256=digest(path))
+        self.assertEqual(["completed", "failed"],
+                         [row["status"] for row in results])
+        successor = json.loads((self.root / results[-1]["execution_report"]).read_text())
+        self.assertNotIn("cancellation", successor)
+        self.assertEqual(payload["task_budget"], successor["task_budget"])
+        self.assertEqual(original, path.read_bytes())
+        self.assertEqual("1", (self.root / "count.txt").read_text())
+        self.assertFalse((self.root / "last.md").exists())
+        self.assertEqual([], self.adapter.calls)
+        self.assertEqual(1, self.runner.call_count)
+        successor_path = self.root / results[-1]["execution_report"]
+        _, checkpoint = self.checkpoint(successor_path, successor)
+        self.assertEqual(["finish"], checkpoint["pending_step_ids"])
+        before = files(self.root)
+        with self.assertRaises(TaskRecoveryError):
+            self.execute(cancellation=self.owner("3" * 32),
+                         task_budget=TaskBudget(limit_tokens=10000),
+                         resume_report=successor_path,
+                         expected_report_sha256=digest(successor_path))
+        self.assertEqual(before, files(self.root))
+        self.assertEqual([], self.adapter.calls)
+        self.assertEqual(1, self.runner.call_count)
+
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "acceptance requires secure descriptor-relative reads")
+    def test_cancel_resume_keeps_prior_failed_acceptance_and_cumulative_evidence(self):
+        from pocketchat.acceptance import (acceptance_history,
+                                          parse_plan as parse_acceptance,
+                                          verify_task)
+        from pocketchat.cli import _task_report_payload
+        _, path, _, results = self.cancel_after_command()
+        task_id = results[0]["task_id"]
+        acceptance = parse_acceptance({
+            "schema_version": "pocketchat-acceptance-plan.v1",
+            "checks": [{"id": "missing", "kind": "file_exists",
+                        "path": "missing.md"}],
+        })
+        receipt = verify_task(self.root, task_id, acceptance)
+        self.assertEqual("failed", receipt["state"])
+        receipt_path = self.root / receipt["record"]
+        receipt_bytes = receipt_path.read_bytes()
+        record_bytes = (self.root / ".pocketchat" / "tasks" / (task_id + ".json")).read_bytes()
+        prior_report = path.read_bytes()
+        history = acceptance_history(self.root, task_id)
+        self.execute(cancellation=self.owner("2" * 32), resume_report=path,
+                     expected_report_sha256=digest(path))
+        self.assertEqual(history, acceptance_history(self.root, task_id))
+        report = _task_report_payload(self.root, tasking.load_record(self.root, task_id))
+        self.assertEqual("failed", report["acceptance"]["state"])
+        self.assertEqual(["write_report", "count_once", "finish"],
+                         [row["step_id"] for row in report["execution_steps"]])
+        self.assertEqual([], report["evidence_issues"])
+        self.assertEqual(receipt_bytes, receipt_path.read_bytes())
+        self.assertEqual(record_bytes,
+                         (self.root / ".pocketchat" / "tasks" / (task_id + ".json")).read_bytes())
+        self.assertEqual(prior_report, path.read_bytes())
+        self.assertEqual(1, len(list(receipt_path.parent.glob("*.json"))))
+        self.assertEqual(1, self.runner.call_count)
+        self.assertEqual("1", (self.root / "count.txt").read_text())
+
     def test_checkpoint_refuses_conflicting_current_and_legacy_archive_digests(self):
         _, path, payload, _ = self.cancel_after_command()
         payload["steps"][1]["evidence"]["archive_sha256"] = "e" * 64
