@@ -280,6 +280,58 @@ and sidecar/preview binding as a separate slice.
   branch is reachable from `main`. The implementation branch and exact reviewed
   candidate remain separate; this planning change does not create or claim them.
 
+
+#### `PC-SFILE-AUDIT-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-session-audit-core`
+- **Write scope**: `pocketchat/session_integrity.py`,
+  `tests/test_session_integrity.py`, `docs/session-integrity.md`,
+  `docs/session-integrity.zh-CN.md`, `docs/review-session-integrity-v1.json`
+- **Depends on**: `PC-SFILE-READ-1` (delivered at `c97fe8e`); no session
+  writer, CLI, repair, provider or runtime dependency.
+- **Done when**: A pure
+  `audit_session_records(records, *, max_findings=64, max_omissions=64, max_bytes=65536)`
+  consumes caller-supplied, already-read session records and returns a closed
+  `pocketchat-session-integrity.v1` report with `schema_version=1` and status
+  `complete`, `partial` or `refused`. The audit validates the header and
+  session identity, run/workspace association, message role and content shape,
+  unique and monotonically increasing turn ids, and provider-shaped tool
+  contexts whose calls and results pair exactly and end in explicit terminal
+  states. It distinguishes malformed input from inspected partial coverage and
+  keeps an empty valid record list distinct from corrupt input. Findings use
+  stable order and bounded typed fields such as record index, code and redacted
+  context; report omissions are explicit. Inputs remain unchanged. The core
+  never repairs, truncates or rewrites records, reads a path, executes a
+  command, calls a provider, or returns full request, message, session or
+  credential bodies. Limits reject rather than silently truncate when the
+  minimal envelope cannot fit. Legacy tolerance is limited to the reader's
+  existing accepted schema and derived turn ids; this slice invents no
+  migration or repair behavior. Focused tests cover valid modern and legacy
+  records, empty valid input, malformed header/message/tool records, duplicate
+  and regressing turn ids, cross-record call/result pairing, explicit terminal
+  states, bounded findings/omissions/report size, input immutability, stable
+  output and zero filesystem/command/socket/provider calls. This slice adds no
+  CLI, real session reader integration, repair/copy, writer change, tag,
+  Release or publication.
+- **Evidence**: `pocketchat/session_integrity.py`,
+  `tests/test_session_integrity.py`, `docs/session-integrity.md`,
+  `docs/session-integrity.zh-CN.md` and
+  `docs/review-session-integrity-v1.json`; focused unittest output, exact
+  reviewed candidate SHA and `git diff --check` are recorded in the
+  implementation review. The delivery commit is recorded only after the
+  candidate is examined against this row and merged.
+- **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
+  delegation; this row and `docs/review-session-audit-approval-v1.json`
+  freeze the pure-core contract. This approval does not authorize a CLI, real
+  file/session observation, repair or mutation, provider/network call, tag,
+  Release or package upload.
+- **Approval evidence**: This row and
+  `docs/review-session-audit-approval-v1.json` are the product approval
+  record. The execution branch is not created by this planning change; it may
+  start only after this row is integrated and read back from product `main`,
+  and only if its write scope remains free of an active writer.
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.

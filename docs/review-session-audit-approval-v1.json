@@ -1,0 +1,30 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-session-audit-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-session-audit-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main b68929df3818ed901b5353f727216885b874e2b1 was fetched before this planning branch; it contains PC-SFILE-READ-1 delivered and no PC-SFILE-AUDIT-1 queue row.",
+    "C: before creation, product remote had no task/pocketchat-session-audit* branch, GitHub had no PC-SFILE-AUDIT-1 issue or session-audit PR, and no active product writer claimed pocketchat/session_integrity.py, tests/test_session_integrity.py or docs/session-integrity*.",
+    "C: the current session writer work is limited to pocketchat/sessions.py, pocketchat/session_writer.py and tests/test_session_writer.py; task diff, JSON input, task deadline, profile explanation and memory-doctor work use separate paths.",
+    "C: the row freezes one pure module, one test module and three dedicated documentation/review paths; it does not edit the existing reader, CLI, writer, repair code, runtime, provider, CHANGELOG.md or release paths.",
+    "C: the contract consumes already-read records and preserves them unchanged; malformed and partial outcomes are separated, legacy acceptance is not expanded, bounded typed findings omit bodies, and report overflow refuses rather than truncates.",
+    "Docs-only diff review checked header/identity, run/workspace association, role/content shape, turn uniqueness/monotonicity, tool pairing and terminal states, empty-versus-corrupt input, fixed caps, stable ordering, secret-safe redaction, no-I/O boundaries and explicit non-goals."
+  ],
+  "unverified_scope": "Planning only: no session-audit implementation, focused or full product tests, real session/file read, repair or mutation, CLI subprocess, provider/network call, product suite, CI, packaging, product main integration, tag, Release or package upload. The implementation branch is not created; main reachability of this approval is a separate readback, and an implementation candidate may start only after that readback and a fresh write-scope conflict check."
+}
