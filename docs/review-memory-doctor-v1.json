@@ -13,7 +13,7 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 4,
+  "rounds": 5,
   "round_decision": "review",
   "round_scope": "full",
   "findings": [
@@ -53,6 +53,13 @@
       "reason": "The second review found that max_findings rejected otherwise well-formed evidence with more findings than the retention bound, and non-iterable inputs reused limit error types. Regressions now require a stable retained prefix plus omitted_findings, distinct invalid_records/invalid_source_observations errors, and a six-thousand-observation bound probe; all pass after the fix."
     },
     {
+      "id": "MD-7",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "unicode-id-and-contradiction-prefix-evidence",
+      "reason": "The fifth bounded pass added focused evidence for canonically equivalent-but-distinct Unicode memory IDs and for retaining a typed contradiction when unrelated findings precede it. Both passed without production-code changes; they close coverage gaps rather than alter the frozen contract."
+    },
+    {
       "id": "MD-5",
       "severity": "minor",
       "status": "deferred",
@@ -71,8 +78,9 @@
   "reviewed_evidence": [
     "C: product issue #25 is main-reachable repository approval for the five-path pure-core slice; it names delivered PC-META-2 as the parser dependency and records the non-overlap check.",
     "V: CPython 3.9.6 first ran `python3 -B -m unittest tests.test_memory_doctor -v`; collection failed with ModuleNotFoundError for pocketchat.memory_doctor, exit 1.",
-    "V: after implementation, the focused file ran 34 tests OK on macOS CPython 3.9.6, exit 0, covering empty/valid/foreign records, admission and sensitive counts, malformed and duplicate records, exact/partial/missing sources, contradictions, duplicate observations, all limits, deterministic order, non-echoing reports, input immutability and zero I/O.",
+    "V: after implementation, the focused file ran 36 tests OK on macOS CPython 3.9.6, exit 0, covering empty/valid/foreign records, admission and sensitive counts, malformed and duplicate records, exact/partial/missing sources, contradictions, duplicate observations, all limits, deterministic order, non-echoing reports, input immutability and zero I/O.",
     "V: the second bounded-evidence review added six-thousand-observation probes, distinct non-iterable errors and a retained-prefix/omitted-findings contract; the focused file then ran 34 tests OK, exit 0.",
+    "V: the final bounded pass added Unicode-ID and finding-prefix cases; the focused file ran 36 tests OK, exit 0. No production behavior changed in that pass.",
     "V: CPython 3.9.6 ran `python3 -B -m unittest tests.test_memory_doctor tests.test_memory_migration tests.test_memory_retrieval -v`: 79 tests OK, exit 0.",
     "V: CPython 3.9.6 ran the complete product unittest suite: 1337 tests OK in 79.148 seconds, exit 0.",
     "V: `ruff check --select E9,F pocketchat/memory_doctor.py tests/test_memory_doctor.py` passed, exit 0.",

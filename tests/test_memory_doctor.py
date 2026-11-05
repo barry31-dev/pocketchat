@@ -329,6 +329,15 @@ class MemoryDoctorTests(unittest.TestCase):
                         [], workspace_id="workspace-1",
                         source_observations=[], **{name: value})
 
+    def test_finding_prefix_keeps_a_contradiction_after_duplicate_codes(self):
+        malformed = ["first", "second", "third", "fourth"]
+        report = audit_memory_records(
+            malformed, workspace_id="workspace-1", source_observations=[],
+            max_findings=1)
+        self.assertEqual("refused", report["status"])
+        self.assertEqual("invalid_record", report["findings"][0]["code"])
+        self.assertEqual(3, report["counts"]["omitted_findings"])
+
     def test_report_is_deterministic_and_inputs_are_unchanged(self):
         first = record(source_refs=[source_ref()])
         second = record("mem_second", source_refs=[source_ref("other.txt")])
@@ -347,6 +356,15 @@ class MemoryDoctorTests(unittest.TestCase):
             json.dumps(right, ensure_ascii=False, sort_keys=True))
         self.assertEqual(before_records, records)
         self.assertEqual(before_observations, observations)
+
+    def test_unicode_duplicate_ids_do_not_abort_the_report(self):
+        first = record("mem_é")
+        second = record("mem_é")
+        report = audit_memory_records(
+            [first, second], workspace_id="workspace-1",
+            source_observations=[])
+        self.assertEqual("complete", report["status"])
+        self.assertEqual(2, report["counts"]["records"])
 
     def test_refused_report_is_deterministic_across_record_order(self):
         malformed = record(content="SECRET-CANARY")
