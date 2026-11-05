@@ -14,6 +14,11 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 INPUT_LIMIT = 1024 * 1024
+POSIX_READER = (
+    os.name == "posix"
+    and os.open in os.supports_dir_fd
+    and all(hasattr(os, flag) for flag in ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK"))
+)
 
 
 def artifact(identifier="session-a", kind="session"):
@@ -35,6 +40,7 @@ def observations():
     }
 
 
+@unittest.skipUnless(POSIX_READER, "requires secure descriptor-relative reads")
 class EvidenceVerifyCLITests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -374,6 +380,24 @@ with mock.patch('socket.socket', forbidden), mock.patch('subprocess.Popen', forb
         self.assertEqual(2, code)
         self.assertEqual("", error.getvalue())
         self.assertEqual("evidence", json.loads(output.getvalue())["error"])
+
+
+class EvidenceVerifyPortabilityTests(unittest.TestCase):
+    def test_platform_without_posix_reader_refuses_safely(self):
+        from pocketchat import service
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            input_path = workspace / "observations.json"
+            input_path.write_text(json.dumps(observations()), encoding="utf-8")
+            if POSIX_READER:
+                unsupported = mock.patch.object(os, "supports_dir_fd", set())
+            else:
+                unsupported = mock.patch.object(sys, "platform", "win32")
+            with unsupported:
+                result = service.verify_evidence_observations(
+                    "observations.json", workspace=workspace)
+        self.assertEqual("refused", result["status"])
+        self.assertEqual("unsupported_platform", result["reason"])
 
 
 if __name__ == "__main__":

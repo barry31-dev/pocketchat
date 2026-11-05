@@ -62,6 +62,13 @@
       "status": "fixed",
       "fingerprint": "stable-cli-inventory-missing-evidence",
       "reason": "GitHub Actions run 42031788807 failed the stable CLI inventory on Linux for CPython 3.9 and 3.13 because the new evidence command was absent from the expected list. The guard was observed red locally, the expected inventory was updated by one name, and the focused guard plus all evidence-CLI tests then passed locally."
+    },
+    {
+      "id": "F-WINDOWS",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "posix-reader-tests-not-scoped",
+      "reason": "GitHub Actions run 42032498809 failed both Windows jobs because successful POSIX descriptor-reader tests expected complete/partial results on a platform that correctly refused with unsupported_platform. The success-path tests are now scoped to POSIX capability; a separate cross-platform test requires the safe unsupported_platform refusal on every platform. The full evidence-CLI module then passed 31 focused tests locally."
     }
   ],
   "source_type": "current code/tests and local run",
@@ -97,14 +104,17 @@
     "C: Fresh-context new-diff round two closed both major findings and reported no new blocking findings. The unused fixed-model reviewer entry failed before any review; a default inherited-model reviewer performed the actual review instead.",
     "V: GitHub Actions run 42031788807 observed test_skeleton.StableV1ContractTests.test_cli_command_inventory_is_stable fail on Linux CPython 3.9 and 3.13 because evidence was absent from the stable command list.",
     "V: macOS CPython 3.13.9 observed the same inventory guard fail locally, then pass after adding evidence; tests.test_evidence_verify_cli plus that guard ran 31 focused tests OK in 9.784 seconds, exit 0.",
-    "V: git diff --check passed after the inventory and review-record update. Exact-SHA CI for this new candidate remains separate evidence."
+    "V: git diff --check passed after the inventory and review-record update. Exact-SHA CI for this new candidate remains separate evidence.",
+    "V: GitHub Actions run 42032498809 observed both Windows jobs fail because the POSIX reader returned the intended unsupported_platform refusal while success-path tests expected complete or partial reports.",
+    "V: macOS CPython 3.13.9 ran the capability-scoped EvidenceVerifyCLITests plus EvidenceVerifyPortabilityTests: 31 tests passed in 10.125 seconds, exit 0. The PTY-backed success paths ran on macOS; the portability test exercised the no-POSIX-reader refusal.",
+    "V: python -m py_compile and git diff --check passed after the Windows portability fix. Exact-SHA CI for this candidate remains separate evidence."
   ],
   "landing_sign_off": {
     "status": "not_landed",
     "authority": "agent under existing routine technical delegation",
     "scope": "technical review only; no public push bypass or release authorization"
   },
-  "unverified_scope": "Exact-SHA CI for the new candidate, live original-artifact reread/freshness, an actual unsupported host, Linux/Windows, the full current product suite, real provider/model/credentials, task execution, clean-wheel build/install, product-main integration, tag, Release and package upload remain unverified. The prior Linux exact-SHA failure is recorded and was not relabeled green.",
+  "unverified_scope": "Exact-SHA CI for the Windows portability candidate, live original-artifact reread/freshness, the full current product suite, real provider/model/credentials, task execution, clean-wheel build/install, product-main integration, tag, Release and package upload remain unverified. The prior Linux and Windows exact-SHA failures are recorded and were not relabeled green.",
   "review_history": [
     {
       "round": 1,
