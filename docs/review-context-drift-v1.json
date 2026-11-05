@@ -53,7 +53,7 @@
       "reason": "This candidate was produced and reviewed in one interactive agent session. The author completed a bounded contract, source, test and documentation review, but an independent fresh-context reviewer was not dispatched. Landing must not infer an independent review from focused tests or author review."
     }
   ],
-  "commit_or_candidate_sha": "PENDING_CANDIDATE_SHA",
+  "commit_or_candidate_sha": "b37238042b0e07750bc31a65025c9a6601d5e7a7",
   "changed_paths": [
     "pocketchat/context_drift.py",
     "tests/test_context_drift.py",
@@ -67,10 +67,10 @@
     "V: After the first implementation, focused tests exposed producer-contract fixture failures, unchecked partial-coverage semantics, checked_files overcounting and report-budget ambiguity; each was fixed in the pure core and focused tests.",
     "V: CPython 3.13.9 ran `python3 -B -m unittest tests.test_context_drift -v`: 20 tests OK, exit 0.",
     "V: Ruff 0.17.3 ran `ruff check --select E9,F pocketchat/context_drift.py tests/test_context_drift.py`: all checks passed, exit 0.",
-    "V: CPython 3.13.9 ran the adjacent `tests.test_task_snapshot`, `tests.test_task_selection` and `tests.test_task_preflight` suites: 59 tests OK, exit 0.",
+    "V: CPython 3.13.9 ran the adjacent `tests.test_task_snapshot`, `tests.test_task_selection` and `tests.test_task_preflight` suites: 59 tests OK, exit 0; the full product suite then ran 1298 tests OK in 51.426s, exit 0.",
     "C: The source review confirms the core validates the full shipped snapshot contract, never reads files or calls provider/command/network, never mutates either input, and never upgrades partial coverage to allow.",
     "C: Focused tests cover unchanged, content/byte change, missing and type replacement, unselected observation ignore, partial/complete coverage, refusal precedence, forged snapshot fields, duplicate/unsafe paths, observation and report limits, zero selected files, input immutability, stable digest and zero filesystem/Git/environment/socket/command/provider calls.",
     "C: The full diff stays within issue #21's five paths and adds no CLI, live collector, snapshot refresh, executor/provider integration, automatic replanning, shared queue edit, tag, Release or package upload."
   ],
-  "unverified_scope": "The author did not run the full product suite or package build/install locally. No independent fresh-context review was dispatched. The exact candidate SHA, GitHub Actions on the candidate SHA, live filesystem/Git observation, race behavior, CLI/executor wiring, automatic replanning, provider/command integration, tag, Release and publication were not verified. A green pure-core test does not prove that the supplied observations are honest or race-free."
+  "unverified_scope": "The author did not run package build/install locally. No independent fresh-context review was dispatched. The exact candidate SHA, GitHub Actions on the candidate SHA, live filesystem/Git observation, race behavior, CLI/executor wiring, automatic replanning, provider/command integration, tag, Release and publication were not verified. A green pure-core test does not prove that the supplied observations are honest or race-free."
 }
