@@ -67,7 +67,7 @@
       "reason": "A separate read-only Codex reviewer was started against the five-path diff. It produced no verdict after more than two minutes and was interrupted; author-side review and tests are not rewritten as independent review. This is a known review limitation, not a pass."
     }
   ],
-  "commit_or_candidate_sha": "self",
+  "commit_or_candidate_sha": "0db35fe0d27d48939c50eec2398b9aac05b5052e",
   "changed_paths": [
     "docs/review-task-diff-v1.json",
     "docs/task-diff.md",
@@ -76,6 +76,7 @@
     "tests/test_task_diff.py"
   ],
   "reviewed_evidence": [
+    "C: candidate 0db35fe0d27d48939c50eec2398b9aac05b5052e contains exactly the five approved paths and uses the published barry31-dev identity for author and committer.",
     "C: product origin/main b68929df3818ed901b5353f727216885b874e2b1 supplied the existing CONTEXT_SNAPSHOT_SCHEMA, snapshot digest and snapshot_files behavior used by this slice.",
     "V: the first focused run failed because pocketchat.task_diff did not exist; after an importable empty contract, the behavioral test failed with NotImplementedError before implementation.",
     "V: CPython 3.13.9 ran `python3 -B -m unittest tests.test_task_diff -v`: 19 tests OK, exit 0.",
