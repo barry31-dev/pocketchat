@@ -22,6 +22,11 @@ def artifact(artifact_id="artifact-1", kind="session", path="sessions/a.jsonl",
     }
 
 
+def canonical_size(value):
+    return len(json.dumps(value, ensure_ascii=False, sort_keys=True,
+                          separators=(",", ":")).encode("utf-8"))
+
+
 def report_digest(report):
     body = {key: value for key, value in report.items()
             if key != "report_sha256"}
@@ -57,7 +62,7 @@ class ArtifactAuditTests(unittest.TestCase):
 
     def test_unicode_and_multibyte_secret_match_bytes(self):
         secret = "秘密🧪"
-        payload = "前缀".encode("utf-8") + secret.encode("utf-8") + "后缀".encode("utf-8")
+        payload = "前缀".encode() + secret.encode() + "后缀".encode()
         report = audit_artifacts([artifact(content=payload)], [secret])
         self.assertEqual("found", report["status"])
         self.assertEqual(1, report["match_count"])
@@ -99,6 +104,25 @@ class ArtifactAuditTests(unittest.TestCase):
         self.assertEqual("refused", report["status"])
         self.assertEqual(0, report["match_count"])
         self.assertNotIn("artifact-1", json.dumps(report))
+
+    def test_secret_in_artifact_id_is_refused_without_echo(self):
+        secret = "SENTINEL-ID-SECRET"
+        report = audit_artifacts(
+            [artifact(artifact_id=secret)], [secret])
+        self.assertEqual("refused", report["status"])
+        self.assertNotIn(secret, json.dumps(report))
+
+    def test_unhashable_artifact_kind_is_refused_not_raised(self):
+        for kind in ([], {}, ["session"], {"session": True}):
+            with self.subTest(kind=kind):
+                report = audit_artifacts([artifact(kind=kind)], [b"x"])
+                self.assertEqual("refused", report["status"])
+
+    def test_parent_and_windows_drive_paths_are_refused(self):
+        for path in ("..", "../outside", "C:/outside.txt", "C:outside.txt"):
+            with self.subTest(path=path):
+                report = audit_artifacts([artifact(path=path)], [b"x"])
+                self.assertEqual("refused", report["status"])
 
     def test_duplicate_artifact_id_is_refused(self):
         report = audit_artifacts(
@@ -156,12 +180,23 @@ class ArtifactAuditTests(unittest.TestCase):
         self.assertEqual("refused", audit_artifacts(
             rows, [b"secret"], max_matches=1)["status"])
 
-    def test_report_limit_refuses_without_truncating_to_clean(self):
+    def test_report_budget_below_minimum_envelope_is_invalid(self):
+        with self.assertRaises(ArtifactAuditError):
+            audit_artifacts(
+                [artifact(content=b"secret")], [b"secret"],
+                max_report_bytes=32)
+
+    def test_report_limit_refuses_compactly_without_clean_truncation(self):
+        rows = [
+            artifact("A" * 255, path=f"a-{index}.json", content=b"secret")
+            for index in range(4)
+        ]
         report = audit_artifacts(
-            [artifact(content=b"secret")], [b"secret"], max_report_bytes=32)
+            rows, [b"secret"], max_report_bytes=512)
         self.assertEqual("refused", report["status"])
         self.assertEqual(0, report["match_count"])
         self.assertEqual([], report["matches"])
+        self.assertLessEqual(canonical_size(report), 512)
 
     def test_invalid_invocation_limits_raise_typed_error(self):
         for kwargs in (
@@ -170,11 +205,11 @@ class ArtifactAuditTests(unittest.TestCase):
                 {"max_artifact_bytes": 0},
                 {"max_total_bytes": -1},
                 {"max_matches": 0},
-                {"max_report_bytes": "64"},
+                {"max_report_bytes": 32},
         ):
-            with self.subTest(kwargs=kwargs):
-                with self.assertRaises(ArtifactAuditError):
-                    audit_artifacts([], [], **kwargs)
+            with self.subTest(kwargs=kwargs), self.assertRaises(
+                    ArtifactAuditError):
+                audit_artifacts([], [], **kwargs)
 
     def test_inputs_are_not_mutated(self):
         rows = [artifact(content=b"secret")]

@@ -33,9 +33,12 @@ audit_artifacts(
 
 `secret_values` contains exact non-empty bytes or UTF-8 strings. Values are
 compared as bytes, so CJK, emoji and values spanning an internal chunk boundary
-are handled consistently. Invalid invocation limits raise
-`ArtifactAuditError`. Invalid input or an exceeded inclusive limit returns a
-`refused` report; it is never converted into `clean` by truncation.
+are handled consistently. An artifact ID containing a supplied secret, a
+non-string kind, a parent segment or a Windows drive path is refused without
+echo. `max_report_bytes` must be at least 512 bytes so the closed refusal
+envelope can fit; lower values raise `ArtifactAuditError`. Other invalid input
+or an exceeded inclusive limit returns a `refused` report, never a truncated
+`clean` report.
 
 ## Report
 
@@ -84,6 +87,8 @@ access and preserve the same no-echo report contract.
 
 The focused suite covers clean and matching bytes, ASCII and UTF-8 secrets,
 deduplication, closed artifact kinds and paths, input limits, report limits,
-stable ordering, input immutability and zero-I/O behavior. The implementation
-branch records the exact commands and their unverified scope in its review
-record.
+stable ordering, input immutability and zero-I/O behavior. It also checks that
+secret-valued IDs, unhashable kinds and unsafe parent/drive paths refuse without
+echo or traceback, and that overflow returns a compact report within the
+declared budget. The implementation branch records the exact commands and their
+unverified scope in its review record.

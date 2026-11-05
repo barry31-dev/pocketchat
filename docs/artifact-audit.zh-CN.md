@@ -27,7 +27,7 @@ audit_artifacts(
 | `entry_type` | `regular_file` |
 | `content` | 调用者提供的 bytes |
 
-`secret_values` 是非空 bytes 或 UTF-8 字符串。所有值按 bytes 比较，因此 CJK、emoji 以及跨越内部扫描块边界的结果是一致的。非法调用限额抛出 `ArtifactAuditError`；非法输入或超出包含边界的限额返回 `refused`，不会通过截断变成 `clean`。
+`secret_values` 是非空 bytes 或 UTF-8 字符串。所有值按 bytes 比较，因此 CJK、emoji 以及跨越内部扫描块边界的结果是一致的。artifact ID 含秘密值、kind 不是字符串、路径含父级段或 Windows 盘符时一律拒绝且不回显。`max_report_bytes` 至少为 512 字节，以容纳闭合拒绝报告；更小的值抛出 `ArtifactAuditError`。其他非法输入或超出包含边界的限额返回 `refused`，不会通过截断变成 `clean`。
 
 ## 报告
 
@@ -64,4 +64,4 @@ audit_artifacts(
 
 ## 验证
 
-聚焦测试覆盖干净与命中、ASCII 与 UTF-8 秘密、去重、闭合的 artifact 类型与路径、输入限额、报告限额、稳定顺序、输入不可变和零 I/O。实现分支的审查记录写明实际命令与未验证范围。
+聚焦测试覆盖干净与命中、ASCII 与 UTF-8 秘密、去重、闭合的 artifact 类型与路径、输入限额、报告限额、稳定顺序、输入不可变和零 I/O。测试还证明秘密值 ID、不可哈希 kind、父级/盘符不安全路径会拒绝且不回显或抛裸异常，溢出会返回符合预算的紧凑报告。实现分支的审查记录写明实际命令与未验证范围。

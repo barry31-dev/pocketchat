@@ -11,7 +11,8 @@ import hashlib
 import json
 import posixpath
 import re
-from typing import Any, Dict, List, Sequence, Set, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 SCHEMA = "pocketchat-secret-audit.v1"
 SCHEMA_VERSION = 1
@@ -21,6 +22,7 @@ DEFAULT_MAX_ARTIFACT_BYTES = 8 * 1024 * 1024
 DEFAULT_MAX_TOTAL_BYTES = 32 * 1024 * 1024
 DEFAULT_MAX_MATCHES = 256
 DEFAULT_MAX_REPORT_BYTES = 64 * 1024
+MIN_MAX_REPORT_BYTES = 512
 ARTIFACT_KINDS = frozenset({
     "request", "trace", "session", "comparison", "execution_report",
     "checkpoint",
@@ -32,12 +34,7 @@ _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 
 
 class ArtifactAuditError(ValueError):
-    """An invocation limit is invalid or the caller supplied a bad shape."""
-
-
-def _is_digest(value: Any) -> bool:
-    return (isinstance(value, str) and len(value) == 64
-            and all(ch in "0123456789abcdef" for ch in value))
+    """An invocation limit cannot support the closed report contract."""
 
 
 def _canonical_sha256(payload: Any) -> str:
@@ -48,31 +45,33 @@ def _canonical_sha256(payload: Any) -> str:
 
 def _limit(value: Any, name: str, low: int, high: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ArtifactAuditError("%s must be an integer" % name)
+        raise ArtifactAuditError(f"{name} must be an integer")
     if not low <= value <= high:
-        raise ArtifactAuditError("%s must be between %d and %d"
-                                 % (name, low, high))
+        raise ArtifactAuditError(
+            f"{name} must be between {low} and {high}")
     return value
 
 
 def _safe_path(value: Any) -> bool:
     if (not isinstance(value, str) or not value or "\x00" in value
-            or "\\" in value or value.startswith("/")
-            or value.startswith("~")):
+            or "\\" in value or value.startswith(("/", "~"))
+            or re.match(r"^[A-Za-z]:", value)):
+        return False
+    parts = value.split("/")
+    if any(part in ("", ".", "..") for part in parts):
         return False
     normalized = posixpath.normpath(value)
-    return (normalized == value and normalized != "."
-            and not normalized.startswith("../"))
+    return normalized == value
 
 
-def _closed(record: Any, allowed: Set[str], what: str) -> bool:
+def _closed(record: Any, allowed: set[str]) -> bool:
     return isinstance(record, dict) and set(record) == allowed
 
 
 def _base_report(status: str, artifact_count: int, secret_count: int,
-                 matches: List[Dict[str, Any]],
-                 omissions: List[Dict[str, Any]],
-                 limits: Dict[str, int]) -> Dict[str, Any]:
+                 matches: list[dict[str, Any]],
+                 omissions: list[dict[str, Any]],
+                 limits: dict[str, int]) -> dict[str, Any]:
     report = {
         "schema": SCHEMA,
         "schema_version": SCHEMA_VERSION,
@@ -89,15 +88,15 @@ def _base_report(status: str, artifact_count: int, secret_count: int,
 
 
 def _refusal(reason: str, artifact_count: int, secret_count: int,
-             limits: Dict[str, int]) -> Dict[str, Any]:
+             limits: dict[str, int]) -> dict[str, Any]:
     return _base_report("refused", artifact_count, secret_count, [],
                         [{"reason": reason, "count": 1}], limits)
 
 
-def _secret_bytes(values: Sequence[Any]) -> Tuple[List[bytes], bool]:
+def _secret_bytes(values: Sequence[Any]) -> tuple[list[bytes], bool]:
     if not isinstance(values, list) or len(values) > MAX_SECRETS:
         return [], False
-    result: List[bytes] = []
+    result: list[bytes] = []
     for value in values:
         if isinstance(value, bytes):
             data = value
@@ -114,23 +113,27 @@ def _secret_bytes(values: Sequence[Any]) -> Tuple[List[bytes], bool]:
     return result, True
 
 
-def _parse_artifacts(values: Sequence[Any], max_artifact_bytes: int,
-                     max_total_bytes: int) -> Tuple[List[Dict[str, Any]], bool, str]:
+def _parse_artifacts(values: Sequence[Any], secrets: Sequence[bytes],
+                     max_artifact_bytes: int,
+                     max_total_bytes: int) -> tuple[list[dict[str, Any]], bool, str]:
     if not isinstance(values, list) or len(values) > MAX_ARTIFACTS:
         return [], False, "artifact_limit"
-    parsed: List[Dict[str, Any]] = []
-    ids: Set[str] = set()
-    paths: Set[str] = set()
+    parsed: list[dict[str, Any]] = []
+    ids: set[str] = set()
+    paths: set[str] = set()
     total = 0
     for raw in values:
-        if not _closed(raw, _ARTIFACT_KEYS, "artifact"):
+        if not _closed(raw, _ARTIFACT_KEYS):
             return [], False, "invalid_artifact"
         identifier = raw["artifact_id"]
         if (not isinstance(identifier, str) or not _ID.fullmatch(identifier)
                 or identifier in ids):
             return [], False, "invalid_artifact"
+        encoded_id = identifier.encode("ascii")
+        if any(secret in encoded_id for secret in secrets):
+            return [], False, "invalid_artifact"
         kind = raw["kind"]
-        if kind not in ARTIFACT_KINDS:
+        if not isinstance(kind, str) or kind not in ARTIFACT_KINDS:
             return [], False, "invalid_artifact"
         path = raw["path"]
         if not _safe_path(path) or path in paths:
@@ -162,7 +165,7 @@ def audit_artifacts(artifacts: Any, secret_values: Any, *,
                     max_total_bytes: int = DEFAULT_MAX_TOTAL_BYTES,
                     max_matches: int = DEFAULT_MAX_MATCHES,
                     max_report_bytes: int = DEFAULT_MAX_REPORT_BYTES
-                    ) -> Dict[str, Any]:
+                    ) -> dict[str, Any]:
     """Audit supplied bytes without I/O and return a closed bounded report."""
     max_artifacts = _limit(max_artifacts, "max_artifacts", 1, MAX_ARTIFACTS)
     max_artifact_bytes = _limit(
@@ -171,7 +174,7 @@ def audit_artifacts(artifacts: Any, secret_values: Any, *,
         max_total_bytes, "max_total_bytes", 1, 1 << 30)
     max_matches = _limit(max_matches, "max_matches", 1, MAX_ARTIFACTS)
     max_report_bytes = _limit(
-        max_report_bytes, "max_report_bytes", 1, 1 << 30)
+        max_report_bytes, "max_report_bytes", MIN_MAX_REPORT_BYTES, 1 << 30)
     limits = {
         "max_artifacts": max_artifacts,
         "max_artifact_bytes": max_artifact_bytes,
@@ -185,13 +188,13 @@ def audit_artifacts(artifacts: Any, secret_values: Any, *,
     if not secrets_ok:
         return _refusal("invalid_secret", artifact_count, secret_count, limits)
     parsed, artifacts_ok, reason = _parse_artifacts(
-        artifacts, max_artifact_bytes, max_total_bytes)
+        artifacts, secrets, max_artifact_bytes, max_total_bytes)
     if not artifacts_ok:
         return _refusal(reason, artifact_count, secret_count, limits)
     if len(parsed) > max_artifacts:
         return _refusal("artifact_limit", artifact_count, secret_count, limits)
 
-    found: Set[Tuple[str, str, str]] = set()
+    found: set[tuple[str, str, str]] = set()
     for item in parsed:
         for secret in secrets:
             if secret in item["content"]:
