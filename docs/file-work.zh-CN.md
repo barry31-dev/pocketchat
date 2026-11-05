@@ -58,6 +58,7 @@ write_file。模型不能 apply/undo/自批/扩权，旧工具 schema 不变。�
 after、proposal_sha256、approval、events。owner 绑定 workspace 与已有 session/conversation/branch；
 origin 绑定 run/tool-call/profile；before/after 绑定字节长度、hash、私有对象引用和目标身份/存在性。
 operation 只允许 create/replace。proposal digest 不含自身、approval 和可追加 events。
+已确认 undo 事件还必须记录 restores_change_id / restored_file_identity，绑定前一修改与恢复后身份。
 未知版本/字段、重复身份、不完整绑定或非法迁移均拒绝。对象引用的实际 bytes 必须验证 hash，
 不能只绑定可变文件名。只有 approval 和追加事件可演进；变更 owner/profile/path 重新提案。
 
@@ -125,8 +126,12 @@ symlink/配额/竞争、prepare/replace/receipt 中断负例。离线 CLI 测试
 断言与退出码。router 只证明该路由，不冒充托管直连/其他模型；stub、真实 provider、人工终端体验分开。
 本设计不授权新付费调用或凭据。
 
-发布前同步 help/README 中英/compatibility/security/formats/checklist；小改相称测试，冻结时一次必要
-全量/lint/精确 SHA CI/build/install。公开 push/合入/tag/Release/包索引均经受控路径和各自精确授权。
+E2E 格先交付可复用黄金路径 fixture 与开发验收，开发 wheel 不自动成为发布证明。RELEASE 格先完成
+版本/打包/随包说明，再冻结最终 SHA/wheel，之后复用该 fixture 对这个产物执行最终真实 provider/
+人工验收及必要全量/lint/精确 SHA CI/install。不能把旧版本/wheel 的绿转给新产物。
+
+最终运行证据先存候选树外并绑定 SHA/wheel，发布后单独提交 validation/证据矩阵/台账，不移动 tag。
+冻结后代码、打包输入或随包行为说明变化，必须按影响重新冻结/验证；单独追加发布后登记不要求重跑无关检查。公开 push/合入/tag/Release/包索引均经受控路径和各自精确授权。
 GitHub Release 不隐含依赖包索引凭据。发布后回读 tag 身份、Release 状态、wheel hash 和公开产物干净安装，
 再登记台账。
 

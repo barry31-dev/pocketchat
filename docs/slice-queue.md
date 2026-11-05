@@ -519,7 +519,7 @@ belongs to integration/release, not every overlapping worker.
   - `docs/file-work.md`
   - `docs/file-work.zh-CN.md`
   - `docs/review-file-undo-v1.json`
-- **Done when**: Persisted undo restores the actual before image, including across process restart. Undo of a created file is restricted to the owned unchanged file. A-to-B-to-C reverses in order; conflicts preserve later edits; duplicate undo has no repeated effect; session-wide compensation stops at the first conflict and reports remaining items. It does not use session rewind, Git HEAD or arbitrary deletion. Deep rollback review is required.
+- **Done when**: Persisted undo restores the actual before image, including across process restart. Undo of a created file is restricted to the owned unchanged file. A-to-B-to-C reverses in order through confirmed undo receipts binding restores_change_id/restored_file_identity; atomic-restore inode changes survive restart, while arbitrary same-hash replacements remain conflicts; conflicts preserve later edits; duplicate undo has no repeated effect; session-wide compensation stops at the first conflict and reports remaining items. It does not use session rewind, Git HEAD or arbitrary deletion. Deep rollback review is required.
 - **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
 - **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
 - **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
@@ -588,7 +588,7 @@ belongs to integration/release, not every overlapping worker.
   - `docs/file-work-validation.zh-CN.md`
   - `docs/pocketchat-evidence-matrix.md`
   - `docs/review-file-e2e-v1.json`
-- **Done when**: After the existing cancellation work needed by this path is safely integrated, the built wheel outside the source checkout passes offline filesystem/CLI fixtures, one separately authorized real tool-capable provider path, and manual terminal observation. Bind exact version/SHA/wheel/platform/session/run/change evidence and negative assertions. Missing provider authority or manual evidence stays incomplete. Product defects return to their owning slice; no silent scope expansion.
+- **Done when**: After the existing cancellation work needed by this path is safely integrated, deliver a reusable golden-path fixture and layered development-wheel evidence outside the source checkout. Bind exact version/SHA/wheel/platform/session/run/change evidence and negative assertions. Record missing provider authority or manual evidence explicitly; development results do not certify the release artifact. The release slice must execute the final real-provider/manual gate after its own version/SHA/wheel freeze. Product defects return to their owning slice; no silent scope expansion.
 - **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
 - **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
 - **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
@@ -607,10 +607,13 @@ belongs to integration/release, not every overlapping worker.
   - `docs/compatibility.md`
   - `docs/compatibility.zh-CN.md`
   - `docs/release-ledger.md`
+  - `docs/file-work-validation.md`
+  - `docs/file-work-validation.zh-CN.md`
+  - `docs/pocketchat-evidence-matrix.md`
   - `docs/release-1.2.md`
   - `docs/release-1.2.zh-CN.md`
   - `docs/review-file-release-v1.json`
-- **Done when**: Freeze one compatible candidate, verify docs/help/version/build/install/required CI and release gates, obtain exact external-action authorization, publish through the approved path, and read back tag identity, Release state, wheel hash and a fresh public-wheel installation loop. Use the existing build version source rather than duplicating it. A local wheel, tag-only action or main source is not publication. Package-index upload is separate, not a hidden prerequisite.
+- **Done when**: Finish version/packaging/shipped-doc changes, freeze the final SHA/wheel, then execute the existing golden-path fixture for that artifact's real-provider/manual acceptance and required checks/CI/install. Retain evidence outside the frozen tree, obtain exact external-action authorization, publish that same artifact, and read back tag identity, Release state, wheel hash and a fresh public-wheel installation loop. Register final validation/evidence/ledger readbacks in a separate post-publication documentation commit without moving the tag; any frozen product input change requires a new freeze and proportionate verification. Use the existing build version source rather than duplicating it. A local wheel, tag-only action or main source is not publication. Package-index upload is separate, not a hidden prerequisite.
 - **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
 - **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
 - **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.

@@ -85,7 +85,7 @@ shape below; implementation tests must cover each rejection family.
 | `after` | exact candidate byte length/hash and private object reference |
 | `proposal_sha256` | canonical binding of the preceding immutable proposal fields, excluding itself, approval and events |
 | `approval` | null until trusted confirmation; then proposal/policy digest and local interactive approval identity |
-| `events` | ordered durable transitions with observed result hashes/identities and bounded failure reason |
+| `events` | ordered durable transitions with observed hashes/identities and bounded failure reason; confirmed undo events also bind `restores_change_id` and `restored_file_identity` |
 
 Only `approval` and appended events evolve. The digest commits the bytes through
 verified object hashes, not just mutable object filenames. Owner/profile/path
@@ -202,9 +202,19 @@ file hashes, assertions and exits. A router run proves that route, not a direct
 hosted provider or another model. Stub, real-provider and manual terminal
 usability evidence are separate. No new paid calls or credentials are implied.
 
-Update help, both READMEs, compatibility/security/formats and the version
-checklist before publication. Run proportionate regressions, then required
-release checks and exact-candidate CI once at freeze. Public branch push,
+The E2E slice first delivers the reusable golden-path fixture and development
+validation; its wheel is not automatically the release wheel. In the release
+slice, finish version, packaging and shipped-document changes **before freezing
+the final SHA and wheel**. Then use that same fixture for the final wheel's
+real-provider and manual acceptance, required checks and exact-candidate CI.
+Development-wheel results cannot certify a different version or artifact.
+
+Keep the final run evidence outside the frozen tree, bound to its SHA/wheel.
+After publication, register that evidence and readbacks in a separate
+documentation commit without moving the tag. A change to frozen product code,
+packaging inputs or shipped behavior instructions invalidates the freeze and
+requires proportionate revalidation. This is not an instruction to rerun
+unrelated checks merely to add a post-publication ledger record. Public branch push,
 merge, tag, Release and package-index upload remain separately authorized
 external actions through the approved path. GitHub Release distribution does
 not depend on package-index credentials. Read back tag identity, Release state,
