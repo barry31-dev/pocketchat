@@ -46,7 +46,7 @@
       "severity": "major",
       "status": "open",
       "fingerprint": "new-diff-review-and-unreviewed-combinations",
-      "reason": "Second round new-diff review is still pending. First round did not complete all cancellation with stop_after/model-repair, cumulative acceptance-failure, and exhausted/unknown-usage combinations. Landing remains hold."
+      "reason": "Independent round 2 reviewed e34f4dd..6332a72 and explicitly closed both reader majors with no new blocker/major in that new diff. The original stop_after/model-repair combinations, cumulative acceptance-failure combinations and exhausted/unknown-usage cancellation combinations remain unreviewed; full landing remains on hold."
     }
   ],
   "slice_id": "PC-TASK-CANCEL-1",
@@ -77,8 +77,11 @@
     "V: Exact candidate-tree scan for first checkpoint f9aa078 found zero private-context file hits. Controlled publication check passed identity for 190 commits/3 tags plus 13 API-bound GitHub merges but refused 16 inherited commit-message private-context hits, exit 2; no public push occurred.",
     "V: Independent first-round reviewer read the full bounded diff and new semantic guard, then returned two actionable major reader defects using static paths and in-memory CPython 3.14.10 probes. No blocker observed in read scope; explicitly unreviewed combinations are not treated as reviewed.",
     "V: After those two defects were reproduced red (2 tests / 7 failures), corrected 20 cancellation tests passed on CPython 3.9.6 and 3.14.10; 47 affected legacy reader/report/checkpoint regressions passed on CPython 3.9.6. Ruff E9/F, compileall and diff check passed.",
-    "V: Original lease expired and release was refused; the same existing task card was legally re-claimed before any new product change. No old token was reused or duplicate task created."
+    "V: Original lease expired and release was refused; the same existing task card was legally re-claimed before any new product change. No old token was reused or duplicate task created.",
+    "V: Independent second-round new-diff review e34f4dd..6332a72 confirmed R2/R3 fixed and no new blocker/major in that limited diff; it performed static code/test review, not another suite run. Remaining combinations are explicitly not reviewed.",
+    "V: In-memory AST mutation removing only the completed-command consistency guard makes all six matching contradictory-command subtests fail; zero errors and no persistent product edits.",
+    "V: Final source candidate 6332a72 has 20 focused cancellation tests green on macOS CPython 3.9.6 and 3.14.10, and 47 affected reader/report/checkpoint regressions green on CPython 3.9.6."
   ],
-  "unverified_scope": "Current 18 cancellation tests passed on local macOS CPython 3.9.6 and 3.14.10, including real bounded command-template and deterministic provider-stub paths. Existing 106 related and 65 caller regressions passed before the cancellation-only semantic guard addition; default code path is unchanged by that guard. Independent review is pending. Public push is blocked by inherited history policy. Full product suite, exact-SHA CI, public PR/main integration, Linux/Windows execution, real provider, process/thread/signal termination, arbitrary crash exactly-once, deadline wiring, tag/Release and upload were not run.",
-  "commit_or_candidate_sha": "e34f4dd01604e189cb035e8775fc247ac8096977"
+  "unverified_scope": "Current 20 cancellation tests passed on local macOS CPython 3.9.6 and 3.14.10, including real bounded command-template and deterministic provider-stub paths; 47 affected legacy reader/report/checkpoint tests passed after reader fixes. Existing 106 related and 65 caller regressions passed earlier, and are not relabeled current full-suite results. Independent rounds 1/2 covered the bounded diff and fixes but did not finish stop_after/model-repair, cumulative acceptance-failure, or exhausted/unknown-usage cancellation combinations; landing stays hold. Public push is blocked by inherited history policy. Full product suite, exact-SHA CI, public PR/main integration, Linux/Windows execution, real provider, process/thread/signal termination, arbitrary-crash exactly-once, deadline wiring, tag/Release and upload were not run.",
+  "commit_or_candidate_sha": "6332a72b6e41311655bb8008b5c0b83435efd972"
 }
