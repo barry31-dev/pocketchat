@@ -1,0 +1,50 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-task-deadline-v1.json",
+    "pocketchat/task_deadline.py",
+    "tests/test_task_deadline.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "falsey-clock-injection",
+      "reason": "The first implementation selected the injected clock by truthiness, so a callable with a false boolean value silently fell back to the system monotonic clock. A focused red regression reproduced it; explicit None selection now preserves every callable clock."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "independent-fresh-context-review",
+      "reason": "This candidate was produced in one interactive agent session. The author completed a bounded second-pass review of issue #15, the full three-file diff and the focused tests, but an independent fresh-context reviewer was not dispatched. Landing must not infer that missing review from local tests or author review."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-task-deadline-v1.json",
+    "pocketchat/task_deadline.py",
+    "tests/test_task_deadline.py"
+  ],
+  "reviewed_evidence": [
+    "C: product issue #15, authored by barry31-dev, is the repository-reachable ready approval record for PC-TASK-DEADLINE-1 and freezes the unique branch, three-path write scope, dependency, contract and stop boundary.",
+    "V: CPython 3.9.6 first ran `python3 -B -m unittest tests.test_task_deadline -v` before implementation; collection failed with ModuleNotFoundError for pocketchat.task_deadline, exit 1.",
+    "V: The focused falsey-callable regression first failed because the injected clock was ignored; after the one-line source fix, the complete focused file ran 12 tests OK, exit 0.",
+    "V: Ruff 0.17.3 ran `ruff check --select E9,F pocketchat/task_deadline.py tests/test_task_deadline.py`: all checks passed, exit 0.",
+    "C: The source review confirms serialized records contain only relative duration fields and step state, never a monotonic anchor or wall-clock value; restore validates exact fields and arithmetic before re-anchoring.",
+    "C: Focused tests cover positive integer validation, whole-task and step expiry, effective capping, reserve/settle/expired idempotency, one active step, resume re-anchoring, closed-step stability, malformed records, backwards clocks and zero file/network/command/signal/wall-clock calls.",
+    "C: The full diff stays within issue #15's three paths and adds no CLI, shared queue edit, checkpoint integration, cancellation state machine, provider timeout, tag, Release or package upload.",
+    "V: JSON parsing, Python AST parsing and `git diff --check` passed locally."
+  ],
+  "unverified_scope": "Only macOS CPython 3.9.6 focused tests and Ruff E9/F were run locally. The full product suite, package build/install, CPython 3.13, Linux, Windows, exact-SHA GitHub Actions, independent fresh-context review, real checkpoint/task integration, signals, subprocess termination, provider timeout, tag, Release and publication were not run. A green pure-core test does not prove later task cancellation or checkpoint wiring."
+}
