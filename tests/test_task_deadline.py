@@ -197,6 +197,48 @@ class TaskDeadlineTests(unittest.TestCase):
                     TaskDeadline.from_dict(forged, clock=clock)
                 self.assertEqual(error_type, caught.exception.error_type)
 
+    def test_restore_rejects_impossible_cross_field_step_state(self):
+        clock = FakeClock()
+        deadline = TaskDeadline(limit_ms=1_000, clock=clock)
+        deadline.reserve(500, step_id="step-a")
+        clock.advance(10)
+        payload = deadline.to_dict()
+
+        step_elapsed_exceeds_task = copy.deepcopy(payload)
+        step_elapsed_exceeds_task["steps"][0]["elapsed_ms"] = 90
+        step_elapsed_exceeds_task["steps"][0]["remaining_ms"] = 410
+
+        step_limit_exceeds_task = copy.deepcopy(payload)
+        step_limit_exceeds_task["steps"][0]["requested_ms"] = 2_000
+        step_limit_exceeds_task["steps"][0]["limit_ms"] = 1_500
+        step_limit_exceeds_task["steps"][0]["elapsed_ms"] = 10
+        step_limit_exceeds_task["steps"][0]["remaining_ms"] = 1_490
+        step_limit_exceeds_task["steps"][0]["state"] = "settled"
+
+        cases = (
+            (step_elapsed_exceeds_task, "step elapsed exceeds task elapsed"),
+            (step_limit_exceeds_task, "step limit exceeds task limit"),
+        )
+        for forged, message in cases:
+            with self.subTest(forged=forged):
+                with self.assertRaises(TaskDeadlineError) as caught:
+                    TaskDeadline.from_dict(forged, clock=FakeClock())
+                self.assertEqual("invalid_task_deadline", caught.exception.error_type)
+                self.assertEqual(message, str(caught.exception))
+
+    def test_restore_rejects_duplicate_step_ids(self):
+        clock = FakeClock()
+        deadline = TaskDeadline(limit_ms=1_000, clock=clock)
+        deadline.reserve(100, step_id="step-a")
+        deadline.settle("step-a")
+        payload = deadline.to_dict()
+        payload["steps"].append(copy.deepcopy(payload["steps"][0]))
+
+        with self.assertRaises(TaskDeadlineError) as caught:
+            TaskDeadline.from_dict(payload, clock=FakeClock())
+        self.assertEqual("invalid_task_deadline", caught.exception.error_type)
+        self.assertEqual("duplicate step id", str(caught.exception))
+
     def test_backwards_monotonic_clock_is_refused(self):
         clock = FakeClock(100)
         deadline = TaskDeadline(limit_ms=100, clock=clock)

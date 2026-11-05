@@ -81,7 +81,9 @@ class TaskDeadline:
 
         task_remaining = self.limit_ms - elapsed_ms
         for source in steps or []:
-            row = self._validate_step(source, task_remaining=task_remaining)
+            row = self._validate_step(
+                source, task_remaining=task_remaining,
+                task_elapsed=elapsed_ms, task_limit=self.limit_ms)
             step_id = row["step_id"]
             if step_id in self._steps:
                 raise TaskDeadlineError("duplicate step id")
@@ -96,7 +98,8 @@ class TaskDeadline:
             self._steps[step_id] = row
 
     @staticmethod
-    def _validate_step(source: Any, *, task_remaining: int) -> dict[str, Any]:
+    def _validate_step(source: Any, *, task_remaining: int,
+                       task_elapsed: int, task_limit: int) -> dict[str, Any]:
         if not isinstance(source, dict) or set(source) != _STEP_FIELDS:
             raise TaskDeadlineError("invalid step record fields")
         row = dict(source)
@@ -108,6 +111,10 @@ class TaskDeadline:
             row["remaining_ms"], "step remaining_ms")
         if row["limit_ms"] > row["requested_ms"]:
             raise TaskDeadlineError("step limit exceeds its request")
+        if row["limit_ms"] > task_limit:
+            raise TaskDeadlineError("step limit exceeds task limit")
+        if row["elapsed_ms"] > task_elapsed:
+            raise TaskDeadlineError("step elapsed exceeds task elapsed")
         if row["elapsed_ms"] > row["limit_ms"] \
                 or row["remaining_ms"] != row["limit_ms"] - row["elapsed_ms"]:
             raise TaskDeadlineError("step duration fields disagree")
