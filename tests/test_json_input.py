@@ -243,6 +243,15 @@ class JSONInputTests(unittest.TestCase):
             ),
         )
 
+    def test_structural_admission_does_not_retain_private_string_content(self):
+        data = br'{"private-key":"private-value","nested":{"private-key":1}}'
+        error = self.assert_refused(
+            data, error_type="node_limit_exceeded", category="limit",
+            max_depth=4, max_nodes=3,
+        )
+        self.assertNotIn("private-key", repr(error.__dict__))
+        self.assertNotIn("private-value", repr(error.__dict__))
+
     def test_structural_limits_refuse_before_materializing_the_value(self):
         cases = (
             (b"[" * 65 + b"0" + b"]" * 65, 64, 66,
@@ -266,6 +275,17 @@ class JSONInputTests(unittest.TestCase):
                     )
                 self.assertEqual(path, error.path)
                 self.assertNotIn("private-key", repr(error.__dict__))
+
+    def test_admission_refuses_extreme_depth_without_recursing(self):
+        data = b"[" * 5000 + b"0" + b"]" * 5000
+        error = self.assert_refused(
+            data,
+            error_type="depth_limit_exceeded",
+            category="limit",
+            max_depth=64,
+            max_nodes=5001,
+        )
+        self.assertEqual((("array", 0),) * 64, error.path)
 
     def test_admission_ignores_delimiters_in_escaped_keys_and_strings(self):
         data = br'{"a\"[,]":{"\\":["\"}{,:[]",0]}}'

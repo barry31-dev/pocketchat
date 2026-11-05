@@ -81,9 +81,10 @@ def _admit_structure(text: str, start: int,
                      max_depth: int, max_nodes: int) -> None:
     """Count the first value without building strings, numbers or containers.
 
-    The standard library still owns value conversion. This lexical pass keeps
-    its whole-value decoder behind the caller's depth and node budgets. Only
-    a depth-bounded stack of offsets and key-free paths is retained here.
+    The standard library still owns value conversion. This iterative lexical
+    pass keeps its whole-value decoder behind the caller's depth and node
+    budgets without making Python recursion depth part of the input contract.
+    Only explicit parser frames and key-free paths are retained here.
     """
     nodes = 0
 
@@ -116,8 +117,21 @@ def _admit_structure(text: str, start: int,
             offset += 1
         invalid(offset)
 
-    def value_end(offset: int, parent_depth: int,
-                  path: StructuralPath) -> int:
+    def scalar_end(offset: int) -> int:
+        character = text[offset]
+        if character == '"':
+            return string_end(offset)
+        for literal in ("true", "false", "null", "NaN", "Infinity",
+                        "-Infinity"):
+            if text.startswith(literal, offset):
+                return offset + len(literal)
+        number = _NUMBER.match(text, offset)
+        if number is not None:
+            return number.end()
+        invalid(offset)
+
+    def token_end(offset: int, parent_depth: int,
+                  path: StructuralPath) -> Tuple[int, Any]:
         nonlocal nodes
         offset = _skip_whitespace(text, offset)
         if offset >= len(text):
@@ -128,44 +142,41 @@ def _admit_structure(text: str, start: int,
         nodes += 1
         if nodes > max_nodes:
             raise _refuse("node_limit_exceeded", "limit", path=path)
+        if character not in "[{":
+            return scalar_end(offset), None
+        depth = parent_depth + 1
+        if depth > max_depth:
+            raise _refuse("depth_limit_exceeded", "limit", path=path)
+        kind = "array" if character == "[" else "object"
+        return offset + 1, (kind, depth, path, 0)
 
-        if character in "[{":
-            depth = parent_depth + 1
-            if depth > max_depth:
-                raise _refuse("depth_limit_exceeded", "limit", path=path)
-            kind, closing = ("array", "]") if character == "[" else ("object", "}")
+    offset = _skip_whitespace(text, start)
+    offset, frame = token_end(offset, 0, ())
+    frames = [] if frame is None else [frame]
+    while frames:
+        kind, depth, path, ordinal = frames[-1]
+        closing = "]" if kind == "array" else "}"
+        offset = _skip_whitespace(text, offset)
+        if offset < len(text) and text[offset] == closing:
+            frames.pop()
+            offset += 1
+            continue
+        if ordinal:
+            if offset >= len(text) or text[offset] != ",":
+                invalid(offset)
             offset = _skip_whitespace(text, offset + 1)
-            if offset < len(text) and text[offset] == closing:
-                return offset + 1
-            ordinal = 0
-            while True:
-                if kind == "object":
-                    if offset >= len(text) or text[offset] != '"':
-                        invalid(offset)
-                    offset = _skip_whitespace(text, string_end(offset))
-                    if offset >= len(text) or text[offset] != ":":
-                        invalid(offset)
-                    offset += 1
-                offset = value_end(offset, depth, path + ((kind, ordinal),))
-                offset = _skip_whitespace(text, offset)
-                if offset < len(text) and text[offset] == closing:
-                    return offset + 1
-                if offset >= len(text) or text[offset] != ",":
-                    invalid(offset)
-                offset = _skip_whitespace(text, offset + 1)
-                ordinal += 1
-        if character == '"':
-            return string_end(offset)
-        for literal in ("true", "false", "null", "NaN", "Infinity", "-Infinity"):
-            if text.startswith(literal, offset):
-                return offset + len(literal)
-        number = _NUMBER.match(text, offset)
-        if number is not None:
-            return number.end()
-        invalid(offset)
-
-    # Ignore the tail here: raw_decode owns trailing-value and numeric errors.
-    value_end(start, 0, ())
+        child_path = path + ((kind, ordinal),)
+        if kind == "object":
+            if offset >= len(text) or text[offset] != '"':
+                invalid(offset)
+            offset = _skip_whitespace(text, string_end(offset))
+            if offset >= len(text) or text[offset] != ":":
+                invalid(offset)
+            offset += 1
+        offset, child = token_end(offset, depth, child_path)
+        frames[-1] = (kind, depth, path, ordinal + 1)
+        if child is not None:
+            frames.append(child)
 
 
 def _check_structure(value: Any, max_depth: int, max_nodes: int) -> None:

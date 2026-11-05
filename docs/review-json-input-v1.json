@@ -13,9 +13,9 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 3,
-  "round_decision": "reconsider",
-  "round_scope": "new-diff-only",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
   "findings": [
     {
       "id": "F1",
@@ -36,7 +36,7 @@
       "severity": "major",
       "status": "fixed",
       "fingerprint": "independent-fresh-context-review",
-      "reason": "Independent fresh-context numeric/Unicode/error review completed on immutable 3c02f42. A separate fresh-context reviewer reviewed only the new structural/number/error/test/doc diff, reported F7, then closed the narrow F7 follow-up with no actionable residual. Final source/test/doc scope is covered; historical CI and independent test execution are not inferred."
+      "reason": "Fresh-context review against candidate 352a00d returned BLOCK with the recursive-admission finding F8 and no open blocker after the follow-up fix. The review was static and did not substitute for tests or CI."
     },
     {
       "id": "F4",
@@ -65,9 +65,16 @@
       "status": "fixed",
       "fingerprint": "active-caller-exception-traceback-disclosure",
       "reason": "The new-diff reviewer reproduced a caller exception being exposed by relocated raises. All nine refusal types (ten paths with named/overflowed nonfinite values separate) were observed red under an active caller handler. JSONInputError now suppresses context display at construction and relocated raises use from None; docs explicitly exclude exception-internals and frame-local erasure."
+    },
+    {
+      "id": "F8",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "recursive-admission-stack",
+      "reason": "Fresh-context review found that the lexical admission pass used Python recursion, so malformed or adversarial nesting could hit the interpreter recursion limit before the declared depth refusal. The pass now uses explicit parser frames; a 5000-level regression refuses at depth 64, and private key/value text is absent from refusal metadata."
     }
   ],
-  "commit_or_candidate_sha": "3c02f42011a49df74ffa54150ecabb17fb34a492",
+  "commit_or_candidate_sha": "352a00d",
   "candidate_binding": "This record names the reviewed integration base; the private handoff binds the exact final commit and all five file hashes. No self-referential commit SHA or inherited CI claim.",
   "reviewed_evidence": [
     "C: product issue #17, authored by barry31-dev, is the repository-reachable ready approval record for PC-JSON-CORE-1 and freezes the unique branch, five-path write scope, dependency-free pure-core contract and stop boundary.",
@@ -93,7 +100,11 @@
     "C: New-diff-only independent review examined lexical admission, integer conversion, safe errors, tests and bilingual docs; no additional structural/integer finding within that scope. It reported F7 for active caller exception display, which is fixed with a separately observed red-to-green regression.",
     "V: The active-caller-handler regression initially failed all ten subcases on CPython 3.9.6 (exit 1). After context-display suppression, both CPython 3.9.6 and 3.14.10 ran the final 18 focused tests with no skips, exit 0. Ruff 0.17.3 E9/F and diff check were re-run because executable/test lines changed; both passed.",
     "C: Bilingual refusal names, Python AST parse, and five-path record identity were checked without rerunning the product suite. The decoder remains unconnected to all existing readers and CLI.",
-    "C: The new-diff reviewer statically closed F7 after checking constructor suppression, both relocated raises, the active-handler regression and bilingual clarification. No actionable residual was found in that narrow follow-up; it did not rerun tests, Ruff or historical review. Review cap is retained as three rounds/new-diff-only."
+    "C: The new-diff reviewer statically closed F7 after checking constructor suppression, both relocated raises, the active-handler regression and bilingual clarification. No actionable residual was found in that narrow follow-up; it did not rerun tests, Ruff or historical review. Review cap is retained as three rounds/new-diff-only.",
+    "V: Fresh-context static review of 352a00d returned BLOCK only for recursive structural admission; no other blocker remained in the reviewed scope.",
+    "V: CPython 3.9.6 focused JSON tests after the iterative-admission fix: 20 tests OK, exit 0.",
+    "V: CPython 3.9.6 full product suite after the fix: 1323 tests OK in 47.032s, exit 0.",
+    "V: 500 deterministic randomized valid-value comparisons preserved Python values; Ruff E9/F and diff check passed."
   ],
-  "unverified_scope": "No final-candidate CI, Linux/Windows run, supported CPython 3.13 run, full product suite, build/install, real reader/CLI integration, provider traffic, CPU/memory exhaustion, tag, Release or package upload was performed in this follow-up. Historical CI belongs only to its historical SHA. Public push and main integration are not authorized by a private candidate record and have not happened for this follow-up."
+  "unverified_scope": "Focused and full local evidence is on macOS CPython 3.9.6 only. Exact-candidate CI, Linux/Windows, CPython 3.13, build/install, real reader/CLI integration, provider traffic, tag, Release and publication remain unverified or unexecuted. The approval row for this slice is an issue record and was not merged into product main before implementation; landing must preserve that boundary or obtain an explicit queue approval first."
 }
