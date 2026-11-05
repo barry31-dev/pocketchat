@@ -1,0 +1,93 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-task-diff-v1.json",
+    "docs/task-diff.md",
+    "docs/task-diff.zh-CN.md",
+    "pocketchat/task_diff.py",
+    "tests/test_task_diff.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "TD-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "snapshot-selection-digest-treated-as-file-content-identity",
+      "reason": "The first implementation compared selection_sha256 directly and produced selection_mismatch whenever a selected file changed size. The test fixture now covers a normal size change, and selection identity is checked by query terms plus selected path set; a changed frozen tree gets its own tree_mismatch omission."
+    },
+    {
+      "id": "TD-2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "missing-text-treated-as-a-valid-partial-snapshot",
+      "reason": "The first draft treated text:null as a legitimate partial snapshot. The real snapshot producer always includes decoded text and hashes it, so a null or non-string text is now invalid_snapshot rather than a fabricated coverage state."
+    },
+    {
+      "id": "TD-3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "snapshot-aggregate-counters-not-cross-checked",
+      "reason": "The first validator did not verify tree_schema, per-row selection_size_changed against selection_bytes/bytes, aggregate size-change counts, or total_bytes against max_bytes. Tests and implementation now refuse these contradictions."
+    },
+    {
+      "id": "TD-4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "report-byte-budget-self-reference-and-nonconvergence",
+      "reason": "The early budget loop could rewrite max_files/max_bytes or loop on report_bytes insertion. The final implementation budgets the complete public envelope, reports content bytes excluding report_bytes/report_sha256, converges by dropping entries/detail, refuses only budgets below the minimal envelope, and has a 1..511-byte boundary test."
+    },
+    {
+      "id": "TD-5",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "omitted-changed-paths-not-named",
+      "reason": "The file limit initially exposed only a count. It now emits bounded omitted_paths in sorted order; if byte pressure removes that detail, the max_bytes omission remains."
+    },
+    {
+      "id": "TD-6",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "ambiguous-compared-file-count-and-added-deleted-text-state",
+      "reason": "compared_files now counts changed paths represented before limits, and added/deleted rows use text_compared=false because there is no two-sided text comparison."
+    },
+    {
+      "id": "TD-7",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "independent-reviewer-no-verdict",
+      "reason": "A separate read-only Codex reviewer was started against the five-path diff. It produced no verdict after more than two minutes and was interrupted; author-side review and tests are not rewritten as independent review. This is a known review limitation, not a pass."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-task-diff-v1.json",
+    "docs/task-diff.md",
+    "docs/task-diff.zh-CN.md",
+    "pocketchat/task_diff.py",
+    "tests/test_task_diff.py"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main b68929df3818ed901b5353f727216885b874e2b1 supplied the existing CONTEXT_SNAPSHOT_SCHEMA, snapshot digest and snapshot_files behavior used by this slice.",
+    "V: the first focused run failed because pocketchat.task_diff did not exist; after an importable empty contract, the behavioral test failed with NotImplementedError before implementation.",
+    "V: CPython 3.13.9 ran `python3 -B -m unittest tests.test_task_diff -v`: 19 tests OK, exit 0.",
+    "V: CPython 3.13.9 ran the full local product suite `python3 -B -m unittest discover -s tests -v` twice after the final implementation changes: 1297 tests OK, exit 0 each time.",
+    "V: `python -m ruff check --select E9,F pocketchat/task_diff.py tests/test_task_diff.py` passed with exit 0.",
+    "V: `python -m compileall -q pocketchat/task_diff.py tests/test_task_diff.py` and `git diff --check` passed with exit 0.",
+    "C: the focused no-I/O test mocks open, socket, subprocess.run and environment access; build_task_diff reads only the two supplied mappings and never opens a path or calls Git/provider code.",
+    "C: both snapshots are closed and revalidated; canonical snapshot_sha256, tree schema, row digests, text/bytes equality, aggregate counters and workspace-relative paths are checked before comparison.",
+    "C: selection identity is query terms plus selected paths; file size changes do not masquerade as selection mismatch, while changed tree digests emit tree_mismatch and keep the report partial.",
+    "C: added/deleted/modified/unchanged semantics, sorted entries, no source-text echo, exact file/byte boundaries, omitted path evidence, input immutability and whole_workspace_compared=false match the approved issue.",
+    "C: the implementation remains a pure module; no reader, CLI, task runtime, checkpoint, provider, CHANGELOG, shared slice queue or publication path was edited.",
+    "V: the independent read-only reviewer did not return a verdict before the bounded stop; it is recorded as deferred rather than counted as review evidence."
+  ],
+  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. No exact-SHA GitHub CI, Linux/Windows run, CPython 3.9 run, live snapshot collection, real workspace/Git observation, CLI integration, provider call, package build/install, tag, Release or publication was performed. A complete report only compares the two supplied snapshot records and does not prove the whole workspace or any unselected path is unchanged."
+}
