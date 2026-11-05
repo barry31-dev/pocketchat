@@ -1,0 +1,142 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/evidence-links.md",
+    "docs/evidence-links.zh-CN.md",
+    "docs/review-evidence-verify-cli-v1.json",
+    "pocketchat/cli.py",
+    "pocketchat/service.py",
+    "tests/test_evidence_verify_cli.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F-KIND",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "untrusted-kind-output",
+      "reason": "A focused canary red test exposed unknown kind text in output; projection now maps outside ARTIFACT_KINDS to fixed invalid."
+    },
+    {
+      "id": "F-SURROGATE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "escaped-unpaired-surrogate-core-serialize",
+      "reason": "Escaped unpaired surrogate fixtures first triggered UnicodeEncodeError; the existing finite canonical UTF-8 helper now validates decoded observations before the core."
+    },
+    {
+      "id": "F-GLOBAL",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "global-finding-id-collision",
+      "reason": "Fresh-context review and a red regression showed report_limit falsely bound to an input artifact named report; global reason codes now always target input with null index."
+    },
+    {
+      "id": "F-NONBLOCK",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "missing-nonblock-reader-primitive",
+      "reason": "Fresh-context review and a red regression showed AttributeError with O_NONBLOCK absent; entry prechecks O_DIRECTORY/O_NOFOLLOW/O_NONBLOCK and fails unsupported without fallback."
+    },
+    {
+      "id": "F-PLATFORMS",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "unrun-platform-and-install-matrix",
+      "reason": "This bounded CLI slice runs macOS CPython 3.9.6 fixture checks only; Linux/Windows and clean-wheel install were not run. The no-follow refusal is tested by capability injection, not a real unsupported host."
+    }
+  ],
+  "source_type": "current code/tests and local run",
+  "verification_status": "verified",
+  "date": "2026-11-05",
+  "approval_issue": "https://github.com/barry31-dev/pocketchat/issues/27",
+  "base_commit": "f30f7f34bf5816ed7721c3c059fd9bcaf1233a69",
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/evidence-links.md",
+    "docs/evidence-links.zh-CN.md",
+    "docs/review-evidence-verify-cli-v1.json",
+    "pocketchat/cli.py",
+    "pocketchat/service.py",
+    "tests/test_evidence_verify_cli.py"
+  ],
+  "reviewed_by": [
+    "self",
+    "fresh-context independent reviewer"
+  ],
+  "reviewed_evidence": [
+    "V: CPython 3.9.6 ran the first complete CLI subprocess test before implementation: 1 test failed, exit 1, because evidence was not a known subcommand. The first focused pre-implementation suite ran 24 tests with expected missing-command failures; this was observed red, not a green substitute.",
+    "V: The initial focused implementation ran 24 tests OK. Unknown kind, escaped surrogate, global finding collision and absent directory/nonblock primitive regressions were each observed before their fixes and then passed.",
+    "V: CPython 3.9.6 ran python3 -B -m unittest tests.test_evidence_verify_cli tests.test_evidence_links tests.test_cli_json tests.test_cli_exec_json tests.test_release_process_docs -v: 83 tests OK, exit 0. Later adapter-only edge fixes are covered by the final focused run; the unchanged adjacent modules were not re-run.",
+    "V: The final focused test suite ran 30 tests OK, exit 0. Human/JSON status and exits, strict finite UTF-8 input, closed metadata, counts/bytes, no-relations/empty input, safe paths/symlink/unsupported reads, zero provider/config/command calls and unchanged source tree fixtures are covered.",
+    "V: Ruff 0.17.3 ran the repository CI selection --select E9,F on changed Python files: all checks passed. Unqualified host-wide Ruff selected additional modernization/style rules and reported 279 findings including existing legacy CLI/service code; those extra rules are not claimed green and were not used to bulk-rewrite existing code.",
+    "V: CPython 3.9.6 compileall on changed files and git diff --check exited 0. Relative links in the four changed docs resolve; anchor coverage is not claimed as a separate automated check.",
+    "C: Fresh-context round one identified two major adapter findings; round two reviews only the new global-index and reader-primitive patches. Neither acceptance.py nor evidence_links.py changed.",
+    "V: A real CLI invocation over a private fixture with no referenced artifacts returned complete/exit 0 and files_rechecked=false. That proves only supplied observation consistency, not artifact existence or freshness.",
+    "C: Fresh-context new-diff round two closed both major findings and reported no new blocking findings. The unused fixed-model reviewer entry failed before any review; a default inherited-model reviewer performed the actual review instead."
+  ],
+  "landing_sign_off": {
+    "status": "not_landed",
+    "authority": "agent under existing routine technical delegation",
+    "scope": "technical review only; no public push bypass or release authorization"
+  },
+  "unverified_scope": "No live original-artifact reread/freshness, actual unsupported host, Linux/Windows, full current product suite, real provider/model/credentials, task execution, clean-wheel build/install, exact-SHA CI, product-main integration, tag, Release or package upload. The final canonical public identity/message/private-content gate and exact remote readback remain separate from local code tests.",
+  "review_history": [
+    {
+      "round": 1,
+      "scope": "full task diff plus contracts",
+      "reviewer": "independent fresh-context agent",
+      "status": "two major findings",
+      "environment": "macOS CPython 3.13.9",
+      "observed": "One bounded in-memory probe, exit 0, reproduced global finding ID collision and missing O_NONBLOCK escape; not a test-suite pass."
+    },
+    {
+      "round": 2,
+      "scope": "new-diff only: global location and O_NONBLOCK patches plus regression tests",
+      "reviewer": "same independent fresh-context agent",
+      "status": "both findings fixed; no new blocker or major",
+      "environment": "macOS CPython 3.13.9",
+      "observed": "One bounded in-memory probe, exit 0, checked global/local indexes and missing-primitive single JSON/exit 2/zero reader calls; no full suite."
+    }
+  ],
+  "evidence_log_digests": {
+    "red.txt": "10b2f6a610c808e9ccabb30d4ffc5eb21509419678f7f97c3058f8f9fbe0cab1",
+    "red-suite.txt": "13cf579757b4c2730da55b457a7a748bd331d2627c43edb36f6cb406c37f85e6",
+    "red-kind.txt": "3ad0bb23d8d4b6ef65123ce5e36f3cbb75724e78ccb03336569b125cbd9b50d0",
+    "red-surrogate.txt": "8bfb5c807ebe4a2d6e9ccbd427d2464a7f95559ba8bbd5c9ce548a8ee2c21f33",
+    "red-directory-flag.txt": "b22acaa5a2f1c77f039a78c72d077773114aa06e8d7578fa383996b8af5761ef",
+    "red-review.txt": "081b2749046bb6a7a1dba233d01098fc30bd4594d7f81185d9484711f6502f91",
+    "green-review.txt": "de21a7e5d7a76f5a844ffdf0f900f1b94c3406858e738a5d3c0f7e73ddddbfbe",
+    "focused-final.txt": "dab142c22bc58cbe2d7abe5494a58e74684e422af7bcde98c0fb65d3ec0c10f4",
+    "verification-final.txt": "a0ca484860dc259fd47f3c4d48168432157ad410e67dca5508bf288e43b2d316",
+    "ruff-final.txt": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+  },
+  "local_validation_summary": {
+    "python": "CPython 3.9.6",
+    "focused_final": {
+      "tests": 30,
+      "exit_code": 0
+    },
+    "adjacent_once_before_final_edge_fixes": {
+      "tests": 83,
+      "exit_code": 0,
+      "scope": "new CLI, evidence core, existing CLI JSON/exec JSON, process docs"
+    },
+    "ruff": "0.17.3, repository CI selection E9/F, exit 0",
+    "compileall_exit": 0,
+    "diff_check_exit": 0,
+    "suite_repeat_reason": "After the first combined green run, new escaped-Unicode and missing-reader-primitive/global-index failures justified one final focused-only rerun; adjacent unchanged modules were not rerun."
+  }
+}

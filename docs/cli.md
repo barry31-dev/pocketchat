@@ -757,3 +757,19 @@ result. The number restarts at 1 on the next turn. It is not a retry ordinal:
 `v1.0.x` still sends each request once, so a value greater than 1 means a
 future implementation made more than one request in that turn, not that this
 version retried automatically.
+
+## `evidence verify`
+
+```bash
+pocketchat evidence verify observations.json --workspace ./checkout --json
+```
+
+Read one explicit, bounded workspace-relative observation document and use the
+shipped evidence-link verifier. Omit `--json` for a human summary; omit
+`--workspace` to use the current directory. This does not open the original
+artifacts, load credentials, call a provider, execute/replay a task or write any
+file. Both modes say that the scope is supplied observations and the original
+files were not rechecked. Complete returns 0, partial returns 1, and refused or
+invalid input returns 2; partial is never `ok: true`. JSON is one safe bounded
+document with input indexes and reason codes, not paths, identity values or
+bodies. See [the input contract and limits](evidence-links.md#explicit-observation-cli).

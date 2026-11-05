@@ -55,7 +55,7 @@ from .tui import TUIUnavailable, run_tui
 from .tools import (ToolError, ToolPermissionError, execute_read_file,
                     execute_write_file)
 from .service import (context_preview, export_record, export_session,
-                      session_overview, show_record)
+                      session_overview, show_record, verify_evidence_observations)
 from .sessions import (SessionFileError, read_header, read_messages,
                        resolve_session_argument, resolve_session_path,
                        NOT_RECORDED)
@@ -421,6 +421,17 @@ def _parser() -> argparse.ArgumentParser:
                         help="name/path for the new session branch")
     rewind.add_argument("--json", action="store_true", dest="as_json",
                         help="print one JSON object instead of a human line")
+
+    evidence = subparsers.add_parser(
+        "evidence", help="verify explicit evidence observations without replay")
+    evidence_subparsers = evidence.add_subparsers(dest="evidence_command", required=True)
+    evidence_verify = evidence_subparsers.add_parser(
+        "verify", help="check one observation document, not the original files")
+    evidence_verify.add_argument("observations", help="workspace-relative observation JSON")
+    evidence_verify.add_argument("--workspace", type=Path, default=None,
+                                 help="explicit read-only workspace (default: current directory)")
+    evidence_verify.add_argument("--json", action="store_true", dest="as_json",
+                                 help="print one bounded JSON result")
 
     task = subparsers.add_parser(
         "task", help="run and inspect one bounded, evidence-backed task")
@@ -898,6 +909,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return _cmd_checkpoint(args)
     if args.command == "rewind":
         return _cmd_rewind(args)
+    if args.command == "evidence":
+        return _cmd_evidence(args)
     if args.command == "task":
         return _cmd_task(args)
     if args.command == "profile":
@@ -920,6 +933,24 @@ def main(argv: Optional[List[str]] = None) -> int:
         return _cmd_index(args)
     print("pocketchat: unknown command %r" % args.command, file=sys.stderr)
     return EXIT_USAGE
+
+
+def _cmd_evidence(args) -> int:
+    result = verify_evidence_observations(args.observations, workspace=args.workspace)
+    if args.as_json:
+        print(json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+    else:
+        print("Evidence verification: %s (supplied observations; files not rechecked)"
+              % result["status"])
+        report = result.get("verification")
+        if report is not None:
+            print("Artifacts: %d; relations: %d; unknowns: %d; omissions: %d"
+                  % (len(report["artifacts"]), len(report["edges"]),
+                     len(report["unknowns"]), len(report["omissions"])))
+        else:
+            print("Reason: %s" % result["reason"])
+    return {"complete": EXIT_OK, "partial": EXIT_RUN_FAILED,
+            "refused": EXIT_USAGE}[result["status"]]
 
 
 def _json_path(value: Path, start: Path = None) -> str:

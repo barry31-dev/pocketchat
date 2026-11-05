@@ -627,3 +627,15 @@ trace 会说明用了哪一个。
 `attempt_scope: "turn"`，用来把一次物理请求与它的结果配对。下一 turn 重新从 1
 开始。它不是 retry ordinal：`v1.0.x` 每个请求仍只发送一次，所以将来若出现大于 1
 的值，只表示该 turn 内发生了多次物理请求，不表示本版本执行过自动重试。
+
+## `evidence verify`
+
+```bash
+pocketchat evidence verify observations.json --workspace ./checkout --json
+```
+
+有界读取一个显式工作区相对观察文档，复用既有 evidence-link 纯核；不加 `--json` 输出人类摘要，
+不加 `--workspace` 使用当前目录。它不打开原工件、不读凭据、不调 provider、不执行/重放任务、
+不写文件，两模式均说明只核对传入观察、原文件未重读。complete 返回 0，partial 返回 1，refused
+或坏输入返回 2；partial 不能是 ok=true。JSON 为单个有界安全对象，只有输入索引/原因码，不回显
+路径、身份或正文。输入与限额见 [证据契约](evidence-links.zh-CN.md#显式观察-cli)。
