@@ -109,7 +109,14 @@
     "C: byte-pressure degradation keeps complete reason identities, sorted retained omitted paths and accurate counters, or refuses when even the truthful minimal envelope cannot fit.",
     "C: added/deleted/modified/unchanged semantics, selection/tree coverage, sorted entries, no source-text echo, exact file/byte boundaries, input immutability and whole_workspace_compared=false match issue #18.",
     "C: the no-I/O test still patches open, socket, subprocess.run and environment access; the implementation edits no reader, CLI, task runtime, checkpoint, provider, CHANGELOG, shared queue or publication path.",
-    "C: an independent fresh-context review read issue #18, all five changed paths, producer contracts and boundary behavior; all blocker/major findings are fixed in df968a468e894ba629b0b6f1677dfb709173aaf5."
+    "C: an independent fresh-context review read issue #18, all five changed paths, producer contracts and boundary behavior; all blocker/major findings are fixed in df968a468e894ba629b0b6f1677dfb709173aaf5.",
+    "V: GitHub Actions run 41974777540 is bound to exact head 516cc4759b4c3be4b9ebd3cf5f788f57d49c098d and completed 7/7 jobs successfully across Linux/macOS/Windows, CPython 3.9/3.13 and release-smoke."
   ],
-  "unverified_scope": "The corrected candidate was run locally only on macOS CPython 3.9.6 with the focused task-diff suite. The predecessor head 68068e7 had 7/7 exact-SHA GitHub jobs, but those results are not reused for df968a4. No exact-SHA CI for the corrected candidate, Linux/Windows run, CPython 3.13 run, final full product suite, live snapshot collection, real workspace/Git observation, CLI integration, provider call, package build/install, merge, tag, Release or publication was performed. A complete report only compares the two supplied snapshot records and does not prove the whole workspace or any unselected path is unchanged."
+  "unverified_scope": "The corrected candidate was run locally only on macOS CPython 3.9.6 with the focused task-diff suite. Exact head 516cc475 has 7/7 successful GitHub Actions jobs across Linux/macOS/Windows and CPython 3.9/3.13 plus release-smoke. The final full product suite, live snapshot collection, real workspace/Git observation, CLI integration, provider call, package build/install and main merge were not performed at review-record time. Tag, Release and publication were not performed. A complete report only compares the two supplied snapshot records and does not prove the whole workspace or any unselected path is unchanged.",
+  "landing_sign_off": {
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly directed manual closeout of all pending work. This authorizes landing the reviewed draft candidates into product main only; it does not authorize a tag, Release, package upload, or any other publication action."
+  }
 }
