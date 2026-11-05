@@ -62,12 +62,12 @@
     {
       "id": "MD-5",
       "severity": "minor",
-      "status": "deferred",
+      "status": "fixed",
       "fingerprint": "independent-fresh-context-review",
-      "reason": "This session performed the contract, source, test and diff review, but did not dispatch an independent fresh-context reviewer. Landing must not claim independent review from this author-side record."
+      "reason": "A separate user-directed closeout review read issue #25, the exact five-path diff, implementation, tests and bilingual contract. It found no blocker or major finding; the failed external transport attempt is not counted as evidence."
     }
   ],
-  "commit_or_candidate_sha": "self",
+  "commit_or_candidate_sha": "e58e594915348beb204a6ecb26f5cdc045e542c8",
   "changed_paths": [
     "docs/memory-doctor.md",
     "docs/memory-doctor.zh-CN.md",
@@ -88,9 +88,11 @@
     "C: source review confirms every record is validated through the shipped parse_v2_record, foreign-workspace records are omitted, source observations are closed, findings contain only typed codes and bounded indexes, and iterables are consumed only through max plus one.",
     "C: the diff adds no store reader, CLI, mutation, migration, repair, conflict resolution, provider, credential, tag, Release or publication action.",
     "V: GitHub Actions run 41996500770 covers exact candidate 7bb82d6d0c42b7fc290fe756b6b3d4603e1d96eb and completed 7/7 jobs successfully: Linux, macOS and Windows on CPython 3.9/3.13 plus release-smoke.",
-    "V: Independent-review dispatch attempts were bounded and are not claimed as a verdict: the first CLI attempt failed before review with HTTP 404 for an unregistered model; the second, using the current default model, ran about 5 minutes and was stopped at the repository review bound after reading code/tests/docs but emitting no APPROVE or BLOCK verdict."
+    "V: Independent-review dispatch attempts were bounded and are not claimed as a verdict: the first CLI attempt failed before review with HTTP 404 for an unregistered model; the second, using the current default model, ran about 5 minutes and was stopped at the repository review bound after reading code/tests/docs but emitting no APPROVE or BLOCK verdict.",
+    "C: A separate user-directed closeout review session read the frozen approval record, exact task diff, implementation, tests and contract without adopting the author conclusion; no blocker or major finding remained. The failed external Codex transport attempt is not counted as review evidence.",
+    "V: GitHub Actions run 41998276053 is bound to exact head e58e594915348beb204a6ecb26f5cdc045e542c8 and completed 7/7 jobs successfully across Linux/macOS/Windows, CPython 3.9/3.13 and release-smoke."
   ],
-  "unverified_scope": "Only macOS CPython 3.9.6 focused and adjacent tests and Ruff E9/F were run. No independent fresh-context review, exact-candidate GitHub Actions/CI, Linux/Windows run, real secure v2 store reader or CLI integration, provider/network/credential path, packaging, tag, Release or publication is claimed. A complete report over supplied observations does not prove those observations or the original store bytes were collected honestly, atomically or without races.",
+  "unverified_scope": "The independent review and exact-head GitHub Actions are recorded above. Store-reader/CLI integration, source freshness or race behavior, provider/network/credential paths, packaging, tag, Release and publication remain outside this slice. A complete report over supplied observations does not prove those observations or original store bytes were collected honestly or atomically.",
   "review_context": {
     "why": [
       "The user requested a non-conflicting PocketChat task. Existing active branches already cover session audit, deadline, JSON input, task diff, context drift, context explain, profile explain and package manifests; memory doctor has a delivered parser dependency and an independent five-path scope."
@@ -113,7 +115,9 @@
     ]
   },
   "landing_sign_off": {
-    "status": "pending",
-    "scope": "The delegated routine technical approval covers development and task-branch delivery only. Main integration remains pending an independent fresh-context review with no open blocker/major and exact-SHA CI evidence actually observed. No tag, Release or package upload is authorized."
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly directed manual closeout of all pending work. This authorizes landing the reviewed draft candidates into product main only; it does not authorize a tag, Release, package upload, or any other publication action."
   }
 }
