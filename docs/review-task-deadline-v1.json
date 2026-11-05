@@ -11,8 +11,8 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 1,
-  "round_decision": "review",
+  "rounds": 3,
+  "round_decision": "accept",
   "round_scope": "full",
   "findings": [
     {
@@ -24,28 +24,44 @@
     },
     {
       "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "restore-accepts-impossible-cross-field-step-state",
+      "reason": "The first candidate accepted checkpoint rows whose step limit exceeded the task limit or whose step elapsed exceeded task elapsed. Fresh-context review reproduced both impossible records; red regressions were added and the constructor/restore validator now rejects either contradiction."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "regression-tests-not-discriminating",
+      "reason": "The first fix's regression cases could remain green through unrelated active-step or elapsed-time validation. The final tests isolate each rule with otherwise valid records and exact rejection reasons; in-memory guard-removal checks proved removing either production guard makes its matching test fail."
+    },
+    {
+      "id": "F4",
       "severity": "minor",
-      "status": "deferred",
+      "status": "fixed",
       "fingerprint": "independent-fresh-context-review",
-      "reason": "This candidate was produced in one interactive agent session. The author completed a bounded second-pass review of issue #15, the full three-file diff and the focused tests, but an independent fresh-context reviewer was not dispatched. Landing must not infer that missing review from local tests or author review."
+      "reason": "Completed independent fresh-context reviews covered the full candidate and then the corrected new diff. The final review returned no blocker or major finding and accepted the discriminating regression tests."
     }
   ],
-  "commit_or_candidate_sha": "7f94f0b1e73eb3179c35d207cd6d9808393cbd03",
+  "commit_or_candidate_sha": "a2f4929661a68148d1713328c22af3649424765d",
   "changed_paths": [
     "docs/review-task-deadline-v1.json",
     "pocketchat/task_deadline.py",
     "tests/test_task_deadline.py"
   ],
   "reviewed_evidence": [
-    "C: product issue #15, authored by barry31-dev, is the repository-reachable ready approval record for PC-TASK-DEADLINE-1 and freezes the unique branch, three-path write scope, dependency, contract and stop boundary.",
-    "V: CPython 3.9.6 first ran `python3 -B -m unittest tests.test_task_deadline -v` before implementation; collection failed with ModuleNotFoundError for pocketchat.task_deadline, exit 1.",
-    "V: The focused falsey-callable regression first failed because the injected clock was ignored; after the one-line source fix, the complete focused file ran 12 tests OK, exit 0.",
-    "V: Ruff 0.17.3 ran `ruff check --select E9,F pocketchat/task_deadline.py tests/test_task_deadline.py`: all checks passed, exit 0.",
-    "C: The source review confirms serialized records contain only relative duration fields and step state, never a monotonic anchor or wall-clock value; restore validates exact fields and arithmetic before re-anchoring.",
-    "C: Focused tests cover positive integer validation, whole-task and step expiry, effective capping, reserve/settle/expired idempotency, one active step, resume re-anchoring, closed-step stability, malformed records, backwards clocks and zero file/network/command/signal/wall-clock calls.",
-    "C: The full diff stays within issue #15's three paths and adds no CLI, shared queue edit, checkpoint integration, cancellation state machine, provider timeout, tag, Release or package upload.",
-    "V: JSON parsing, Python AST parsing and `git diff --check` passed locally.",
-    "V: GitHub Actions run 41964823728 is attached to implementation candidate 7f94f0b1e73eb3179c35d207cd6d9808393cbd03 and completed 7/7 jobs successfully: Linux, macOS and Windows on CPython 3.9/3.13 plus release-smoke."
+    "C: product issue #15 is the repository-reachable ready approval record for PC-TASK-DEADLINE-1 and freezes the unique branch, three-path write scope, delivered PC-TBUDGET-4 dependency, pure-core contract and stop boundary.",
+    "C: corrected candidate a2f4929661a68148d1713328c22af3649424765d has exactly the three issue #15 paths relative to product base b68929df3818ed901b5353f727216885b874e2b1 and uses the published barry31-dev identity.",
+    "V: CPython 3.9.6 ran the two new cross-field regressions before the fix; both failed because TaskDeadlineError was not raised, exit 1.",
+    "V: after the cross-field guard fix and discriminating test updates, CPython 3.9.6 ran `python3 -B -m unittest tests.test_task_deadline -v`: 14 tests OK, exit 0.",
+    "V: Ruff 0.17.3 ran `ruff check --select E9,F pocketchat/task_deadline.py tests/test_task_deadline.py` with all checks passed, and `git diff --check` passed, both exit 0.",
+    "C: TaskDeadline construction and restore now enforce step limit <= task limit and step elapsed <= task elapsed before step-local arithmetic/state checks; equality remains valid.",
+    "C: tests/test_task_deadline.py isolates step-limit and step-elapsed contradictions with otherwise valid rows and exact messages, and isolates duplicate IDs with two settled rows so only duplicate-ID validation can reject the payload.",
+    "V: an independent fresh-context reviewer inspected the full candidate and found the cross-field validation major; a second fresh-context review found the first regressions non-discriminating; the final new-diff review returned no blocker or major finding and READY yes.",
+    "V: a read-only in-memory AST mutation removed each guard separately. Removing the step-limit guard or duplicate-ID guard made its matching test fail with AssertionError: TaskDeadlineError not raised, while the two checkpoint/resume tests remained green under both mutations.",
+    "V: one earlier final-review attempt on the default model route produced no verdict for about 12 minutes and was terminated with exit 143; no review pass or clean result was inferred from that attempt.",
+    "C: the corrected diff remains a pure core and adds no CLI, signals, subprocess termination, provider timeout, background timer, synchronization, cancellation state machine, checkpoint integration, shared queue edit, CHANGELOG, tag, Release or upload."
   ],
-  "unverified_scope": "The author did not run the full product suite or package build/install locally. Exact-SHA GitHub Actions run 41964823728 covers the implementation candidate on Linux, macOS and Windows with CPython 3.9/3.13 plus release-smoke, but an independent fresh-context review, real checkpoint/task integration, signals, subprocess termination, provider timeout, tag, Release and publication were not run. A green pure-core test does not prove later task cancellation or checkpoint wiring."
+  "unverified_scope": "The corrected candidate was verified locally on macOS only with CPython 3.9.6 focused tests, Ruff E9/F and an in-memory mutation check. The full product suite, package build/install, CPython 3.13, Linux/Windows, exact-SHA GitHub Actions for candidate a2f4929, real task/checkpoint integration, signals, subprocess termination, provider timeout, tag, Release and publication were not run. The predecessor 7/7 CI result for 7f94f0b is not reused as evidence for this corrected candidate."
 }
