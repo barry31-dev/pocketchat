@@ -280,6 +280,57 @@ and sidecar/preview binding as a separate slice.
   branch is reachable from `main`. The implementation branch and exact reviewed
   candidate remain separate; this planning change does not create or claim them.
 
+#### `PC-JSON-CORE-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-json-input-core`
+- **Write scope**: `pocketchat/json_input.py`, `tests/test_json_input.py`,
+  `docs/json-input.md`, `docs/json-input.zh-CN.md`,
+  `docs/review-json-input-v1.json`
+- **Depends on**: none
+- **Goal**: Add one pure, caller-bounded JSON decoder for future readers
+  without changing any current reader or CLI.
+- **Done when**: A pure
+  `decode_json_bytes(data, max_bytes, max_depth, max_nodes)` accepts
+  caller-supplied UTF-8 bytes and explicit positive integer limits. Booleans
+  are not limits. If `len(data)` exceeds `max_bytes`, refuse before decoding.
+  `max_depth` and `max_nodes` are inclusive limits: the exact boundary is
+  accepted and one over is refused. `max_depth` counts nested arrays and
+  objects, with a scalar root at depth 0 and a root container at depth 1;
+  `max_nodes` counts every JSON value, including every object member value,
+  every array element and the root. A refusal raises a typed
+  `JSONInputError` carrying a stable `error_type` and `category` plus only the
+  byte offset or structural path of the offending location, never any input
+  key, value or body text. Stable error types are `invalid_limits`,
+  `byte_limit_exceeded`, `invalid_utf8`, `invalid_json`, `duplicate_key`,
+  `nonfinite_number`, `trailing_value`, `depth_limit_exceeded` and
+  `node_limit_exceeded`. Duplicate keys are refused at any nesting level;
+  NaN, Infinity and -Infinity are refused; exactly one complete JSON value is
+  required. Ordinary unique-key finite values, including CJK and emoji text,
+  are returned unchanged.
+- **Not doing**: No file, environment, socket, command, provider or clock I/O;
+  no canonical serializer; no reader migration; no CLI; no logging of rejected
+  payloads; no change to acceptance, checkpoint, selection, snapshot, session,
+  task or provider behavior.
+- **Evidence**: The five write-scope paths. Focused tests must cover valid
+  objects/arrays/scalars, CJK and emoji, nested duplicate keys, non-finite
+  constants, a second trailing value, invalid UTF-8, byte/depth/node exact
+  boundaries and one-over refusals, no input echo, input immutability, stable
+  error metadata, and zero open/socket/environment/command/provider calls.
+- **Budget / stop**: One pure-core slice. Stop rather than add a reader, CLI,
+  serializer, compatibility change or a second schema.
+- **Rollback / next**: Revert the isolated candidate. A later approved reader
+  slice may wire this decoder into one existing format; this row does not
+  authorize that wiring.
+- **Approved by**: agent (user 2026-11-04 16:34 PocketChat delegation and
+  2026-11-05 non-conflicting-task selection); this row and
+  `docs/review-json-core-approval-v1.json` freeze the pure-core contract. It is
+  not an execution card and does not authorize public publication.
+- **Approval evidence**: This row and
+  `docs/review-json-core-approval-v1.json`; claimable only after this planning
+  branch is reachable from product `main`. The execution branch and its
+  candidate remain separate.
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.

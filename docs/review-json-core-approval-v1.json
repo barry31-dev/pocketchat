@@ -1,0 +1,53 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-json-core-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "JCP-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "json-core-unbounded-nesting-and-node-growth",
+      "reason": "The row now freezes caller-supplied byte, depth and node limits, inclusive boundary checks and typed refusal before a future implementation can claim a bounded decoder from JSON's parser alone."
+    },
+    {
+      "id": "JCP-2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "json-core-duplicate-key-and-nonfinite-ambiguity",
+      "reason": "The contract rejects duplicate object keys at any depth, NaN/Infinity, extra trailing values and invalid UTF-8, while preserving ordinary finite values and avoiding a second canonical serializer."
+    },
+    {
+      "id": "JCP-3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "json-core-approval-scope-conflation",
+      "reason": "The execution write scope is limited to the new module, focused test, two contract pages and its review record. It excludes readers, CLI, provider, changelog, shared queue updates during development and publication."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-json-core-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main was fetched and read at b68929df3818ed901b5353f727216885b874e2b1 before this planning branch was created.",
+    "C: product main has no PC-JSON-CORE-1 row, no pocketchat/json_input.py, no tests/test_json_input.py and no remote task/pocketchat-json-input-core branch at the recorded readback.",
+    "C: the independent write scope does not overlap the active memory-doctor planner or the task/pocketchat-task-deadline-core branch; both remain separate writers.",
+    "C: existing acceptance.py, task_checkpoint.py, task_snapshot.py and task_delegate.py already demonstrate local duplicate-key rejection patterns; this approval does not copy or replace those reader-specific parsers.",
+    "C: MyWork planning section §8.3 defines the candidate's pure bytes decoder, explicit byte/depth/node limits, bad-input refusal and no-I/O boundary; this row freezes that design for a future implementation.",
+    "Docs-only diff review checked the queue row's closed API, error metadata, inclusive limit semantics, immutability, no-echo requirement, five-path write scope and explicit not-doing boundary.",
+    "C: no product implementation or test was added on this planning branch; an absent-module test run is not presented as a product test result."
+  ],
+  "unverified_scope": "Planning only: no implementation, focused or full product tests, CI, real readers, CLI, provider, build/install, exact-SHA CI, tag, Release or package upload. The row becomes claimable only after this planning branch is integrated and read back from product main; the execution branch remains separate."
+}
