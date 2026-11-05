@@ -1,0 +1,56 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-session-integrity-v1.json",
+    "docs/session-integrity.md",
+    "docs/session-integrity.zh-CN.md",
+    "pocketchat/session_integrity.py",
+    "tests/test_session_integrity.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "tool-owner-masked-internal-pairing",
+      "reason": "The first implementation reported the non-assistant tool_context owner but skipped internal entry validation, hiding an orphan tool result that the existing reader validates first. The audit now validates context entries and then reports the ownership violation."
+    },
+    {
+      "id": "F2",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "duplicate-tool-call-counted",
+      "reason": "Duplicate rejected tool-call IDs initially incremented tool_calls before deduplication, making the unresolved total disagree with accepted calls. The counter now advances only when a unique call enters pending state."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-session-integrity-v1.json",
+    "docs/session-integrity.md",
+    "docs/session-integrity.zh-CN.md",
+    "pocketchat/session_integrity.py",
+    "tests/test_session_integrity.py"
+  ],
+  "reviewed_evidence": [
+    "C: product main 68629cb8f39c3459774e34ab508409eed9f162b5 contains the PC-SFILE-AUDIT-1 ready row and approval record before this implementation branch was created.",
+    "V: CPython 3.9.6 first ran the focused test module before implementation and failed with ModuleNotFoundError: No module named pocketchat.session_integrity. A prior test-file syntax error was fixed and rerun so the recorded red was the expected missing-feature import failure.",
+    "V: CPython 3.9.6 ran `python3 -B -m unittest tests.test_session_integrity -v`: 17 tests OK, exit 0.",
+    "C: diff review checked header/schema/identity, modern and legacy turns, message shapes, global tool call/result pairing, run/workspace binding, stable positional findings, partial omission accounting, canonical report refusal, secret canaries, input immutability and no-I/O boundaries.",
+    "C: the implementation imports only json, re and typing; the focused no-I/O test patches open, socket.create_connection, subprocess.Popen and os.environ.get and raises on any call.",
+    "C: the diff is limited to the five approved PC-SFILE-AUDIT-1 paths and does not edit the existing session reader/writer, CLI, queue, CHANGELOG, runtime, provider or release paths.",
+    "V: CPython 3.13.9 ran `python3.13 -B -m unittest discover -s tests -v`: 1295 tests OK in 55.791s, exit 0.",
+    "V: Ruff 0.17.3 ran `ruff check --select E9,F pocketchat/session_integrity.py tests/test_session_integrity.py`: All checks passed, exit 0.",
+    "V: CPython 3.13.9 ran `python3.13 -m compileall -q pocketchat/session_integrity.py tests/test_session_integrity.py`: exit 0.",
+    "V: `git diff --check` passed after the review evidence update."
+  ],
+  "unverified_scope": "Local focused and full unittest suites, Ruff E9/F, compileall and git diff --check ran on macOS with CPython 3.9.6/3.13.9 as recorded. Real session-file reads, reader integration, CLI subprocesses, repair/copy, provider/network calls, Linux/Windows/other Python runs, exact-SHA CI, packaging, product main integration, tag, Release and package upload are not verified."
+}
