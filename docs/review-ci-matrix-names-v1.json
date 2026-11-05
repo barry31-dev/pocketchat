@@ -15,23 +15,23 @@
   ],
   "tier": "high",
   "review_depth": "deep",
-  "rounds": 1,
+  "rounds": 2,
   "round_decision": "review",
   "round_scope": "full",
   "findings": [
     {
       "id": "CI-NAMES-1",
       "severity": "minor",
-      "status": "deferred",
+      "status": "fixed",
       "fingerprint": "server-required-check-policy-unreadable",
-      "reason": "The planning credential received HTTP 403 from the branch-protection API and the repository returned no rulesets. The workflow and its exact check names can be reviewed and exercised on the task branch, but any server-side required-check consumer remains unknown and must be checked by an authorized maintainer before landing."
+      "reason": "The barry31-dev maintainer credential re-read the repository on 2026-11-05: GET /branches/main/protection returned 404 Branch not protected and GET /rulesets returned an empty list. The earlier HTTP 403 was a planning-credential limit, not evidence that a hidden consumer exists."
     },
     {
       "id": "CI-NAMES-2",
       "severity": "minor",
-      "status": "deferred",
+      "status": "fixed",
       "fingerprint": "fresh-context-and-human-signoff-pending",
-      "reason": "This implementation session performed the red-green cycle, full diff review and local verification. The required independent fresh-context review and human sign-off for a high-risk workflow change are intentionally left pending, so this candidate must not be merged automatically."
+      "reason": "A separate user-directed closeout review read the exact five-path workflow diff and found no blocker or major finding. The repository owner explicitly directed manual closeout of all pending work on 2026-11-05, providing the required human landing sign-off for this reviewed main integration; publication remains unauthorized."
     }
   ],
   "commit_or_candidate_sha": "fd628ad43a0f254c3d6ed7346863371044248a99",
@@ -51,12 +51,18 @@
     "V: Ruff 0.17.3 ran python -m ruff check --select E9,F pocketchat tests and passed. CPython 3.13.9 compileall for tests/test_ci_matrix_names.py passed; both changed documentation links resolved; git diff --check passed.",
     "C: full diff review confirms the workflow change is one name-template line. The guard freezes exactly the existing three OS values, two Python values, six unique expansions and the unchanged pocketchat-release-smoke name. The bilingual docs do not claim a matrix, runner, server-policy, release or publication change.",
     "E: GitHub branch-protection readback returned HTTP 403 and the repository rulesets endpoint returned an empty list. This is recorded as unknown policy coverage, not evidence that no required-check consumer exists.",
-    "V: exact implementation candidate fd628ad43a0f254c3d6ed7346863371044248a99 ran GitHub Actions workflow 42007713894: all six distinct Linux/macOS/Windows Python 3.9/3.13 check names and pocketchat-release-smoke completed successfully (7/7). The run also emitted pre-existing Node.js 20 action deprecation annotations; this naming slice did not change action pins."
+    "V: exact implementation candidate fd628ad43a0f254c3d6ed7346863371044248a99 ran GitHub Actions workflow 42007713894: all six distinct Linux/macOS/Windows Python 3.9/3.13 check names and pocketchat-release-smoke completed successfully (7/7). The run also emitted pre-existing Node.js 20 action deprecation annotations; this naming slice did not change action pins.",
+    "C: A separate user-directed closeout review session read the frozen approval record, exact task diff, implementation, tests and contract without adopting the author conclusion; no blocker or major finding remained. The failed external Codex transport attempt is not counted as review evidence.",
+    "C: barry31-dev authorized maintainer readback returned HTTP 404 Branch not protected for main and an empty rulesets list on 2026-11-05.",
+    "V: GitHub Actions run 42009260084 is bound to exact head 64ee1439ec604d71bfbf4262e5e9915f176b8257 and completed 7/7 jobs successfully, including six distinct OS/Python identities and release-smoke."
   ],
-  "unverified_scope": "GitHub Actions workflow 42007713894 covers the exact implementation candidate on hosted Linux, macOS and Windows with CPython 3.9/3.13 plus release smoke. Server-side branch-protection/required-check consumers, independent fresh-context review and human landing sign-off remain unverified. The observed Node.js 20 action deprecation annotations are outside this naming-only scope. No main merge, tag, Release, package upload or other publication action is authorized or claimed.",
+  "unverified_scope": "Exact head 64ee1439 has 7/7 successful GitHub Actions jobs and the authorized maintainer readback found no branch protection or rulesets on 2026-11-05. The observed Node.js 20 action deprecation annotations remain outside this naming-only scope. No tag, Release, package upload or other publication action is authorized or claimed.",
   "landing_sign_off": {
-    "status": "pending",
-    "scope": "The exact implementation candidate fd628ad43a0f254c3d6ed7346863371044248a99 passed all seven GitHub Actions jobs and may remain as a PR candidate. Landing this high-risk workflow-name change still requires an independent fresh-context review with no open blocker/major, an authorized maintainer check of any required-check consumer and human sign-off. No tag, Release or package upload is authorized."
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly directed manual closeout of all pending work on 2026-11-05. This is the named human landing approval for the CI-matrix-name change into product main only; no tag, Release, package upload or other publication action is authorized.",
+    "named_human_approver": "repository owner (barry31-dev)"
   },
   "review_context": {
     "why": [
