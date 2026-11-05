@@ -26,10 +26,13 @@ files, inspect the environment, resolve paths, take locks, make network calls,
 run commands, read a clock or call a provider. It does not re-read a source to
 prove that an observation is honest or race-free.
 
-The limits are positive integers. Booleans are not integers. The exact record,
-source, finding and canonical-report byte limits are accepted; one over is
-refused with `MemoryDoctorError` carrying `error_type`. Input iterables are
-consumed only through limit plus one and are never materialized first.
+The limits are positive integers. Booleans are not integers. The exact record
+and source limits are accepted; one over is refused with `MemoryDoctorError`
+carrying `error_type`. Input iterables are consumed only through limit plus one
+and are never materialized first. `max_findings` bounds retained findings, not
+processing: findings beyond it are counted in `omitted_findings` rather than
+raised or silently discarded. The final canonical report must fit
+`max_report_bytes` exactly; one over is refused.
 
 ## Record checks
 
@@ -44,7 +47,8 @@ the requested workspace. A valid record with no source refs needs no source
 observation.
 
 The report contains admission counts (`accepted`, `candidate`, `retired`,
-`conflicted`), a `sensitive` count, source counts, finding and omission counts.
+`conflicted`), a `sensitive` count, source counts, retained and omitted finding
+counts, and omission counts.
 It never contains memory bodies, memory IDs, source refs, source digests,
 credentials or free-form source text.
 
@@ -89,8 +93,9 @@ is shared, while each source ref still contributes to the source counts.
   observations, and there are no omissions.
 
 The report is canonical JSON-compatible data sorted independently of input
-order. Exact limits are inclusive. Reports over the byte bound, or findings over
-their bound, are refused rather than truncated. Input mappings and lists are not
+order. Findings are retained as the first bounded prefix in that stable order,
+with the remaining count explicit in `omitted_findings`. A report over the byte
+bound is refused rather than truncated. Input mappings and lists are not
 mutated.
 
 ## Evidence boundary

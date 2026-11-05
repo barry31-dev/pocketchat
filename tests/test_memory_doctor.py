@@ -131,6 +131,15 @@ class MemoryDoctorTests(unittest.TestCase):
         self.assertEqual("complete", report["status"])
         self.assertEqual(2, report["counts"]["sources_verified"])
 
+    def test_unhashable_duplicate_value_is_refused_not_raised_as_type_error(self):
+        malformed = record()
+        malformed["tags"] = [{"raw": "SECRET-CANARY"}]
+        report = audit_memory_records(
+            [malformed], workspace_id="workspace-1",
+            source_observations=[])
+        self.assertEqual("refused", report["status"])
+        self.assertNotIn("SECRET-CANARY", json.dumps(report))
+
     def test_non_mapping_record_is_refused_without_traceback_text(self):
         report = audit_memory_records(
             ["SECRET-CANARY"], workspace_id="workspace-1",
@@ -222,18 +231,15 @@ class MemoryDoctorTests(unittest.TestCase):
                 source_observations=[], max_records=1)
         self.assertEqual("record_limit_exceeded", error.exception.error_type)
 
-    def test_finding_limit_is_inclusive_and_one_over_is_refused(self):
-        malformed = ["first", "second"]
+    def test_finding_limit_retains_a_prefix_and_counts_omissions(self):
+        malformed = ["first", "second", "third"]
         report = audit_memory_records(
             malformed, workspace_id="workspace-1", source_observations=[],
             max_findings=2)
         self.assertEqual("refused", report["status"])
         self.assertEqual(2, report["counts"]["findings"])
-        with self.assertRaises(MemoryDoctorError) as error:
-            audit_memory_records(
-                malformed, workspace_id="workspace-1", source_observations=[],
-                max_findings=1)
-        self.assertEqual("finding_limit_exceeded", error.exception.error_type)
+        self.assertEqual(1, report["counts"]["omitted_findings"])
+        self.assertEqual(2, len(report["findings"]))
 
     def test_report_limit_is_inclusive_and_one_over_is_refused(self):
         baseline = audit_memory_records(
@@ -264,6 +270,25 @@ class MemoryDoctorTests(unittest.TestCase):
                 source_observations=[observation(), observation("second.md")],
                 max_sources=1)
         self.assertEqual("source_limit_exceeded", error.exception.error_type)
+
+    def test_six_thousand_duplicate_observations_are_capped_by_finding_limit(self):
+        observations = [observation() for _ in range(6000)]
+        report = audit_memory_records(
+            [], workspace_id="workspace-1", source_observations=observations,
+            max_sources=6000, max_findings=256)
+        self.assertEqual("refused", report["status"])
+        self.assertEqual(256, report["counts"]["findings"])
+        self.assertEqual(5743, report["counts"]["omitted_findings"])
+        self.assertLess(len(json.dumps(report)), 65536)
+
+    def test_six_thousand_source_observations_preserve_the_finding_bound(self):
+        observations = [
+            observation(f"file-{index}.md") for index in range(6000)]
+        report = audit_memory_records(
+            [], workspace_id="workspace-1",
+            source_observations=observations, max_sources=6000)
+        self.assertEqual("complete", report["status"])
+        self.assertLess(len(json.dumps(report)), 65536)
 
     def test_record_generator_is_consumed_only_through_one_over_limit(self):
         consumed = []
@@ -336,12 +361,14 @@ class MemoryDoctorTests(unittest.TestCase):
         self.assertEqual(left, right)
         self.assertEqual("refused", left["status"])
 
-    def test_invalid_observations_and_records_respect_the_finding_limit(self):
-        with self.assertRaises(MemoryDoctorError) as error:
-            audit_memory_records(
-                ["one", "two"], workspace_id="workspace-1",
-                source_observations=[], max_findings=1)
-        self.assertEqual("finding_limit_exceeded", error.exception.error_type)
+    def test_invalid_observations_and_records_retain_a_bounded_prefix(self):
+        report = audit_memory_records(
+            ["one", "two"], workspace_id="workspace-1",
+            source_observations=[], max_findings=1)
+        self.assertEqual("refused", report["status"])
+        self.assertEqual(1, report["counts"]["findings"])
+        self.assertEqual(1, report["counts"]["omitted_findings"])
+        self.assertEqual(1, len(report["findings"]))
 
     def test_foreign_record_is_omitted_even_with_invalid_source_ref(self):
         foreign = record(
@@ -378,6 +405,17 @@ class MemoryDoctorTests(unittest.TestCase):
             source_observations=[{"ref": "SECRET-CANARY"}])
         self.assertEqual("refused", report["status"])
         self.assertNotIn("SECRET-CANARY", json.dumps(report))
+
+    def test_non_iterable_inputs_have_distinct_typed_errors(self):
+        with self.assertRaises(MemoryDoctorError) as records_error:
+            audit_memory_records(
+                None, workspace_id="workspace-1", source_observations=[])
+        self.assertEqual("invalid_records", records_error.exception.error_type)
+        with self.assertRaises(MemoryDoctorError) as sources_error:
+            audit_memory_records(
+                [], workspace_id="workspace-1", source_observations=None)
+        self.assertEqual("invalid_source_observations",
+                         sources_error.exception.error_type)
 
     def test_audit_does_not_touch_files_environment_sockets_or_commands(self):
         with mock.patch("builtins.open", side_effect=AssertionError("open")), \

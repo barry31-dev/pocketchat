@@ -1,0 +1,109 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/memory-doctor.md",
+    "docs/memory-doctor.zh-CN.md",
+    "docs/review-memory-doctor-v1.json",
+    "pocketchat/memory_doctor.py",
+    "tests/test_memory_doctor.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 4,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "MD-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "unbounded-iterable-materialization",
+      "reason": "The first implementation called list(records) and list(source_observations) before checking limits, so an unbounded generator could be fully consumed. The approval was extended with max_sources and source_limit_exceeded; focused regressions observed the old whole-generator consumption, then passed after bounded consumption through limit plus one."
+    },
+    {
+      "id": "MD-2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "duplicate-source-ref-across-records",
+      "reason": "The first implementation treated a source identity repeated by two different records as a duplicate source ref. A focused regression failed with that error; the fix now permits shared source observations while still counting every record ref and refusing duplicate observations."
+    },
+    {
+      "id": "MD-3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "order-dependent-refused-report",
+      "reason": "A refused report included the original input index, so reordering malformed records changed the report bytes. A focused regression failed; inputs are now sorted by their canonical value before diagnostic indexes are assigned and findings are sorted by typed code and index."
+    },
+    {
+      "id": "MD-4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "invalid-input-exception-leak",
+      "reason": "Malformed records and observations initially raised immediately rather than producing a bounded refused report. Focused regressions now require stable typed findings without raw content, and the implementation returns a canonical refused envelope while only unsafe envelope/limit conditions raise MemoryDoctorError."
+    },
+    {
+      "id": "MD-6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "finding-bound-raised-on-large-valid-input",
+      "reason": "The second review found that max_findings rejected otherwise well-formed evidence with more findings than the retention bound, and non-iterable inputs reused limit error types. Regressions now require a stable retained prefix plus omitted_findings, distinct invalid_records/invalid_source_observations errors, and a six-thousand-observation bound probe; all pass after the fix."
+    },
+    {
+      "id": "MD-5",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "independent-fresh-context-review",
+      "reason": "This session performed the contract, source, test and diff review, but did not dispatch an independent fresh-context reviewer. Landing must not claim independent review from this author-side record."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/memory-doctor.md",
+    "docs/memory-doctor.zh-CN.md",
+    "docs/review-memory-doctor-v1.json",
+    "pocketchat/memory_doctor.py",
+    "tests/test_memory_doctor.py"
+  ],
+  "reviewed_evidence": [
+    "C: product issue #25 is main-reachable repository approval for the five-path pure-core slice; it names delivered PC-META-2 as the parser dependency and records the non-overlap check.",
+    "V: CPython 3.9.6 first ran `python3 -B -m unittest tests.test_memory_doctor -v`; collection failed with ModuleNotFoundError for pocketchat.memory_doctor, exit 1.",
+    "V: after implementation, the focused file ran 34 tests OK on macOS CPython 3.9.6, exit 0, covering empty/valid/foreign records, admission and sensitive counts, malformed and duplicate records, exact/partial/missing sources, contradictions, duplicate observations, all limits, deterministic order, non-echoing reports, input immutability and zero I/O.",
+    "V: the second bounded-evidence review added six-thousand-observation probes, distinct non-iterable errors and a retained-prefix/omitted-findings contract; the focused file then ran 34 tests OK, exit 0.",
+    "V: CPython 3.9.6 ran `python3 -B -m unittest tests.test_memory_doctor tests.test_memory_migration tests.test_memory_retrieval -v`: 79 tests OK, exit 0.",
+    "V: CPython 3.9.6 ran the complete product unittest suite: 1337 tests OK in 79.148 seconds, exit 0.",
+    "V: `ruff check --select E9,F pocketchat/memory_doctor.py tests/test_memory_doctor.py` passed, exit 0.",
+    "V: `python3 -m py_compile pocketchat/memory_doctor.py tests/test_memory_doctor.py` and `git diff --check` passed, exit 0.",
+    "C: source review confirms every record is validated through the shipped parse_v2_record, foreign-workspace records are omitted, source observations are closed, findings contain only typed codes and bounded indexes, and iterables are consumed only through max plus one.",
+    "C: the diff adds no store reader, CLI, mutation, migration, repair, conflict resolution, provider, credential, tag, Release or publication action."
+  ],
+  "unverified_scope": "Only macOS CPython 3.9.6 focused and adjacent tests and Ruff E9/F were run. No independent fresh-context review, exact-candidate GitHub Actions/CI, Linux/Windows run, real secure v2 store reader or CLI integration, provider/network/credential path, packaging, tag, Release or publication is claimed. A complete report over supplied observations does not prove those observations or the original store bytes were collected honestly, atomically or without races.",
+  "review_context": {
+    "why": [
+      "The user requested a non-conflicting PocketChat task. Existing active branches already cover session audit, deadline, JSON input, task diff, context drift, context explain, profile explain and package manifests; memory doctor has a delivered parser dependency and an independent five-path scope."
+    ],
+    "not_doing": [
+      "No store read or mutation, CLI, repair, migration, accept/retire/forget, conflict merge, source freshness probe, provider, publication or shared queue change."
+    ],
+    "diff_walk": [
+      "memory_doctor.py delegates v2 validation to parse_v2_record, bounds both iterables, normalizes observations, counts admissions/workspace/source evidence and emits typed canonical findings.",
+      "test_memory_doctor.py starts from the observed missing module, then binds success, refusal, unknown, limits, deterministic bytes, redaction, immutability and zero-I/O behavior.",
+      "Both docs freeze the API, observation schema, source status semantics, report counts, non-goals and the distinction between supplied evidence and real source freshness."
+    ],
+    "static_checks": [
+      "Changed paths exactly match issue #25.",
+      "No content, memory ID, digest, source ref or credential text is present in failure findings.",
+      "No absolute private path, tag or release claim was added."
+    ],
+    "gaps": [
+      "Independent fresh-context review and exact-candidate CI remain before any landing claim."
+    ]
+  },
+  "landing_sign_off": {
+    "status": "pending",
+    "scope": "The delegated routine technical approval covers development and task-branch delivery only. Main integration remains pending an independent fresh-context review with no open blocker/major and exact-SHA CI evidence actually observed. No tag, Release or package upload is authorized."
+  }
+}

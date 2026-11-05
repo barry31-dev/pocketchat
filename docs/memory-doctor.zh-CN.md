@@ -23,9 +23,11 @@ audit_memory_records(
 函数不打开文件、不读环境、不解析路径、不拿锁、不联网、不执行命令、不读时钟，也不调用
 provider。它不重新读取来源来证明观察值真实，也不声称排除了来源读取过程中的竞态。
 
-限额必须为正整数，布尔值不算整数。record、source、finding 与 canonical report 的字节数恰好等于
-上限时接受，超一即由 `MemoryDoctorError.error_type` 拒绝。输入 iterable 最多消费“上限 + 1”项，
-不会先整体物化。
+限额必须为正整数，布尔值不算整数。record、source 的项数恰好等于上限时接受，超一即由
+`MemoryDoctorError.error_type` 拒绝。输入 iterable 最多消费“上限 + 1”项，不会先整体物化。
+`max_findings` 只限制报告保留的 finding 数，不限制处理；超出的 finding 计入
+`omitted_findings`，既不抛异常也不静默丢失。最终 canonical report 必须恰好适配
+`max_report_bytes`，超一即拒绝。
 
 ## 记录检查
 
@@ -36,7 +38,8 @@ provider。它不重新读取来源来证明观察值真实，也不声称排除
 的损坏。合法且没有 source ref 的记录不需要 source observation。
 
 报告包含 accepted/candidate/retired/conflicted 的 admission 计数、`sensitive` 计数、来源计数、
-finding/omission 计数；不包含 memory 正文、memory ID、source ref、source digest、凭据或自由文本。
+保留/省略 finding 计数与 omission 计数；不包含 memory 正文、memory ID、source ref、source digest、
+凭据或自由文本。
 
 ## Source observation
 
@@ -72,8 +75,8 @@ identity 是 `(source_kind, ref, scope)`。
 - `partial`：合法 workspace 记录中存在 missing/partial source，或有 foreign-workspace omission。
 - `complete`：所有记录合法、所有 source ref 都有 complete 且 exact 的 observation，且无 omission。
 
-报告是 canonical JSON-compatible data，不随输入顺序改变。限额恰好相等时接受；超限拒绝而不是
-截断。输入 mapping/list 不被修改。
+报告是 canonical JSON-compatible data，不随输入顺序改变。finding 按稳定顺序保留有界前缀，其余
+数量显式写入 `omitted_findings`。报告超过字节上限时拒绝而不是截断。输入 mapping/list 不被修改。
 
 ## 证据边界
 

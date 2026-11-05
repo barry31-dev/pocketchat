@@ -91,13 +91,13 @@ def _stable_sort_key(value: Any) -> str:
 
 
 def _bounded_iterable(values: Any, limit: int, *, error_type: str,
-                      label: str) -> List[Any]:
+                      invalid_error_type: str, label: str) -> List[Any]:
     result = []
     try:
         iterator = iter(values)
     except TypeError:
         raise MemoryDoctorError(
-            f"{label} must be iterable", error_type=error_type)
+            f"{label} must be iterable", error_type=invalid_error_type)
     for value in iterator:
         if len(result) == limit:
             raise MemoryDoctorError(
@@ -134,10 +134,12 @@ def audit_memory_records(
     findings: List[Dict[str, Any]] = []
     raw_records = _bounded_iterable(
         records, max_records, label="records",
-        error_type="record_limit_exceeded")
+        error_type="record_limit_exceeded",
+        invalid_error_type="invalid_records")
     raw_observations = _bounded_iterable(
         source_observations, max_sources, label="source observations",
-        error_type="source_limit_exceeded")
+        error_type="source_limit_exceeded",
+        invalid_error_type="invalid_source_observations")
 
     raw_records = sorted(raw_records, key=_stable_sort_key)
     raw_observations = sorted(raw_observations, key=_stable_sort_key)
@@ -213,6 +215,7 @@ def audit_memory_records(
         "sources_verified": 0,
         "sources_unknown": 0,
         "findings": 0,
+        "omitted_findings": 0,
         "omissions": 0,
     }
     for index, item in accepted:
@@ -252,14 +255,13 @@ def audit_memory_records(
         for index, item in parsed_records
         if item["workspace_id"] != workspace_id
     ]
-    counts["findings"] = len(findings)
     counts["omissions"] = len(omissions)
     findings = sorted(findings, key=lambda item: (
         item["code"], item.get("record_index", -1),
         item.get("observation_index", -1)))
-    if len(findings) > max_findings:
-        raise MemoryDoctorError(
-            "finding limit exceeded", error_type="finding_limit_exceeded")
+    counts["omitted_findings"] = max(0, len(findings) - max_findings)
+    findings = findings[:max_findings]
+    counts["findings"] = len(findings)
     status = "refused" if any(
         finding["code"] in {
             "invalid_record", "invalid_records", "duplicate_memory_id",
