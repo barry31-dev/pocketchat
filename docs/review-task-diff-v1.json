@@ -1,0 +1,122 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-task-diff-v1.json",
+    "docs/task-diff.md",
+    "docs/task-diff.zh-CN.md",
+    "pocketchat/task_diff.py",
+    "tests/test_task_diff.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "accept",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "TD-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "snapshot-selection-digest-treated-as-file-content-identity",
+      "reason": "The first implementation compared selection_sha256 directly and produced selection_mismatch whenever a selected file changed size. The test fixture now covers a normal size change, and selection identity is checked by query terms plus selected path set; a changed frozen tree gets its own tree_mismatch omission."
+    },
+    {
+      "id": "TD-2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "missing-text-treated-as-a-valid-partial-snapshot",
+      "reason": "The first draft treated text:null as a legitimate partial snapshot. The real snapshot producer always includes decoded text and hashes it, so a null or non-string text is now invalid_snapshot rather than a fabricated coverage state."
+    },
+    {
+      "id": "TD-3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "snapshot-aggregate-counters-not-cross-checked",
+      "reason": "The first validator did not verify tree_schema, per-row selection_size_changed against selection_bytes/bytes, aggregate size-change counts, or total_bytes against max_bytes. Tests and implementation now refuse these contradictions."
+    },
+    {
+      "id": "TD-4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "report-byte-budget-self-reference-and-nonconvergence",
+      "reason": "The early budget loop could rewrite max_files/max_bytes or loop on report_bytes insertion. The final implementation budgets the complete public envelope, reports content bytes excluding report_bytes/report_sha256, converges by dropping entries/detail, refuses only budgets below the minimal envelope, and has a 1..511-byte boundary test."
+    },
+    {
+      "id": "TD-5",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "omitted-changed-paths-not-named",
+      "reason": "The file limit initially exposed only a count. It now emits bounded omitted_paths in sorted order; if byte pressure removes that detail, the max_bytes omission remains."
+    },
+    {
+      "id": "TD-6",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "ambiguous-compared-file-count-and-added-deleted-text-state",
+      "reason": "compared_files now counts changed paths represented before limits, and added/deleted rows use text_compared=false because there is no two-sided text comparison."
+    },
+    {
+      "id": "TD-7",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "independent-reviewer-no-verdict",
+      "reason": "A separate fresh-context review completed against issue #18 and the full five-path diff. It found three major boundedness defects, required red regressions and fixes, and then accepted the corrected candidate with no open blocker or major finding."
+    },
+    {
+      "id": "TD-8",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "snapshot-validator-omits-producer-resource-bounds",
+      "reason": "The validator accepted records impossible under the existing snapshot producer, including more than 64 selected files, more than 32 query terms, an over-16-MiB snapshot budget and NUL text. It now enforces the producer constants and normalized query-token shape before hashing or comparison; regression cases failed before the fix and pass afterward."
+    },
+    {
+      "id": "TD-9",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "quadratic-sequence-matcher-on-legal-repetitive-text",
+      "reason": "SequenceMatcher with autojunk disabled took 7.541 seconds for only 8,000 repeated lines and could receive much larger legal snapshots. Optional line counts now stop before 256 KiB or 2,048 combined lines; digest and byte evidence remains complete and the regression proves the matcher is not called beyond the bound."
+    },
+    {
+      "id": "TD-10",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "byte-budget-removes-coverage-reasons-and-path-order",
+      "reason": "The byte-budget fallback could return omitted_files with no omission reason and could append a dropped entry after existing omitted paths, yielding b,c,a. It now preserves every coverage reason in a compact form, always names max_bytes when byte pressure occurs, sorts retained paths and refuses budgets too small for that truthful envelope."
+    }
+  ],
+  "commit_or_candidate_sha": "df968a468e894ba629b0b6f1677dfb709173aaf5",
+  "changed_paths": [
+    "docs/review-task-diff-v1.json",
+    "docs/task-diff.md",
+    "docs/task-diff.zh-CN.md",
+    "pocketchat/task_diff.py",
+    "tests/test_task_diff.py"
+  ],
+  "reviewed_evidence": [
+    "C: corrected candidate df968a468e894ba629b0b6f1677dfb709173aaf5 has exactly the five issue #18 paths relative to product main b68929df3818ed901b5353f727216885b874e2b1 and uses the published barry31-dev identity.",
+    "C: product main supplied the existing CONTEXT_SNAPSHOT_SCHEMA, MAX_SELECTED_FILES, MAX_QUERY_TERMS, MAX_SNAPSHOT_BYTES, MAX_SNAPSHOT_FILE_BYTES and snapshot_files behavior used as the validation authority.",
+    "V: the original implementation observed a missing-module/NotImplemented red phase, 19 focused tests and 1297 full-suite tests on CPython 3.13.9 before this independent review.",
+    "V: CPython 3.9.6 performance probing of SequenceMatcher(autojunk=False) over repeated lines measured 0.115s at 1,000, 0.469s at 2,000, 1.897s at 4,000 and 7.541s at 8,000 lines, establishing the quadratic review finding.",
+    "V: new producer-bound regressions first failed because oversized query/file/budget/NUL records were accepted; the repetitive-text regression first failed because SequenceMatcher was called; the omission regression first failed because required reasons were absent.",
+    "V: after the final fixes, CPython 3.9.6 ran `python3 -B -m unittest tests.test_task_diff -v`: 23 tests OK, exit 0.",
+    "V: Ruff 0.17.3 `check --select E9,F pocketchat/task_diff.py tests/test_task_diff.py`, `python3 -m compileall -q pocketchat/task_diff.py tests/test_task_diff.py` and `git diff --check` passed with exit 0.",
+    "C: the corrected validator enforces the closed producer bounds before comparison and no longer deep-copies caller objects; normalized output rows remain detached and the input-immutability test passes.",
+    "C: line-count detail is optional and bounded while digest/byte/path change evidence remains present; large repetitive text does not enter the quadratic matcher.",
+    "C: byte-pressure degradation keeps complete reason identities, sorted retained omitted paths and accurate counters, or refuses when even the truthful minimal envelope cannot fit.",
+    "C: added/deleted/modified/unchanged semantics, selection/tree coverage, sorted entries, no source-text echo, exact file/byte boundaries, input immutability and whole_workspace_compared=false match issue #18.",
+    "C: the no-I/O test still patches open, socket, subprocess.run and environment access; the implementation edits no reader, CLI, task runtime, checkpoint, provider, CHANGELOG, shared queue or publication path.",
+    "C: an independent fresh-context review read issue #18, all five changed paths, producer contracts and boundary behavior; all blocker/major findings are fixed in df968a468e894ba629b0b6f1677dfb709173aaf5.",
+    "V: GitHub Actions run 41974777540 is bound to exact head 516cc4759b4c3be4b9ebd3cf5f788f57d49c098d and completed 7/7 jobs successfully across Linux/macOS/Windows, CPython 3.9/3.13 and release-smoke."
+  ],
+  "unverified_scope": "The corrected candidate was run locally only on macOS CPython 3.9.6 with the focused task-diff suite. Exact head 516cc475 has 7/7 successful GitHub Actions jobs across Linux/macOS/Windows and CPython 3.9/3.13 plus release-smoke. The final full product suite, live snapshot collection, real workspace/Git observation, CLI integration, provider call, package build/install and main merge were not performed at review-record time. Tag, Release and publication were not performed. A complete report only compares the two supplied snapshot records and does not prove the whole workspace or any unselected path is unchanged.",
+  "landing_sign_off": {
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly directed manual closeout of all pending work. This authorizes landing the reviewed draft candidates into product main only; it does not authorize a tag, Release, package upload, or any other publication action."
+  }
+}
