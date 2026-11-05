@@ -98,3 +98,81 @@ This slice does not add a CLI, read artifact bytes, verify that a digest was
 computed from the current filesystem, repair a mismatch, call a provider, or
 claim publication. A caller that needs those actions must use a separate
 bounded reader/CLI slice and keep this report's evidence scope explicit.
+
+## Explicit observation CLI
+
+```bash
+pocketchat evidence verify observations.json --workspace ./checkout --json
+pocketchat evidence verify observations.json --workspace ./checkout
+```
+
+`observations.json` is a normalized **workspace-relative** path. `--workspace`
+selects its read-only root and defaults to the current directory. The command
+reads exactly this one document; it does not open the artifact paths it names,
+run a task, replay a request, repair evidence, load a profile or contact a model.
+The input is a closed object containing exactly:
+
+```json
+{
+  "schema_version": 1,
+  "artifacts": [
+    {
+      "id": "session-a", "kind": "session", "path": "sessions/a.jsonl",
+      "whole_file_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_whole_file_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "semantic_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "semantic_scope": "canonical-json", "read_coverage": "complete",
+      "identity": {"run_id": "run-a"}
+    },
+    {
+      "id": "trace-a", "kind": "trace", "path": "traces/a.jsonl",
+      "whole_file_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "observed_whole_file_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "semantic_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "semantic_scope": "trace-events", "read_coverage": "complete",
+      "identity": {"run_id": "run-a"}
+    }
+  ],
+  "relations": [{"id": "link-a", "source": "session-a", "target": "trace-a",
+                 "kind": "same-run", "fields": ["run_id"]}]
+}
+```
+
+The hashes above are illustrative declarations, not measured files. The CLI
+reuses `verify_evidence_links()` on supplied observations. A `complete` result
+means this supplied evidence is internally consistent, **not** that the original
+files were rechecked or still exist. Every result therefore carries
+`scope: "supplied_observations"` and `files_rechecked: false`. `source_sha256`
+binds the bytes of the input document actually read, not the referenced files.
+
+Identifiers must match `[A-Za-z][A-Za-z0-9_-]{0,63}`; paths use the shipped safe
+workspace-relative path rules. `identity` uses the core's closed names;
+`run_ids` is a unique list of at most 256 identifiers, and `turn` is a positive
+32-bit integer. Unknown artifact/relation keys or unsafe metadata are refused.
+`required` and `present` remain optional booleans. Input is limited to 1 MiB
+(inclusive), strictly decoded as finite UTF-8 JSON, with duplicate keys and
+more than 64 levels of nesting refused. Symlinks, nonregular files, protected
+paths, changed reads and missing no-follow primitives are refused, without a
+path-following fallback. The explicit root itself must not be a symlink; the
+existing reader does not claim to detect every ancestor replacement outside
+that root. A descriptor read is an observation, not a filesystem sandbox.
+
+The JSON output is one document, including its trailing newline within a
+64 KiB budget. `ok` is true only for `complete`. Artifact and relation findings
+refer to **zero-based input indexes**, with `null` for ambiguous/global findings;
+they retain only fixed kind/status/reason values. Artifact paths, identifiers,
+identity values, diagnostic detail, message bodies and credentials are never
+copied to the output. Identical input bytes yield identical JSON bytes. Reports
+that exceed the budget are refused, not silently truncated.
+
+| Status | Exit | Meaning |
+|---|---:|---|
+| `complete` | 0 | Supplied required links are consistent and completely observed. |
+| `partial` | 1 | Coverage/optional evidence is missing, or no relations were supplied. |
+| `refused` | 2 | Contradictory evidence, empty artifact set, bad input, unsafe read or exceeded budget. |
+
+Human and JSON modes share the same result and exit. Handled input errors use
+`error: "evidence"` and a fixed reason; JSON mode does not emit a traceback or
+stderr body. This command creates no session, trace, request, verification
+receipt or output file. Live artifact acquisition and freshness verification
+require a separate approved slice.

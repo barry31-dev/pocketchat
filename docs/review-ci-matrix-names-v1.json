@@ -1,0 +1,100 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    ".github/workflows/ci.yml",
+    "docs/ci-matrix.md",
+    "docs/ci-matrix.zh-CN.md",
+    "docs/review-ci-matrix-names-v1.json",
+    "tests/test_ci_matrix_names.py"
+  ],
+  "categories": [
+    "links",
+    "docs",
+    "python-tools",
+    "release"
+  ],
+  "tier": "high",
+  "review_depth": "deep",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "CI-NAMES-1",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "server-required-check-policy-unreadable",
+      "reason": "The barry31-dev maintainer credential re-read the repository on 2026-11-05: GET /branches/main/protection returned 404 Branch not protected and GET /rulesets returned an empty list. The earlier HTTP 403 was a planning-credential limit, not evidence that a hidden consumer exists."
+    },
+    {
+      "id": "CI-NAMES-2",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "fresh-context-and-human-signoff-pending",
+      "reason": "A separate user-directed closeout review read the exact five-path workflow diff and found no blocker or major finding. The repository owner explicitly directed manual closeout of all pending work on 2026-11-05, providing the required human landing sign-off for this reviewed main integration; publication remains unauthorized."
+    }
+  ],
+  "commit_or_candidate_sha": "fd628ad43a0f254c3d6ed7346863371044248a99",
+  "changed_paths": [
+    ".github/workflows/ci.yml",
+    "docs/ci-matrix.md",
+    "docs/ci-matrix.zh-CN.md",
+    "docs/review-ci-matrix-names-v1.json",
+    "tests/test_ci_matrix_names.py"
+  ],
+  "reviewed_evidence": [
+    "C: PocketChat origin/main f30f7f34bf5816ed7721c3c059fd9bcaf1233a69 was fetched before branch creation; product issue #29 is the repository approval record for this exact branch and five-path scope under the process issue-or-queue rule.",
+    "C: before branch creation there was no equivalent issue, PR, local or remote task/pocketchat-ci-matrix-names branch, active worktree overlap or unmerged task-branch overlap. The old migration/from-mywork-m04 workflow diff is 137 commits behind main, has no PR/worktree and is not an active writer.",
+    "V: CPython 3.9.6 focused RED ran tests.test_ci_matrix_names before the workflow edit and failed for the expected reason: the current template expanded to only pocketchat-ci (python 3.9) and pocketchat-ci (python 3.13), exit 1.",
+    "V: CPython 3.9.6 focused GREEN ran the new matrix-name guard plus the two adjacent release-smoke workflow guards: 3 tests OK, exit 0.",
+    "V: CPython 3.13.9 ran python -B -m unittest discover -s tests -v: 1304 tests OK in 52.799 seconds, exit 0.",
+    "V: Ruff 0.17.3 ran python -m ruff check --select E9,F pocketchat tests and passed. CPython 3.13.9 compileall for tests/test_ci_matrix_names.py passed; both changed documentation links resolved; git diff --check passed.",
+    "C: full diff review confirms the workflow change is one name-template line. The guard freezes exactly the existing three OS values, two Python values, six unique expansions and the unchanged pocketchat-release-smoke name. The bilingual docs do not claim a matrix, runner, server-policy, release or publication change.",
+    "E: GitHub branch-protection readback returned HTTP 403 and the repository rulesets endpoint returned an empty list. This is recorded as unknown policy coverage, not evidence that no required-check consumer exists.",
+    "V: exact implementation candidate fd628ad43a0f254c3d6ed7346863371044248a99 ran GitHub Actions workflow 42007713894: all six distinct Linux/macOS/Windows Python 3.9/3.13 check names and pocketchat-release-smoke completed successfully (7/7). The run also emitted pre-existing Node.js 20 action deprecation annotations; this naming slice did not change action pins.",
+    "C: A separate user-directed closeout review session read the frozen approval record, exact task diff, implementation, tests and contract without adopting the author conclusion; no blocker or major finding remained. The failed external Codex transport attempt is not counted as review evidence.",
+    "C: barry31-dev authorized maintainer readback returned HTTP 404 Branch not protected for main and an empty rulesets list on 2026-11-05.",
+    "V: GitHub Actions run 42009260084 is bound to exact head 64ee1439ec604d71bfbf4262e5e9915f176b8257 and completed 7/7 jobs successfully, including six distinct OS/Python identities and release-smoke."
+  ],
+  "unverified_scope": "Exact head 64ee1439 has 7/7 successful GitHub Actions jobs and the authorized maintainer readback found no branch protection or rulesets on 2026-11-05. The observed Node.js 20 action deprecation annotations remain outside this naming-only scope. No tag, Release, package upload or other publication action is authorized or claimed.",
+  "landing_sign_off": {
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly directed manual closeout of all pending work on 2026-11-05. This is the named human landing approval for the CI-matrix-name change into product main only; no tag, Release, package upload or other publication action is authorized.",
+    "named_human_approver": "repository owner (barry31-dev)"
+  },
+  "review_context": {
+    "why": [
+      "The existing six-cell workflow used only the Python version in its job name, so three operating systems collapsed into two displayed identities.",
+      "Current evidence-verify, memory-doctor, session-audit, context, task-diff, JSON-input and deadline work uses disjoint paths; this slice changes only workflow identity and dedicated guards/docs."
+    ],
+    "not_doing": [
+      "No matrix cell, runner, Python version, step, action pin, permission, trigger, concurrency, timeout, retry, skip, product behavior, branch-protection setting, tag, Release or package upload change."
+    ],
+    "diff_walk": [
+      ".github/workflows/ci.yml adds matrix.os to the existing test job name and changes no other workflow field.",
+      "tests/test_ci_matrix_names.py expands the committed inline matrix and requires the exact six OS/Python names plus the unchanged release-smoke identity.",
+      "The bilingual docs define the stable names, evidence boundary and unknown branch-protection readback without claiming hosted execution.",
+      "This review record preserves the observed red-green cycle, proportional local checks, external readback gap and landing hold."
+    ],
+    "static_checks": [
+      "All five changed paths match product issue #29.",
+      "The template contains both matrix.os and matrix.python; the declared matrix remains three by two and max-parallel remains unchanged.",
+      "No credential, private path, product payload, release status or publication claim appears in the changed files."
+    ],
+    "red_green": [
+      "Before the workflow edit, the new guard observed two unique Python-only names and failed against the six expected OS/Python identities.",
+      "After the one-line workflow edit, the guard and adjacent workflow tests passed without any test relaxation."
+    ],
+    "review_notes": [
+      "The full diff was reviewed in round one. No blocker or major implementation finding was observed locally; two external landing requirements remain deferred and explicit.",
+      "Exact-SHA Actions expanded the six names exactly as the static guard specified and kept pocketchat-release-smoke separate; all seven jobs passed."
+    ],
+    "gaps": [
+      "Branch-protection required-check consumers are unreadable with the planning credential.",
+      "Independent fresh-context review and human landing sign-off are pending.",
+      "The exact CI run reported pre-existing Node.js 20 action deprecation annotations; action-pin migration is a separate scope."
+    ]
+  }
+}
