@@ -1,0 +1,30 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-profile-explain-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-profile-explain-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main b68929df3818ed901b5353f727216885b874e2b1 was fetched and read before this planning branch.",
+    "C: current main has no PC-PROFILE-EXPLAIN-1 row, open issue, remote task/pocketchat-profile* branch, or equivalent private card; the active product writers are limited to task diff, JSON input, and task deadline paths.",
+    "C: existing pocketchat/config.py load_config(), profile_config() and requires_api_key() provide the validated profile view and credential requirement semantics reused by the planned pure core.",
+    "C: the row freezes one new module and one test module with disjoint docs/review paths; it does not edit config.py, cli.py, task/runtime, provider, session, memory, the shared queue beyond this planning row, CHANGELOG.md or any release path.",
+    "C: the contract requires caller-supplied raw/resolved mappings and a closed credential observation; it forbids environment enumeration, credential-value return, provider/network calls, file reads, config mutation and CLI wiring.",
+    "Docs-only diff review checked schema-1/schema-2 compatibility, explicit/default selection, multi-profile and missing-credential cases, secret canaries, malicious values, input immutability, stable ordering, the 128-field/64-KiB bounds, refusal behavior and explicit non-goals."
+  ],
+  "unverified_scope": "Planning only: no product implementation, focused/full tests, CI, real config or environment read, CLI subprocess, provider/network call, cross-platform build, tag, Release or package upload. The implementation branch is not created; main reachability of this approval is a separate readback, and an implementation candidate can be claimed only after that readback and a fresh write-scope conflict check."
+}

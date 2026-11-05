@@ -280,6 +280,51 @@ and sidecar/preview binding as a separate slice.
   branch is reachable from `main`. The implementation branch and exact reviewed
   candidate remain separate; this planning change does not create or claim them.
 
+
+#### `PC-PROFILE-EXPLAIN-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-profile-explain-core`
+- **Write scope**: `pocketchat/profile_explain.py`,
+  `tests/test_profile_explain.py`, `docs/profile-explain.md`,
+  `docs/profile-explain.zh-CN.md`, `docs/review-profile-explain-v1.json`
+- **Depends on**: none; the existing `load_config()` and `profile_config()`
+  contracts are the source of parsed configuration and profile selection.
+- **Done when**: A pure
+  `explain_profile(raw_config, resolved_config, explicit_profile, credential_presence)`
+  returns a closed `pocketchat-profile-explain.v1` report with
+  `schema_version=1`, `status=complete|refused`, the selected profile,
+  selection source `cli|default`, effective model and redacted endpoint
+  identity, field provenance `explicit|default`, required/not-required
+  credential state, and credential presence `present|missing|unknown` with
+  source `environment|not_required`. The caller supplies already-parsed
+  mappings and a closed credential observation; the core never reads the
+  environment, opens a path, calls a provider or performs network access.
+  Schema-1 and schema-2 inputs, explicit/default selection, multiple profiles,
+  missing credentials, malformed inputs, duplicate keys, malicious values and
+  raw/resolved/selection mismatches are handled deterministically. Reports are
+  sorted, bounded to 128 fields and 64 KiB canonical UTF-8 bytes, and refused
+  rather than truncated when the minimal envelope cannot fit. No credential
+  value, full environment, profile body or secret is returned; input mappings
+  remain unchanged. This slice adds no CLI, config writer, provider probe,
+  trace/session artifact, tag, Release or publication.
+- **Evidence**: `pocketchat/profile_explain.py`,
+  `tests/test_profile_explain.py`, `docs/profile-explain.md`,
+  `docs/profile-explain.zh-CN.md` and `docs/review-profile-explain-v1.json`;
+  focused unittest output, exact reviewed candidate SHA and `git diff --check`
+  recorded in the implementation review. The delivery commit is recorded only
+  after the candidate is examined against this row and merged.
+- **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
+  delegation; this row and `docs/review-profile-explain-approval-v1.json`
+  freeze the pure-core contract. The approval does not authorize a CLI,
+  real environment read, provider/network call, config mutation, tag, Release
+  or package upload.
+- **Approval evidence**: This row and
+  `docs/review-profile-explain-approval-v1.json` are the product approval
+  record. The execution branch is not created by this planning change; it may
+  start only after this row is integrated and read back from product `main`,
+  and only if its write scope remains free of an active writer.
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.
