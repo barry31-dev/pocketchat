@@ -34,7 +34,7 @@
       "reason": "This implementation session performed the red-green cycle, full diff review and local verification. The required independent fresh-context review and human sign-off for a high-risk workflow change are intentionally left pending, so this candidate must not be merged automatically."
     }
   ],
-  "commit_or_candidate_sha": "self",
+  "commit_or_candidate_sha": "fd628ad43a0f254c3d6ed7346863371044248a99",
   "changed_paths": [
     ".github/workflows/ci.yml",
     "docs/ci-matrix.md",
@@ -50,12 +50,13 @@
     "V: CPython 3.13.9 ran python -B -m unittest discover -s tests -v: 1304 tests OK in 52.799 seconds, exit 0.",
     "V: Ruff 0.17.3 ran python -m ruff check --select E9,F pocketchat tests and passed. CPython 3.13.9 compileall for tests/test_ci_matrix_names.py passed; both changed documentation links resolved; git diff --check passed.",
     "C: full diff review confirms the workflow change is one name-template line. The guard freezes exactly the existing three OS values, two Python values, six unique expansions and the unchanged pocketchat-release-smoke name. The bilingual docs do not claim a matrix, runner, server-policy, release or publication change.",
-    "E: GitHub branch-protection readback returned HTTP 403 and the repository rulesets endpoint returned an empty list. This is recorded as unknown policy coverage, not evidence that no required-check consumer exists."
+    "E: GitHub branch-protection readback returned HTTP 403 and the repository rulesets endpoint returned an empty list. This is recorded as unknown policy coverage, not evidence that no required-check consumer exists.",
+    "V: exact implementation candidate fd628ad43a0f254c3d6ed7346863371044248a99 ran GitHub Actions workflow 42007713894: all six distinct Linux/macOS/Windows Python 3.9/3.13 check names and pocketchat-release-smoke completed successfully (7/7). The run also emitted pre-existing Node.js 20 action deprecation annotations; this naming slice did not change action pins."
   ],
-  "unverified_scope": "Exact-candidate GitHub Actions has not run yet because the branch and PR are not yet pushed. Linux, Windows and hosted macOS execution for this candidate, server-side branch-protection/required-check consumers, independent fresh-context review and human landing sign-off remain unverified. No main merge, tag, Release, package upload or other publication action is authorized or claimed.",
+  "unverified_scope": "GitHub Actions workflow 42007713894 covers the exact implementation candidate on hosted Linux, macOS and Windows with CPython 3.9/3.13 plus release smoke. Server-side branch-protection/required-check consumers, independent fresh-context review and human landing sign-off remain unverified. The observed Node.js 20 action deprecation annotations are outside this naming-only scope. No main merge, tag, Release, package upload or other publication action is authorized or claimed.",
   "landing_sign_off": {
     "status": "pending",
-    "scope": "The branch may be pushed and opened as a PR candidate for exact-SHA Actions. Landing this high-risk workflow-name change requires an independent fresh-context review with no open blocker/major, an authorized maintainer's check of any required-check consumer, exact-candidate CI evidence actually observed, and human sign-off. No tag, Release or package upload is authorized."
+    "scope": "The exact implementation candidate fd628ad43a0f254c3d6ed7346863371044248a99 passed all seven GitHub Actions jobs and may remain as a PR candidate. Landing this high-risk workflow-name change still requires an independent fresh-context review with no open blocker/major, an authorized maintainer check of any required-check consumer and human sign-off. No tag, Release or package upload is authorized."
   },
   "review_context": {
     "why": [
@@ -81,12 +82,13 @@
       "After the one-line workflow edit, the guard and adjacent workflow tests passed without any test relaxation."
     ],
     "review_notes": [
-      "The full diff was reviewed in round one. No blocker or major implementation finding was observed locally; two external landing requirements remain deferred and explicit."
+      "The full diff was reviewed in round one. No blocker or major implementation finding was observed locally; two external landing requirements remain deferred and explicit.",
+      "Exact-SHA Actions expanded the six names exactly as the static guard specified and kept pocketchat-release-smoke separate; all seven jobs passed."
     ],
     "gaps": [
-      "Exact-SHA GitHub Actions and hosted-platform behavior are pending the pushed PR.",
       "Branch-protection required-check consumers are unreadable with the planning credential.",
-      "Independent fresh-context review and human landing sign-off are pending."
+      "Independent fresh-context review and human landing sign-off are pending.",
+      "The exact CI run reported pre-existing Node.js 20 action deprecation annotations; action-pin migration is a separate scope."
     ]
   }
 }
