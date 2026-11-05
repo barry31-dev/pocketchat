@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "CHANGELOG.md",
     "docs/formats.md",
@@ -120,8 +120,8 @@
     "Document guards, CPython 3.9.6: /usr/bin/python3 -m unittest tests.test_release_process_docs -q; 15 tests OK, exit 0.",
     "Ruff 0.17.3: ruff check --select E9,F pocketchat tests; All checks passed!, exit 0.",
     "git diff --check passed.",
-    "Fresh-context review: OpenAI Codex v0.166.0-alpha.5.1 codex exec review --uncommitted --ephemeral, model trae-cn-mimo-v2.6-pro, sandbox read-only; completed and returned F6-F9. Each was reproduced locally before a failing regression test was added and fixed.",
-    "New-diff-only review: OpenAI Codex v0.166.0-alpha.5.1 codex exec --ephemeral --sandbox read-only, model trae-cn-mimo-v2.6-pro; completed and returned F10-F12. Each was reproduced or established statically before a failing regression test was added and fixed.",
+    "Fresh-context review: A fresh-context reviewer ran an uncommitted-change review, model trae-cn-mimo-v2.6-pro, sandbox read-only; completed and returned F6-F9. Each was reproduced locally before a failing regression test was added and fixed.",
+    "New-diff-only review: A fresh-context reviewer ran a new-diff review in a read-only sandbox, model trae-cn-mimo-v2.6-pro; completed and returned F10-F12. Each was reproduced or established statically before a failing regression test was added and fixed.",
     "Earlier candidate before the final review fixes ran the full discovered suite on CPython 3.9.6 and 3.13.9 with 1146/1146 tests OK on each; it is historical evidence, not a full-suite result for the final tree."
   ],
   "unverified": [

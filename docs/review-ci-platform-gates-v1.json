@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "docs/review-ci-platform-gates-v1.json",
     "tests/test_agent.py",

@@ -125,7 +125,7 @@ and sidecar/preview binding as a separate slice.
   both session-read error docs, and `docs/review-session-read-errors-v1.json`;
   merged to `main` as `c97fe8e`.
 - **Approved by**: User directive of 2026-11-03 to continue PocketChat
-  foundational work; MyWork planner recorded the approved design at `9496c235`.
+  foundational work; the approved design was recorded before this slice.
 
 #### `PC-RCAP-1`
 
@@ -142,7 +142,7 @@ and sidecar/preview binding as a separate slice.
   `pocketchat/runtime_capabilities.py`, and
   `docs/review-runtime-capabilities-v1.json`; merged to `main` as `5ce3586`.
 - **Approved by**: User directive of 2026-11-03 to continue PocketChat
-  foundational work; MyWork planner recorded the approved design at `9496c235`.
+  foundational work; the approved design was recorded before this slice.
 
 #### `PC-RDOCTOR-1`
 
@@ -160,7 +160,7 @@ and sidecar/preview binding as a separate slice.
   `pocketchat/cli.py`, both CLI docs, and
   `docs/review-doctor-runtime-v1.json`; merged to `main` as `b3ca703`.
 - **Approved by**: User directive of 2026-11-03 to continue PocketChat
-  foundational work; MyWork planner recorded the design at `9496c235` and the
+  foundational work; the approved design was recorded before this slice, with the
   delivered dependency `PC-RCAP-1`.
 
 #### `PC-SFILE-FENCE-1`
@@ -184,7 +184,7 @@ and sidecar/preview binding as a separate slice.
   request counter proving the refused writer sends zero requests, and an
   unchanged historical file hash; merged to `main` as `4877e5e`.
 - **Approved by**: User directive of 2026-11-03 to continue PocketChat
-  foundational work; MyWork planner recorded the design at `9496c235` and the
+  foundational work; the approved design was recorded before this slice, with the
   delivered dependency `PC-SFILE-READ-1`.
 
 #### `PC-EVIDENCE-LINK-1`

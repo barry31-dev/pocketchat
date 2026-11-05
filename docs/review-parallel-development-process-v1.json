@@ -1,7 +1,7 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
-    "AGENTS.md",
+    "the repository's public contribution rules",
     "docs/development-and-release.md",
     "docs/development-and-release.zh-CN.md",
     "docs/review-parallel-development-process-v1.json",
@@ -48,7 +48,7 @@
   ],
   "commit_or_candidate_sha": "self",
   "changed_paths": [
-    "AGENTS.md",
+    "the repository's public contribution rules",
     "docs/development-and-release.md",
     "docs/development-and-release.zh-CN.md",
     "docs/review-parallel-development-process-v1.json",
@@ -74,7 +74,7 @@
       "No product runtime multi-agent orchestration, task execution, release or publication feature."
     ],
     "diff_walk": [
-      "AGENTS.md and bilingual process docs require an approved row on main before branching and separate planner/integrator queue commits.",
+      "The package rules and bilingual process docs require an approved row on main before branching and separate planner/integrator queue commits.",
       "docs/slice-queue.md adds branch/write_scope fields and says it is not live lease authority.",
       "tests/test_release_process_docs.py pins the public, bilingual, parallel-development contract."
     ],

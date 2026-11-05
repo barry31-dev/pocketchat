@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "pocketchat/runtime_capabilities.py",
     "tests/test_runtime_capabilities.py",

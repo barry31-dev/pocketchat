@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "docs/compatibility.md",
     "docs/compatibility.zh-CN.md",

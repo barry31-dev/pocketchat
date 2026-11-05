@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "docs/review-evidence-link-approval-v1.json",
     "docs/slice-queue.md"

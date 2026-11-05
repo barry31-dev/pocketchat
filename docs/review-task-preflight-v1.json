@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "docs/review-task-preflight-v1.json",
     "docs/slice-queue.md",
@@ -37,7 +37,7 @@
       "severity": "major",
       "status": "fixed",
       "fingerprint": "private-planning-path-in-public-queue",
-      "reason": "The approval row named a private planning file in the public product queue. The row now references only the public package contract; the private authorization remains in MyWork and is not copied into the product tree."
+      "reason": "The approval row named a private planning file in the public product queue. The row now references only the public package contract; the private authorization remains outside the product tree."
     },
     {
       "id": "F2",

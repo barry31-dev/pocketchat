@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "docs/review-task-preflight-integration-v1.json",
     "docs/review-task-preflight-v1.json",

@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "CHANGELOG.md",
     "docs/review-release-smoke-evidence-v1.json",
@@ -62,7 +62,7 @@
     "Ruff 0.17.3: ruff check --select E9,F pocketchat tests; All checks passed!, exit 0.",
     "Local release smoke with documented offline fallback: /opt/anaconda3/bin/python3.13 scripts/release_smoke.py --work-dir /tmp/pocketchat-release-slprep2-final.kBtxfy --no-build-isolation --json; wheel pocketchat-1.1.0-py3-none-any.whl, 245269 bytes, SHA-256 709f6b2177ed92c7b5d1a5d1bfc49cbcda60e31c760b2e26385fa06cb606bc3e, 60 members, five schemas and eleven task command families, exit 0.",
     "First exact-SHA CI attempt: https://github.com/barry31-dev/pocketchat/actions/runs/41586196768 for c34749c. release-smoke and four matrix jobs passed; Windows Python 3.9/3.13 each ran 1125 tests with the same five F2/F3 failures. This failure was reproduced from raw job logs and fixed rather than recorded as a pass.",
-    "Fresh-context review: OpenAI Codex v0.166.0-alpha.5.1 codex exec review --uncommitted --ephemeral, model trae-cn-mimo-v2.6-pro, sandbox read-only; completed and returned F1. No functional memory-lock defect was reported.",
+    "Fresh-context review: A fresh-context reviewer ran an uncommitted-change review, model trae-cn-mimo-v2.6-pro, sandbox read-only; completed and returned F1. No functional memory-lock defect was reported.",
     "git diff --check passed.",
     "Second exact-SHA CI: https://github.com/barry31-dev/pocketchat/actions/runs/41588006974 for 1baea8a completed successfully with all seven jobs: Linux/macOS/Windows Python 3.9/3.13 plus pocketchat-release-smoke.",
     "Downloaded CI artifact 13208881597 (241908 bytes): pocketchat-1.1.0-py3-none-any.whl, 245268 bytes, SHA-256 3a6913293938c9334b0f974024981704f3758040dcfe304d2a96f25abcd235b1, equal to pocketchat-release.json; 60 members, five schemas and eleven task command families."

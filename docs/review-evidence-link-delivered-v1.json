@@ -1,5 +1,5 @@
 {
-  "schema": "mywork-review-record.v1",
+  "schema": "pocketchat-review-record.v1",
   "paths": [
     "CHANGELOG.md",
     "docs/review-evidence-link-delivered-v1.json",
