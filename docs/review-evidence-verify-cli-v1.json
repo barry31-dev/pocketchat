@@ -8,7 +8,8 @@
     "docs/review-evidence-verify-cli-v1.json",
     "pocketchat/cli.py",
     "pocketchat/service.py",
-    "tests/test_evidence_verify_cli.py"
+    "tests/test_evidence_verify_cli.py",
+    "tests/test_skeleton.py"
   ],
   "categories": [
     "docs",
@@ -54,6 +55,13 @@
       "status": "deferred",
       "fingerprint": "unrun-platform-and-install-matrix",
       "reason": "This bounded CLI slice runs macOS CPython 3.9.6 fixture checks only; Linux/Windows and clean-wheel install were not run. The no-follow refusal is tested by capability injection, not a real unsupported host."
+    },
+    {
+      "id": "F-INVENTORY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "stable-cli-inventory-missing-evidence",
+      "reason": "GitHub Actions run 42031788807 failed the stable CLI inventory on Linux for CPython 3.9 and 3.13 because the new evidence command was absent from the expected list. The guard was observed red locally, the expected inventory was updated by one name, and the focused guard plus all evidence-CLI tests then passed locally."
     }
   ],
   "source_type": "current code/tests and local run",
@@ -70,7 +78,8 @@
     "docs/review-evidence-verify-cli-v1.json",
     "pocketchat/cli.py",
     "pocketchat/service.py",
-    "tests/test_evidence_verify_cli.py"
+    "tests/test_evidence_verify_cli.py",
+    "tests/test_skeleton.py"
   ],
   "reviewed_by": [
     "self",
@@ -85,14 +94,17 @@
     "V: CPython 3.9.6 compileall on changed files and git diff --check exited 0. Relative links in the four changed docs resolve; anchor coverage is not claimed as a separate automated check.",
     "C: Fresh-context round one identified two major adapter findings; round two reviews only the new global-index and reader-primitive patches. Neither acceptance.py nor evidence_links.py changed.",
     "V: A real CLI invocation over a private fixture with no referenced artifacts returned complete/exit 0 and files_rechecked=false. That proves only supplied observation consistency, not artifact existence or freshness.",
-    "C: Fresh-context new-diff round two closed both major findings and reported no new blocking findings. The unused fixed-model reviewer entry failed before any review; a default inherited-model reviewer performed the actual review instead."
+    "C: Fresh-context new-diff round two closed both major findings and reported no new blocking findings. The unused fixed-model reviewer entry failed before any review; a default inherited-model reviewer performed the actual review instead.",
+    "V: GitHub Actions run 42031788807 observed test_skeleton.StableV1ContractTests.test_cli_command_inventory_is_stable fail on Linux CPython 3.9 and 3.13 because evidence was absent from the stable command list.",
+    "V: macOS CPython 3.13.9 observed the same inventory guard fail locally, then pass after adding evidence; tests.test_evidence_verify_cli plus that guard ran 31 focused tests OK in 9.784 seconds, exit 0.",
+    "V: git diff --check passed after the inventory and review-record update. Exact-SHA CI for this new candidate remains separate evidence."
   ],
   "landing_sign_off": {
     "status": "not_landed",
     "authority": "agent under existing routine technical delegation",
     "scope": "technical review only; no public push bypass or release authorization"
   },
-  "unverified_scope": "No live original-artifact reread/freshness, actual unsupported host, Linux/Windows, full current product suite, real provider/model/credentials, task execution, clean-wheel build/install, exact-SHA CI, product-main integration, tag, Release or package upload. The final canonical public identity/message/private-content gate and exact remote readback remain separate from local code tests.",
+  "unverified_scope": "Exact-SHA CI for the new candidate, live original-artifact reread/freshness, an actual unsupported host, Linux/Windows, the full current product suite, real provider/model/credentials, task execution, clean-wheel build/install, product-main integration, tag, Release and package upload remain unverified. The prior Linux exact-SHA failure is recorded and was not relabeled green.",
   "review_history": [
     {
       "round": 1,
