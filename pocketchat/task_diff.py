@@ -7,15 +7,17 @@ records contain. It never claims that unselected paths were unchanged.
 
 from __future__ import annotations
 
-import copy
 import difflib
 import hashlib
 import json
 import posixpath
+import re
 from typing import Any, Dict, Tuple
 
-from .task_context import CONTEXT_TREE_SCHEMA
-from .task_snapshot import CONTEXT_SNAPSHOT_SCHEMA
+from .task_context import CONTEXT_TREE_SCHEMA, MAX_FILES as MAX_TREE_FILES
+from .task_selection import MAX_QUERY_TERMS, MAX_SELECTED_FILES
+from .task_snapshot import (CONTEXT_SNAPSHOT_SCHEMA, MAX_SNAPSHOT_BYTES,
+                            MAX_SNAPSHOT_FILE_BYTES)
 
 REPORT_SCHEMA = "pocketchat-task-diff.v1"
 MAX_FILES = 4096
@@ -23,6 +25,8 @@ MAX_REPORT_BYTES = 64 * 1024
 DEFAULT_MAX_FILES = 512
 DEFAULT_MAX_BYTES = 64 * 1024
 RELATIVE_PATH_MAX = 1024
+MAX_LINE_COMPARE_BYTES = 256 * 1024
+MAX_LINE_COMPARE_LINES = 2048
 
 _SNAPSHOT_KEYS = frozenset({
     "schema_version", "tree_schema", "tree_sha256", "selection_sha256",
@@ -30,6 +34,7 @@ _SNAPSHOT_KEYS = frozenset({
     "max_bytes", "total_bytes", "selection_size_changed_files", "files",
     "snapshot_sha256",
 })
+_QUERY_TOKEN = re.compile(r"[^\W_]+", re.UNICODE)
 _FILE_KEYS = frozenset({
     "path", "selection_bytes", "bytes", "selection_size_changed", "sha256",
     "text",
@@ -105,25 +110,40 @@ def _validate_snapshot(payload: Any, label: str) -> Dict[str, Any]:
     if not isinstance(payload.get("selection_truncated"), bool):
         raise TaskDiffError("invalid_snapshot", "structure",
                             "%s.selection_truncated must be a boolean" % label)
-    for field in ("selection_size_changed_files", "total_matches",
-                  "selected_files", "max_bytes", "total_bytes"):
+    integer_bounds = {
+        "selection_size_changed_files": (0, MAX_SELECTED_FILES),
+        "total_matches": (0, MAX_TREE_FILES),
+        "selected_files": (0, MAX_SELECTED_FILES),
+        "max_bytes": (1, MAX_SNAPSHOT_BYTES),
+        "total_bytes": (0, MAX_SNAPSHOT_BYTES),
+    }
+    for field, bounds in integer_bounds.items():
         try:
-            _integer(payload.get(field), "%s.%s" % (label, field))
+            _integer(payload.get(field), "%s.%s" % (label, field),
+                     low=bounds[0], high=bounds[1])
         except TaskDiffError:
-            raise TaskDiffError("invalid_snapshot", "structure",
-                                "%s.%s must be a non-negative integer"
-                                % (label, field))
+            raise TaskDiffError(
+                "invalid_snapshot", "structure",
+                "%s.%s is outside the context snapshot bounds"
+                % (label, field))
     terms = payload.get("query_terms")
     if (not isinstance(terms, list) or not terms
-            or any(not isinstance(term, str) or not term for term in terms)
+            or len(terms) > MAX_QUERY_TERMS
+            or any(not isinstance(term, str) or not term
+                   or "\x00" in term or len(term) > 128
+                   or term != term.casefold()
+                   or _QUERY_TOKEN.fullmatch(term) is None
+                   for term in terms)
             or terms != sorted(set(terms))):
-        raise TaskDiffError("invalid_snapshot", "structure",
-                            "%s.query_terms must be a sorted unique non-empty list"
-                            % label)
+        raise TaskDiffError(
+            "invalid_snapshot", "structure",
+            "%s.query_terms does not match the bounded normalized shape"
+            % label)
     files = payload.get("files")
-    if not isinstance(files, list):
-        raise TaskDiffError("invalid_snapshot", "structure",
-                            "%s.files must be a list" % label)
+    if not isinstance(files, list) or len(files) > MAX_SELECTED_FILES:
+        raise TaskDiffError(
+            "invalid_snapshot", "structure",
+            "%s.files must be a list within the selection file limit" % label)
     if payload["selected_files"] != len(files):
         raise TaskDiffError("snapshot_contradiction", "structure",
                             "%s.selected_files does not match files length" % label)
@@ -178,12 +198,16 @@ def _validate_snapshot(payload: Any, label: str) -> Dict[str, Any]:
                                 path=path)
         seen.add(path)
         for field in ("selection_bytes", "bytes"):
+            high = (MAX_SNAPSHOT_FILE_BYTES if field == "bytes"
+                    else 2 ** 63 - 1)
             try:
-                _integer(raw[field], "%s.files[%d].%s" % (label, index, field))
+                _integer(raw[field], "%s.files[%d].%s" % (label, index, field),
+                         high=high)
             except TaskDiffError:
-                raise TaskDiffError("invalid_snapshot", "structure",
-                                    "%s.files[%d].%s must be a non-negative integer"
-                                    % (label, index, field), path=path)
+                raise TaskDiffError(
+                    "invalid_snapshot", "structure",
+                    "%s.files[%d].%s is outside the snapshot bounds"
+                    % (label, index, field), path=path)
         if not isinstance(raw["selection_size_changed"], bool):
             raise TaskDiffError("invalid_snapshot", "structure",
                                 "%s.files[%d].selection_size_changed must be boolean"
@@ -197,10 +221,11 @@ def _validate_snapshot(payload: Any, label: str) -> Dict[str, Any]:
                                 "%s.files[%d].sha256 must be lowercase SHA-256"
                                 % (label, index), path=path)
         text = raw["text"]
-        if not isinstance(text, str):
-            raise TaskDiffError("invalid_snapshot", "structure",
-                                "%s.files[%d].text must be a string"
-                                % (label, index), path=path)
+        if not isinstance(text, str) or "\x00" in text:
+            raise TaskDiffError(
+                "invalid_snapshot", "structure",
+                "%s.files[%d].text must be a NUL-free string"
+                % (label, index), path=path)
         encoded = text.encode("utf-8")
         if hashlib.sha256(encoded).hexdigest() != raw["sha256"]:
             raise TaskDiffError("snapshot_contradiction", "structure",
@@ -232,10 +257,18 @@ def _validate_snapshot(payload: Any, label: str) -> Dict[str, Any]:
     }
 
 
-def _line_counts(before: str, after: str) -> Tuple[int, int]:
+def _line_counts(before: str, after: str, *,
+                 before_bytes: int, after_bytes: int
+                 ) -> Tuple[int | None, int | None]:
+    if before_bytes + after_bytes > MAX_LINE_COMPARE_BYTES:
+        return None, None
+    before_lines = before.splitlines()
+    after_lines = after.splitlines()
+    if len(before_lines) + len(after_lines) > MAX_LINE_COMPARE_LINES:
+        return None, None
     added = removed = 0
-    matcher = difflib.SequenceMatcher(a=before.splitlines(),
-                                      b=after.splitlines(), autojunk=False)
+    matcher = difflib.SequenceMatcher(a=before_lines, b=after_lines,
+                                      autojunk=False)
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag in ("replace", "delete"):
             removed += i2 - i1
@@ -273,7 +306,9 @@ def _entry(before: Dict[str, Any] | None,
         }
     if before["sha256"] == after["sha256"] and before["bytes"] == after["bytes"]:
         return None
-    added, removed = _line_counts(before["text"], after["text"])
+    added, removed = _line_counts(
+        before["text"], after["text"],
+        before_bytes=before["bytes"], after_bytes=after["bytes"])
     return {
         "path": before["path"],
         "change": "modified",
@@ -281,7 +316,7 @@ def _entry(before: Dict[str, Any] | None,
         "after_sha256": after["sha256"],
         "before_bytes": before["bytes"],
         "after_bytes": after["bytes"],
-        "text_compared": True,
+        "text_compared": added is not None,
         "lines_added": added,
         "lines_removed": removed,
     }
@@ -371,20 +406,21 @@ def _build(baseline: Dict[str, Any], final: Dict[str, Any],
         dropped = body["entries"].pop()
         body["omitted_files"] += 1
         body["omitted_paths"].append(dropped["path"])
+        body["omitted_paths"].sort()
         add_byte_omission()
     if final_size() > max_bytes:
-        body["omissions"] = [{"reason": "max_bytes", "detail": "", "path": ""}]
-        body["compared_files"] = 0
-        body["changed_files"] = 0
-        while final_size() > max_bytes and body["omissions"]:
-            body["omissions"] = []
-        if final_size() > max_bytes and body["omitted_paths"]:
-            body["omitted_paths"] = []
-            add_byte_omission()
-        if final_size() > max_bytes:
-            raise TaskDiffError(
-                "byte_limit_exceeded", "limit",
-                "max_bytes is too small for the minimal report envelope")
+        add_byte_omission()
+        reasons = sorted({item["reason"] for item in body["omissions"]})
+        body["omissions"] = [
+            {"reason": reason, "detail": "", "path": ""}
+            for reason in reasons
+        ]
+    if final_size() > max_bytes and body["omitted_paths"]:
+        body["omitted_paths"] = []
+    if final_size() > max_bytes:
+        raise TaskDiffError(
+            "byte_limit_exceeded", "limit",
+            "max_bytes is too small for the minimal report envelope")
     if body["omitted_files"]:
         body["status"] = "partial"
     if body["omissions"]:
@@ -403,6 +439,6 @@ def build_task_diff(baseline: Any, final: Any, *, max_files: int = DEFAULT_MAX_F
     """Return bounded evidence comparing two supplied context snapshots."""
     max_files = _integer(max_files, "max_files", low=1, high=MAX_FILES)
     max_bytes = _integer(max_bytes, "max_bytes", low=1, high=MAX_REPORT_BYTES)
-    before = _validate_snapshot(copy.deepcopy(baseline), "baseline")
-    after = _validate_snapshot(copy.deepcopy(final), "final")
+    before = _validate_snapshot(baseline, "baseline")
+    after = _validate_snapshot(final, "final")
     return _build(before, after, max_files, max_bytes)

@@ -10,8 +10,10 @@ claim that unselected paths were unchanged.
 Both arguments must use the existing context-snapshot schema. The function
 revalidates the closed record shape, tree and snapshot schemas, SHA-256 fields,
 canonical `snapshot_sha256`, file rows, total bytes, size-change counters and
-workspace-relative paths. A malformed record is refused with `TaskDiffError`;
-it is never treated as an empty snapshot.
+workspace-relative paths. It also enforces the producer's actual bounds: at
+most 64 selected files, 32 bounded query terms, a 16 MiB snapshot budget, a
+1 MiB current file body and NUL-free text. A malformed or impossible record is
+refused with `TaskDiffError`; it is never treated as an empty snapshot.
 
 `max_files` and `max_bytes` are explicit positive integers. Booleans, strings,
 floats and non-positive values are refused with `error_type="invalid_limits"`.
@@ -32,10 +34,14 @@ both is `modified` when its digest or byte count differs. Equal paths are
 `unchanged` and omitted from `entries`. Text line counts are emitted only when
 both snapshot rows contain text; source text is never copied into the report.
 
-`text_compared` is true only for modified rows with both texts available.
-Added and deleted rows use `false` because there is no two-sided text
-comparison. Rename detection is not attempted: the snapshot schema has no
-rename marker, so a rename appears as a separate delete and add.
+`text_compared` is true only for modified rows whose bounded line comparison
+ran. To prevent quadratic work on repetitive input, line detail is omitted when
+the two bodies exceed 256 KiB combined or 2,048 lines combined; then
+`text_compared` is false and both line counts are null while digest/byte change
+evidence remains available. Added and deleted rows also use `false` because
+there is no two-sided text comparison. Rename detection is not attempted: the
+snapshot schema has no rename marker, so a rename appears as a separate delete
+and add.
 
 `compared_files` is the number of changed paths represented by the entries
 before limits, not the sum of baseline and final row counts.

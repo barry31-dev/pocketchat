@@ -10,7 +10,9 @@ from pathlib import Path
 from unittest import mock
 
 from pocketchat.task_diff import TaskDiffError, build_task_diff
-from pocketchat.task_snapshot import CONTEXT_SNAPSHOT_SCHEMA
+from pocketchat.task_selection import MAX_QUERY_TERMS, MAX_SELECTED_FILES
+from pocketchat.task_snapshot import (CONTEXT_SNAPSHOT_SCHEMA,
+                                      MAX_SNAPSHOT_BYTES)
 
 
 DIGEST_A = "a" * 64
@@ -164,6 +166,24 @@ class TaskDiffCoverageTests(unittest.TestCase):
         self.assertIn("selection_size_changed",
                       {item["reason"] for item in report["omissions"]})
 
+    def test_large_repetitive_text_skips_unbounded_line_matching(self):
+        before_text = "x\n" * 1025
+        after_text = "x\n" * 1024 + "y\n"
+        baseline = snapshot([file_row("large.txt", before_text)])
+        final = snapshot([file_row("large.txt", after_text)])
+
+        with mock.patch(
+                "pocketchat.task_diff.difflib.SequenceMatcher",
+                side_effect=AssertionError("unbounded line matcher called")):
+            report = build_task_diff(
+                baseline, final, max_files=8, max_bytes=8192)
+
+        entry = report["entries"][0]
+        self.assertEqual("modified", entry["change"])
+        self.assertFalse(entry["text_compared"])
+        self.assertIsNone(entry["lines_added"])
+        self.assertIsNone(entry["lines_removed"])
+
     def test_missing_text_is_refused_as_a_non_snapshot_record(self):
         baseline = snapshot([file_row("README.md", "old\n")])
         final_row = file_row("README.md", "new\n")
@@ -238,6 +258,31 @@ class TaskDiffLimitTests(unittest.TestCase):
         self.assertEqual("partial", refused["status"])
         self.assertLessEqual(refused["report_bytes"], exact_size - 1)
         self.assertIn("max_bytes", {item["reason"] for item in refused["omissions"]})
+
+    def test_byte_pressure_preserves_coverage_reasons_and_sorted_paths(self):
+        baseline = snapshot([])
+        final = snapshot([
+            file_row("a.txt", "a\n"),
+            file_row("b.txt", "b\n"),
+            file_row("c.txt", "c\n"),
+        ])
+        report = None
+        for size in range(1, 1025):
+            try:
+                candidate = build_task_diff(
+                    baseline, final, max_files=1, max_bytes=size)
+            except TaskDiffError as exc:
+                self.assertEqual("byte_limit_exceeded", exc.error_type)
+                continue
+            if not candidate["entries"] and candidate["omitted_files"]:
+                report = candidate
+                break
+        self.assertIsNotNone(report)
+        reasons = {item["reason"] for item in report["omissions"]}
+        self.assertTrue(
+            {"empty_snapshot", "max_files", "max_bytes"} <= reasons)
+        self.assertEqual(sorted(report["omitted_paths"]),
+                         report["omitted_paths"])
 
     def test_invalid_limits_are_refused(self):
         baseline = snapshot([file_row("README.md", "x\n")])
@@ -326,6 +371,48 @@ class TaskDiffSnapshotValidationTests(unittest.TestCase):
                     build_task_diff(snapshot([]), unsafe, max_files=8,
                                     max_bytes=8192)
                 self.assertEqual("unsafe_path", caught.exception.error_type)
+
+    def test_snapshot_producer_bounds_are_enforced(self):
+        good = snapshot([file_row("README.md", "x\n")])
+
+        too_many_terms = copy.deepcopy(good)
+        too_many_terms["query_terms"] = [
+            "term%02d" % index for index in range(MAX_QUERY_TERMS + 1)
+        ]
+        too_many_terms["snapshot_sha256"] = canonical_sha256(
+            {key: value for key, value in too_many_terms.items()
+             if key != "snapshot_sha256"})
+
+        too_many_files = snapshot([
+            file_row("f%02d.txt" % index, "%d\n" % index)
+            for index in range(MAX_SELECTED_FILES + 1)
+        ])
+
+        non_normalized_terms = copy.deepcopy(good)
+        non_normalized_terms["query_terms"] = ["two words"]
+        non_normalized_terms["snapshot_sha256"] = canonical_sha256(
+            {key: value for key, value in non_normalized_terms.items()
+             if key != "snapshot_sha256"})
+
+        oversized_budget = copy.deepcopy(good)
+        oversized_budget["max_bytes"] = MAX_SNAPSHOT_BYTES + 1
+        oversized_budget["snapshot_sha256"] = canonical_sha256(
+            {key: value for key, value in oversized_budget.items()
+             if key != "snapshot_sha256"})
+
+        nul_text = snapshot([file_row("nul.txt", "safe\x00not-safe")])
+
+        for label, bad in (
+                ("query terms", too_many_terms),
+                ("normalized query terms", non_normalized_terms),
+                ("selected files", too_many_files),
+                ("snapshot byte budget", oversized_budget),
+                ("NUL text", nul_text)):
+            with self.subTest(label=label):
+                with self.assertRaises(TaskDiffError) as caught:
+                    build_task_diff(good, bad, max_files=8, max_bytes=8192)
+                self.assertEqual("invalid_snapshot",
+                                 caught.exception.error_type)
 
     def test_input_row_digest_and_selection_counters_are_consistent(self):
         bad = snapshot([file_row("README.md", "x\n", sha256="not-a-digest")])

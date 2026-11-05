@@ -8,7 +8,9 @@
 
 两个参数都必须符合现有 context snapshot schema。函数会重新校验封闭记录形状、
 tree / snapshot schema、SHA-256 字段、canonical `snapshot_sha256`、文件行、总字节、
-大小变化计数和工作区相对路径。格式错误的记录用 `TaskDiffError` 拒绝，绝不当成空快照。
+大小变化计数和工作区相对路径，并执行 producer 的真实边界：最多 64 个选中文件、
+32 个有界查询词、16 MiB snapshot 预算、当前单文件正文最多 1 MiB，且文本不得含 NUL。
+格式错误或 producer 不可能产生的记录用 `TaskDiffError` 拒绝，绝不当成空快照。
 
 `max_files` 与 `max_bytes` 必须显式给出正整数；布尔、字符串、浮点和非正值都以
 `error_type="invalid_limits"` 拒绝。精确边界本身允许通过。
@@ -27,9 +29,11 @@ tree / snapshot schema、SHA-256 字段、canonical `snapshot_sha256`、文件�
 digest 或字节数不同的是 `modified`；完全相同的是 `unchanged`，不进入 `entries`。
 只有两边都有文本时才输出行数变化；源文本绝不复制进报告。
 
-`text_compared` 只在两边都有文本的 modified 行为 true；added / deleted 行固定为
-false，因为不存在双边文本比较。snapshot schema 没有 rename 标记，所以本函数不猜重命名，
-只分别报告 delete 与 add。
+`text_compared` 只在 modified 行确实执行了有界行比较时为 true。为了避免重复文本触发
+二次方复杂度，两边正文合计超过 256 KiB 或 2,048 行时省略行级明细，此时
+`text_compared` 为 false、两个行数为 null，但 digest / 字节变化证据仍保留。
+added / deleted 行也固定为 false，因为不存在双边文本比较。snapshot schema 没有 rename
+标记，所以本函数不猜重命名，只分别报告 delete 与 add。
 
 `compared_files` 是限额前 entries 代表的变化路径数，不是 baseline 与 final 文件行数之和。
 
