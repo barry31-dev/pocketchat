@@ -55,6 +55,7 @@
     }
   ],
   "commit_or_candidate_sha": "self",
+  "record_schema_followup_sha": "942d9275d9d8e06c8aae547ff53da4a45eab1301",
   "changed_paths": [
     "docs/review-task-preflight-v1.json",
     "docs/slice-queue.md",

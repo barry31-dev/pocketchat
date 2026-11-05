@@ -83,7 +83,7 @@
   "base_sha": "9f3336389132fa58e1e25511eab404e4eb898fdb",
   "reviewed_fix_sha": "3d5812a1060c7ee539e92e5520ed6dacf8846a5b",
   "schema_followup_sha": "ca2ff0b10a201d446512e4a2a110420e32d9c5da",
-  "review_scope_note": "The original review record is historical and unchanged. Its three-round limit led to reconsideration; only concrete integration gaps and their new fix diffs were reviewed here. An interrupted reviewer attempt read no source and is not counted as completed review.",
+  "review_scope_note": "The original review record is historical and unchanged. Its three-round limit led to reconsideration; only concrete integration gaps and their new fix diffs were reviewed here. An interrupted reviewer attempt read no source and is not counted as completed review. The 942d927 follow-up changes record ownership and internal wording only; source-review findings are unchanged.",
   "review_sessions": [
     {
       "reviewer": "Pauli",
@@ -133,21 +133,22 @@
     }
   ],
   "delivery_hold": {
-    "status": "blocked_before_public_action",
+    "status": "reopened_after_policy_fix",
     "source_type": "local run (V) + current code/tests/schema (C)",
     "verification": "verified",
-    "scope": "Read-only publication gate diagnostics; no push or history rewrite.",
+    "scope": "The product branch now passes the identity and content gates after control-plane main 263fe413; exact-candidate CI is still pending.",
     "reasons": [
-      "Observed main already contains twelve commits with service committer GitHub <noreply@github.com>, which the existing identity gate rejects. All commits introduced by this recovery use the configured published identity.",
-      "The current candidate content scan rejects nine review metadata files already on main and one historical original-candidate review record; no policy exemptions were added.",
-      "No exact-candidate CI was created or inherited. Local source checks do not override the publication gates."
+      "Control-plane main 263fe413 admits only API-bound GitHub PR service committers; the product history resolves 12 such merges.",
+      "Product review records now use pocketchat-review-record.v1; the 20 historical schema literals are covered by file-scoped grants.",
+      "The 942d927 candidate’s Git tree scans with zero content hits."
     ],
-    "next_action": "Resolve the established repository identity/content-policy mismatch under explicit authority, then revalidate this exact candidate, push the task branch, obtain exact-SHA CI and finish integration. Do not force-rewrite main or bypass a failed gate."
+    "next_action": "Push the product branch, obtain exact-SHA CI, then land it on product main and update the queue delivered evidence."
   },
-  "unverified_scope": "No real workspace/Git observation, CLI wiring, provider calls, local cross-platform matrix, exact-candidate CI, build/install, tag, Release or upload. This pure check establishes consistency of supplied observations only. No delivered queue status or remote publication is claimed.",
+  "unverified_scope": "No exact-candidate CI has run yet for 942d927. No real workspace/Git observation, CLI wiring, provider call, local cross-platform matrix, build/install, tag, Release or upload is claimed. The review record schema rename is a metadata migration; the existing source-review findings and their evidence are unchanged.",
   "technical_review": {
     "status": "reviewed_no_open_code_findings_in_recorded_scope",
     "reviewed_sha": "ca2ff0b10a201d446512e4a2a110420e32d9c5da",
     "not_a_publication_approval": true
-  }
+  },
+  "product_record_schema_sha": "942d9275d9d8e06c8aae547ff53da4a45eab1301"
 }
