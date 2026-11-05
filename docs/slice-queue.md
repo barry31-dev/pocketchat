@@ -240,7 +240,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-TASK-PREFLIGHT-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-task-preflight`
 - **Write scope**: `pocketchat/task_preflight.py`, `tests/test_task_preflight.py`,
   `docs/task-preflight.md`, `docs/task-preflight.zh-CN.md`,
@@ -267,7 +267,9 @@ and sidecar/preview binding as a separate slice.
   call, publication or claim that a pure fixture is a real Git preflight.
 - **Evidence**: `pocketchat/task_preflight.py`, `tests/test_task_preflight.py`,
   `docs/task-preflight.md`, `docs/task-preflight.zh-CN.md` and
-  `docs/review-task-preflight-v1.json`.
+  `docs/review-task-preflight-v1.json`; delivered on `main` at
+  `fdff82d167a11849d4e6fd7772595fbe3af88486` with exact-SHA run `41944847472`
+  (7/7 checks successful).
 - **Approved by**: agent (user 2026-11-04 16:34 PocketChat delegation); this row
   and the planning review record freeze the existing `PC-TASK-PREFLIGHT-1`
   contract of this public package. This is not an execution authorization and
