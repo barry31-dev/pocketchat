@@ -202,9 +202,9 @@ file hashes, assertions and exits. A router run proves that route, not a direct
 hosted provider or another model. Stub, real-provider and manual terminal
 usability evidence are separate. No new paid calls or credentials are implied.
 
-The E2E slice first delivers the reusable golden-path fixture and development
-validation; its wheel is not automatically the release wheel. In the release
-slice, finish version, packaging and shipped-document changes **before freezing
+The chat delivery package includes the reusable golden-path fixture and development
+validation; E2E is an internal acceptance step, not a separate queue card. Its wheel
+is not automatically the release wheel. In the release package, finish version, packaging and shipped-document changes **before freezing
 the final SHA and wheel**. Then use that same fixture for the final wheel's
 real-provider and manual acceptance, required checks and exact-candidate CI.
 Development-wheel results cannot certify a different version or artifact.
@@ -224,3 +224,21 @@ After this loop, prioritize bounded directory grant expansion, candidate-file
 selection, multi-file review usability, richer diagnosis and observed platform
 or provider gaps. Do not make all memory/context/evidence backlog work a hidden
 prerequisite, and do not count this design as implementation or validation.
+
+
+## 7. Delivery packaging
+
+The 2026-11-05 user request reduces the remaining work to two implementation
+packages plus one release package: **safe changes with undo**, **chat integration
+with development acceptance**, then **final artifact and publication**. Exact IDs,
+write scopes, dependencies and absorbed-row migration live only in
+[slice queue](slice-queue.md#first-chat-and-file-work-sequence-2026-11-05).
+The landed design is not reimplemented. Tests, schema/CLI/docs and necessary
+review stay inside their owning package. Checkpoint commits and session resumes
+do not create extra task IDs or relax leases, review depth, persistent undo,
+trusted confirmation, final-artifact evidence or publication authorization.
+
+Later stages are outcome-driven in the [development roadmap](agent-development-master-plan.zh-CN.md):
+continuous tasks, governed memory/skills, bounded collaboration, and remote work
+only after a separate product decision. They are not pre-created execution rows
+and do not make a broad framework migration a prerequisite for this loop.
