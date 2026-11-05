@@ -26,7 +26,11 @@ decoder's recursion limit.
 The byte limit is checked before UTF-8 decoding. The decoder then requires
 strict UTF-8 and exactly one complete JSON value. Leading and trailing JSON
 whitespace are allowed. A second value or any other non-whitespace tail is
-refused.
+refused. After decoding the bounded UTF-8 bytes, a key-free lexical pass checks
+the first value's depth and node counts before the standard-library decoder
+materializes it. That pass does not build a second JSON value or convert number
+or string tokens. Inputs violating several rules can be refused at the first
+applicable boundary; they are never partially returned.
 
 ## Structure limits
 
@@ -43,12 +47,22 @@ one over is refused.
 
 A valid result preserves the ordinary Python value produced by JSON decoding.
 The module does not sort keys, normalize text, canonicalize numbers, or rewrite
-CJK and emoji strings.
+CJK and emoji strings. Integers are converted exactly in small decimal chunks,
+including values above CPython's ambient integer-string digit limit. The decoder
+does not read or change that process-wide setting: the supplied byte budget
+bounds the accepted integer text. This is not a separate CPU-time or process
+memory limit; callers must choose byte and structure budgets appropriate to
+their environment.
 
 ## Refusals
 
 Every refusal raises `JSONInputError`. Its string is fixed and does not include
-input text. The public metadata is:
+input text. Internally caught decoder exceptions are not retained as its cause
+or context. Python can still attach an exception already handled by the caller;
+its display is suppressed for every refusal. This is an output boundary, not
+in-process secret erasure: callers must not serialize exception internals or
+traceback frame locals, which can still reference sensitive values. The public
+metadata is:
 
 - `error_type`: the stable specific refusal;
 - `category`: one of `limit`, `encoding`, `syntax`, `structure`, or `number`;

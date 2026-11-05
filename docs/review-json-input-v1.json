@@ -13,9 +13,9 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 2,
-  "round_decision": "review",
-  "round_scope": "full",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
   "findings": [
     {
       "id": "F1",
@@ -33,20 +33,42 @@
     },
     {
       "id": "F3",
-      "severity": "minor",
-      "status": "deferred",
+      "severity": "major",
+      "status": "fixed",
       "fingerprint": "independent-fresh-context-review",
-      "reason": "This candidate was produced and reviewed in one interactive session. The author completed a bounded second-pass contract, source, test and documentation review, but an independent fresh-context reviewer was not dispatched. Landing must not infer that missing review from focused tests or author review."
+      "reason": "Independent fresh-context numeric/Unicode/error review completed on immutable 3c02f42. A separate fresh-context reviewer reviewed only the new structural/number/error/test/doc diff, reported F7, then closed the narrow F7 follow-up with no actionable residual. Final source/test/doc scope is covered; historical CI and independent test execution are not inferred."
+    },
+    {
+      "id": "F4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "post-materialization-structural-budgets",
+      "reason": "Depth and node limits used to run only after raw_decode materialized the entire value. Three guard-based negative cases were observed red before adding lexical admission; they now refuse before whole-value materialization and preserve key-free paths."
+    },
+    {
+      "id": "F5",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "input-bearing-decoder-exception-context",
+      "reason": "Independent reviewer reproduced raw input in JSONDecodeError.doc and UnicodeDecodeError.object via __context__, despite from None. Refusals are now raised outside those handlers. A canary regression was red on invalid UTF-8 and is green without a decoder exception cause/context; traceback frame-local erasure is explicitly not claimed."
+    },
+    {
+      "id": "F6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "ambient-integer-digit-limit",
+      "reason": "Independent reviewer reproduced rejection of a valid 4301-digit scalar on CPython 3.14.10 but not 3.9.6. Positive and negative integer regressions were observed red on 3.14.10. Exact chunked conversion now passes without reading or changing the process-wide digit setting."
+    },
+    {
+      "id": "F7",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "active-caller-exception-traceback-disclosure",
+      "reason": "The new-diff reviewer reproduced a caller exception being exposed by relocated raises. All nine refusal types (ten paths with named/overflowed nonfinite values separate) were observed red under an active caller handler. JSONInputError now suppresses context display at construction and relocated raises use from None; docs explicitly exclude exception-internals and frame-local erasure."
     }
   ],
-  "commit_or_candidate_sha": "e375f917db13d1005a64396b92d1e95c3e26daf6",
-  "changed_paths": [
-    "docs/json-input.md",
-    "docs/json-input.zh-CN.md",
-    "docs/review-json-input-v1.json",
-    "pocketchat/json_input.py",
-    "tests/test_json_input.py"
-  ],
+  "commit_or_candidate_sha": "3c02f42011a49df74ffa54150ecabb17fb34a492",
+  "candidate_binding": "This record names the reviewed integration base; the private handoff binds the exact final commit and all five file hashes. No self-referential commit SHA or inherited CI claim.",
   "reviewed_evidence": [
     "C: product issue #17, authored by barry31-dev, is the repository-reachable ready approval record for PC-JSON-CORE-1 and freezes the unique branch, five-path write scope, dependency-free pure-core contract and stop boundary.",
     "C: issue #17 records that this scope is disjoint from active PC-TASK-DEADLINE-1 and the memory-doctor planner, and that the unmerged queue candidate is not a second live approval source.",
@@ -58,7 +80,20 @@
     "C: focused tests cover exact bytes and limit types, byte/depth/node inclusive boundaries, the depth-64 ceiling, scalars, objects, arrays, CJK and emoji, nested duplicate keys, named and overflowed non-finite numbers, invalid UTF-8, malformed/trailing input, structural paths, input immutability and zero file/environment/socket/command/provider calls.",
     "C: the English and Chinese contract pages describe the same API, limit arithmetic, error types/categories, structural path format and non-goals.",
     "C: the full diff is limited to issue #17's five paths and adds no current reader or CLI integration, shared queue edit, serializer, schema migration, CHANGELOG entry, tag, Release or package upload.",
-    "V: GitHub Actions run 41969080254 is attached to branch head 74ed587d296efaa7a2c613bef92fdc757fc8f169 and completed 7/7 jobs successfully: Linux, macOS and Windows on CPython 3.9/3.13 plus release-smoke."
+    "V: GitHub Actions run 41969080254 is attached to branch head 74ed587d296efaa7a2c613bef92fdc757fc8f169 and completed 7/7 jobs successfully: Linux, macOS and Windows on CPython 3.9/3.13 plus release-smoke.",
+    "C: The preceding evidence entries describe historical candidate 74ed587 and its implementation; post-parse-only structural checking and missing independent review are superseded by this follow-up, not claimed as current behavior.",
+    "C: Continued the existing issue #17 candidate on its existing task branch; merged current main f30f7f34bf5816ed7721c3c059fd9bcaf1233a69 without conflicts. No active writer or lease was changed; final product diff remains exactly the approved five paths.",
+    "V: CPython 3.9.6 observed the structural-admission negative test fail in three subcases because raw_decode was called before refusal (exit 1); after lexical admission, 15 focused tests passed (exit 0).",
+    "V: CPython 3.9.6 observed the exception-context regression fail for invalid_utf8 (exit 1). CPython 3.14.10 observed both 4301-digit signed integer regressions fail as invalid_json (exit 1). Both defects were fixed before final focused checks.",
+    "V: macOS CPython 3.9.6: python3 -B -m unittest tests.test_json_input -v; 17 tests passed, no skips, exit 0.",
+    "V: macOS CPython 3.14.10: python3.14 -B -m unittest tests.test_json_input -v; 17 tests passed, no skips, exit 0. This additional version is a regression probe, not a supported-runtime declaration.",
+    "V: Ruff 0.17.3 check --select E9,F pocketchat/json_input.py tests/test_json_input.py passed, exit 0; git diff --check passed.",
+    "V: A deterministic 1144-case standard-library valid-value comparison exercised scalars, arrays, nested objects, CJK/emoji, punctuation/escapes, escaped surrogates, combining text, finite floats, and ASCII/non-ASCII encodings. All compared equal in value and root type on CPython 3.9.6, exit 0. This is bounded compatibility evidence, not a fuzzing completeness claim.",
+    "C: Fresh-context reviewer independently read immutable 3c02f42 numeric/Unicode/error behavior and reproduced F5/F6 on CPython 3.9.6 and 3.14.10; structural resource behavior was explicitly excluded from that reviewer phase.",
+    "C: New-diff-only independent review examined lexical admission, integer conversion, safe errors, tests and bilingual docs; no additional structural/integer finding within that scope. It reported F7 for active caller exception display, which is fixed with a separately observed red-to-green regression.",
+    "V: The active-caller-handler regression initially failed all ten subcases on CPython 3.9.6 (exit 1). After context-display suppression, both CPython 3.9.6 and 3.14.10 ran the final 18 focused tests with no skips, exit 0. Ruff 0.17.3 E9/F and diff check were re-run because executable/test lines changed; both passed.",
+    "C: Bilingual refusal names, Python AST parse, and five-path record identity were checked without rerunning the product suite. The decoder remains unconnected to all existing readers and CLI.",
+    "C: The new-diff reviewer statically closed F7 after checking constructor suppression, both relocated raises, the active-handler regression and bilingual clarification. No actionable residual was found in that narrow follow-up; it did not rerun tests, Ruff or historical review. Review cap is retained as three rounds/new-diff-only."
   ],
-  "unverified_scope": "Only macOS CPython 3.9.6 focused tests and Ruff E9/F were run locally. GitHub Actions run 41969080254 covers branch head 74ed587d296efaa7a2c613bef92fdc757fc8f169 on Linux, macOS and Windows with CPython 3.9/3.13 plus release-smoke, but an independent fresh-context review, real session/task/replay/memory reader integration, provider traffic, tag, Release and publication were not run. A green pure-core test does not prove later reader wiring or compatibility."
+  "unverified_scope": "No final-candidate CI, Linux/Windows run, supported CPython 3.13 run, full product suite, build/install, real reader/CLI integration, provider traffic, CPU/memory exhaustion, tag, Release or package upload was performed in this follow-up. Historical CI belongs only to its historical SHA. Public push and main integration are not authorized by a private candidate record and have not happened for this follow-up."
 }

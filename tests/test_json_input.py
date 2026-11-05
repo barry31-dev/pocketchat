@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import copy
 import os
+import sys
+import traceback
 import unittest
 from unittest import mock
 
@@ -240,6 +242,108 @@ class JSONInputTests(unittest.TestCase):
                 max_nodes=3,
             ),
         )
+
+    def test_structural_limits_refuse_before_materializing_the_value(self):
+        cases = (
+            (b"[" * 65 + b"0" + b"]" * 65, 64, 66,
+             "depth_limit_exceeded", (("array", 0),) * 64),
+            (b'{"private-key":[0,1]}', 2, 3,
+             "node_limit_exceeded", (("object", 0), ("array", 1))),
+            (b'["one","two"]', 1, 2,
+             "node_limit_exceeded", (("array", 1),)),
+        )
+        for data, depth, nodes, error_type, path in cases:
+            with self.subTest(error_type=error_type, nodes=nodes):
+                # A post-decode walk cannot enforce a parsing resource budget:
+                # no whole-value materialization may happen for these inputs.
+                with mock.patch(
+                    "pocketchat.json_input.json.JSONDecoder.raw_decode",
+                    side_effect=AssertionError("value decoded before admission"),
+                ):
+                    error = self.assert_refused(
+                        data, error_type=error_type, category="limit",
+                        max_depth=depth, max_nodes=nodes,
+                    )
+                self.assertEqual(path, error.path)
+                self.assertNotIn("private-key", repr(error.__dict__))
+
+    def test_admission_ignores_delimiters_in_escaped_keys_and_strings(self):
+        data = br'{"a\"[,]":{"\\":["\"}{,:[]",0]}}'
+        self.assertEqual(
+            {'a"[,]': {'\\': ['"}{,:[]', 0]}},
+            decode_json_bytes(data, len(data), 3, 5),
+        )
+
+    def test_admission_preserves_syntax_and_trailing_refusals(self):
+        for data in (b'{"key" 1}', b'[1,]', b'{,}', b'"unterminated',
+                     br'"invalid\q"', b'{"key":}', b'[0 1]'):
+            with self.subTest(data=data):
+                self.assert_refused(
+                    data, error_type="invalid_json", category="syntax",
+                )
+        self.assert_refused(
+            b'0 ' + b'[' * 65 + b'0' + b']' * 65,
+            error_type="trailing_value", category="syntax",
+            max_depth=1, max_nodes=1,
+        )
+
+    def test_refusals_do_not_retain_decoder_input_in_exception_context(self):
+        for data, error_type, category in (
+            (b'"private-source\xff"', "invalid_utf8", "encoding"),
+            (br'"private-source\q"', "invalid_json", "syntax"),
+            (b'{"private-source":1,"private-source":2}',
+             "duplicate_key", "structure"),
+        ):
+            with self.subTest(error_type=error_type):
+                error = self.assert_refused(
+                    data, error_type=error_type, category=category,
+                )
+                self.assertIsNone(error.__context__)
+                self.assertIsNone(error.__cause__)
+                self.assertNotIn("private-source", repr(error.__dict__))
+
+    def test_refusals_suppress_an_exception_already_handled_by_the_caller(self):
+        cases = (
+            (b"null", 4, 0, 1, "invalid_limits"),
+            (b"null", 3, 1, 1, "byte_limit_exceeded"),
+            (b'"\xff"', 3, 1, 1, "invalid_utf8"),
+            (br'"\q"', 4, 1, 1, "invalid_json"),
+            (b'0 1', 3, 1, 1, "trailing_value"),
+            (b'NaN', 3, 1, 1, "nonfinite_number"),
+            (b'1e400', 5, 1, 1, "nonfinite_number"),
+            (b'{"key":0,"key":1}', 17, 1, 3, "duplicate_key"),
+            (b'[[0]]', 5, 1, 3, "depth_limit_exceeded"),
+            (b'[0]', 3, 1, 1, "node_limit_exceeded"),
+        )
+        canary = "outer-exception-private-canary"
+        for data, byte_limit, depth, nodes, error_type in cases:
+            with self.subTest(error_type=error_type, data=data):
+                try:
+                    raise ValueError(canary)
+                except ValueError:
+                    try:
+                        decode_json_bytes(data, byte_limit, depth, nodes)
+                    except JSONInputError as error:
+                        self.assertEqual(error_type, error.error_type)
+                        rendered = "".join(traceback.format_exception(
+                            type(error), error, error.__traceback__))
+                        self.assertNotIn(canary, rendered)
+                        self.assertTrue(error.__suppress_context__)
+                        self.assertIsNone(error.__cause__)
+                    else:
+                        self.fail("expected a bounded JSON refusal")
+
+    def test_large_finite_integers_preserve_value_without_changing_global_guard(self):
+        get_guard = getattr(sys, "get_int_max_str_digits", lambda: None)
+        guard_before = get_guard()
+        expected = 10 ** 4300
+        for prefix, value in ((b"", expected), (b"-", -expected)):
+            data = prefix + b"1" + b"0" * 4300
+            with self.subTest(negative=bool(prefix)):
+                decoded = decode_json_bytes(data, len(data), 1, 1)
+                self.assertIs(type(decoded), int)
+                self.assertTrue(decoded == value)
+        self.assertEqual(guard_before, get_guard())
 
     def test_decoder_performs_no_external_io_or_provider_call(self):
         data = b'{"value":[1,2,3]}'
