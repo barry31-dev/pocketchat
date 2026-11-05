@@ -14,8 +14,8 @@
   "tier": "medium",
   "review_depth": "standard",
   "rounds": 3,
-  "round_decision": "reconsider",
-  "round_scope": "new-diff-only",
+  "round_decision": "accept",
+  "round_scope": "full",
   "findings": [
     {
       "id": "TD-1",
@@ -62,12 +62,33 @@
     {
       "id": "TD-7",
       "severity": "minor",
-      "status": "deferred",
+      "status": "fixed",
       "fingerprint": "independent-reviewer-no-verdict",
-      "reason": "A separate read-only Codex reviewer was started against the five-path diff. It produced no verdict after more than two minutes and was interrupted; author-side review and tests are not rewritten as independent review. This is a known review limitation, not a pass."
+      "reason": "A separate fresh-context review completed against issue #18 and the full five-path diff. It found three major boundedness defects, required red regressions and fixes, and then accepted the corrected candidate with no open blocker or major finding."
+    },
+    {
+      "id": "TD-8",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "snapshot-validator-omits-producer-resource-bounds",
+      "reason": "The validator accepted records impossible under the existing snapshot producer, including more than 64 selected files, more than 32 query terms, an over-16-MiB snapshot budget and NUL text. It now enforces the producer constants and normalized query-token shape before hashing or comparison; regression cases failed before the fix and pass afterward."
+    },
+    {
+      "id": "TD-9",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "quadratic-sequence-matcher-on-legal-repetitive-text",
+      "reason": "SequenceMatcher with autojunk disabled took 7.541 seconds for only 8,000 repeated lines and could receive much larger legal snapshots. Optional line counts now stop before 256 KiB or 2,048 combined lines; digest and byte evidence remains complete and the regression proves the matcher is not called beyond the bound."
+    },
+    {
+      "id": "TD-10",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "byte-budget-removes-coverage-reasons-and-path-order",
+      "reason": "The byte-budget fallback could return omitted_files with no omission reason and could append a dropped entry after existing omitted paths, yielding b,c,a. It now preserves every coverage reason in a compact form, always names max_bytes when byte pressure occurs, sorts retained paths and refuses budgets too small for that truthful envelope."
     }
   ],
-  "commit_or_candidate_sha": "0db35fe0d27d48939c50eec2398b9aac05b5052e",
+  "commit_or_candidate_sha": "df968a468e894ba629b0b6f1677dfb709173aaf5",
   "changed_paths": [
     "docs/review-task-diff-v1.json",
     "docs/task-diff.md",
@@ -76,19 +97,19 @@
     "tests/test_task_diff.py"
   ],
   "reviewed_evidence": [
-    "C: candidate 0db35fe0d27d48939c50eec2398b9aac05b5052e contains exactly the five approved paths and uses the published barry31-dev identity for author and committer.",
-    "C: product origin/main b68929df3818ed901b5353f727216885b874e2b1 supplied the existing CONTEXT_SNAPSHOT_SCHEMA, snapshot digest and snapshot_files behavior used by this slice.",
-    "V: the first focused run failed because pocketchat.task_diff did not exist; after an importable empty contract, the behavioral test failed with NotImplementedError before implementation.",
-    "V: CPython 3.13.9 ran `python3 -B -m unittest tests.test_task_diff -v`: 19 tests OK, exit 0.",
-    "V: CPython 3.13.9 ran the full local product suite `python3 -B -m unittest discover -s tests -v` twice after the final implementation changes: 1297 tests OK, exit 0 each time.",
-    "V: `python -m ruff check --select E9,F pocketchat/task_diff.py tests/test_task_diff.py` passed with exit 0.",
-    "V: `python -m compileall -q pocketchat/task_diff.py tests/test_task_diff.py` and `git diff --check` passed with exit 0.",
-    "C: the focused no-I/O test mocks open, socket, subprocess.run and environment access; build_task_diff reads only the two supplied mappings and never opens a path or calls Git/provider code.",
-    "C: both snapshots are closed and revalidated; canonical snapshot_sha256, tree schema, row digests, text/bytes equality, aggregate counters and workspace-relative paths are checked before comparison.",
-    "C: selection identity is query terms plus selected paths; file size changes do not masquerade as selection mismatch, while changed tree digests emit tree_mismatch and keep the report partial.",
-    "C: added/deleted/modified/unchanged semantics, sorted entries, no source-text echo, exact file/byte boundaries, omitted path evidence, input immutability and whole_workspace_compared=false match the approved issue.",
-    "C: the implementation remains a pure module; no reader, CLI, task runtime, checkpoint, provider, CHANGELOG, shared slice queue or publication path was edited.",
-    "V: the independent read-only reviewer did not return a verdict before the bounded stop; it is recorded as deferred rather than counted as review evidence."
+    "C: corrected candidate df968a468e894ba629b0b6f1677dfb709173aaf5 has exactly the five issue #18 paths relative to product main b68929df3818ed901b5353f727216885b874e2b1 and uses the published barry31-dev identity.",
+    "C: product main supplied the existing CONTEXT_SNAPSHOT_SCHEMA, MAX_SELECTED_FILES, MAX_QUERY_TERMS, MAX_SNAPSHOT_BYTES, MAX_SNAPSHOT_FILE_BYTES and snapshot_files behavior used as the validation authority.",
+    "V: the original implementation observed a missing-module/NotImplemented red phase, 19 focused tests and 1297 full-suite tests on CPython 3.13.9 before this independent review.",
+    "V: CPython 3.9.6 performance probing of SequenceMatcher(autojunk=False) over repeated lines measured 0.115s at 1,000, 0.469s at 2,000, 1.897s at 4,000 and 7.541s at 8,000 lines, establishing the quadratic review finding.",
+    "V: new producer-bound regressions first failed because oversized query/file/budget/NUL records were accepted; the repetitive-text regression first failed because SequenceMatcher was called; the omission regression first failed because required reasons were absent.",
+    "V: after the final fixes, CPython 3.9.6 ran `python3 -B -m unittest tests.test_task_diff -v`: 23 tests OK, exit 0.",
+    "V: Ruff 0.17.3 `check --select E9,F pocketchat/task_diff.py tests/test_task_diff.py`, `python3 -m compileall -q pocketchat/task_diff.py tests/test_task_diff.py` and `git diff --check` passed with exit 0.",
+    "C: the corrected validator enforces the closed producer bounds before comparison and no longer deep-copies caller objects; normalized output rows remain detached and the input-immutability test passes.",
+    "C: line-count detail is optional and bounded while digest/byte/path change evidence remains present; large repetitive text does not enter the quadratic matcher.",
+    "C: byte-pressure degradation keeps complete reason identities, sorted retained omitted paths and accurate counters, or refuses when even the truthful minimal envelope cannot fit.",
+    "C: added/deleted/modified/unchanged semantics, selection/tree coverage, sorted entries, no source-text echo, exact file/byte boundaries, input immutability and whole_workspace_compared=false match issue #18.",
+    "C: the no-I/O test still patches open, socket, subprocess.run and environment access; the implementation edits no reader, CLI, task runtime, checkpoint, provider, CHANGELOG, shared queue or publication path.",
+    "C: an independent fresh-context review read issue #18, all five changed paths, producer contracts and boundary behavior; all blocker/major findings are fixed in df968a468e894ba629b0b6f1677dfb709173aaf5."
   ],
-  "unverified_scope": "Only macOS CPython 3.13.9 was run locally. No exact-SHA GitHub CI, Linux/Windows run, CPython 3.9 run, live snapshot collection, real workspace/Git observation, CLI integration, provider call, package build/install, tag, Release or publication was performed. A complete report only compares the two supplied snapshot records and does not prove the whole workspace or any unselected path is unchanged."
+  "unverified_scope": "The corrected candidate was run locally only on macOS CPython 3.9.6 with the focused task-diff suite. The predecessor head 68068e7 had 7/7 exact-SHA GitHub jobs, but those results are not reused for df968a4. No exact-SHA CI for the corrected candidate, Linux/Windows run, CPython 3.13 run, final full product suite, live snapshot collection, real workspace/Git observation, CLI integration, provider call, package build/install, merge, tag, Release or publication was performed. A complete report only compares the two supplied snapshot records and does not prove the whole workspace or any unselected path is unchanged."
 }
