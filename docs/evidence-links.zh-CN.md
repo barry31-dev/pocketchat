@@ -86,3 +86,37 @@ request、message 或 credential 正文。排序稳定，不受调用方输入�
 本切片不加 CLI、不读取 artifact 字节、不证明摘要来自当前文件系统、不修复
 不一致、不调用 provider，也不声称已发布。需要这些动作时，应由另一个有界
 reader/CLI 切片实现，并在报告中保持证据范围明确。
+
+## 显式观察 CLI
+
+```bash
+pocketchat evidence verify observations.json --workspace ./checkout --json
+pocketchat evidence verify observations.json --workspace ./checkout
+```
+
+`observations.json` 必须是规范的**工作区相对路径**。`--workspace` 指定只读根，默认当前目录。
+命令只读这一个观察文档，不打开其中声明的原工件，不执行任务、重放请求、修复证据、读取 profile
+或调用模型。输入对象闭合为 `schema_version: 1`、`artifacts`、`relations` 三字段；工件与关系结构
+沿用本文纯核契约。完整示例见 [英文对应页](evidence-links.md#explicit-observation-cli)，示例摘要
+只是说明性声明，不是实际文件测量。
+
+本入口复用 `verify_evidence_links()`，`complete` 只表示**传入观察内部一致**，不证明原文件仍存在
+或被本进程重新核验。因此每份结果都带 `scope: "supplied_observations"`、`files_rechecked: false`；
+`source_sha256` 只绑定真正读取的观察文档字节，不绑定其所指原工件的新鲜度。
+
+ID 匹配 `[A-Za-z][A-Za-z0-9_-]{0,63}`，路径沿用现有安全相对路径规则；identity 名称沿用纯核的
+闭合集合。`run_ids` 最多 256 个唯一 ID，`turn` 为正的 32 位整数；工件/关系未知字段、非法 metadata
+均拒绝。`required` 与 `present` 是可选布尔字段。输入上限 1 MiB（含边界），有限 UTF-8 JSON 严格
+解码，重复键、非有限数与超过 64 层嵌套拒绝。沿用 descriptor-relative/no-follow reader，拒绝
+symlink、非普通文件、受保护路径、读取中变化与能力缺失，不退回普通路径跟随。显式根本身不能是
+symlink；既有 reader 不声称能检测根外所有祖先替换，descriptor 观察不是文件系统沙箱。
+
+输出为包含尾换行在内最多 64 KiB 的单 JSON，`ok` 只在 complete 为 true；finding 用输入的
+**零基索引**定位，歧义/全局项用 null，仅保留固定 kind/status/reason。路径、ID、identity 值、诊断
+detail、正文和凭据不复制到输出。同输入字节的 JSON 输出稳定；超预算明确拒绝，不悄悄截断。
+
+完整 complete 返回 0；partial 返回 1 且 ok=false，包括不完整 coverage、可选证据省略或没有显式
+relation；refused/坏输入返回 2 且 ok=false，包括空工件集、摘要/身份矛盾、不安全读取或超限。
+人类输出与 JSON 共用结果/退出码。可处理错误有 `error: "evidence"` 与固定原因，JSON 的 stderr
+不含正文/traceback。命令不生成 session、trace、request、验收 receipt 或输出文件；真实工件采集与
+新鲜度核验另需独立批准，不把本入口宣称为那个能力。
