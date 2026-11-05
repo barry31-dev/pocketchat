@@ -30,7 +30,7 @@
       "reason": "This candidate was produced in one interactive agent session. The author completed a bounded second-pass review of issue #15, the full three-file diff and the focused tests, but an independent fresh-context reviewer was not dispatched. Landing must not infer that missing review from local tests or author review."
     }
   ],
-  "commit_or_candidate_sha": "self",
+  "commit_or_candidate_sha": "7f94f0b1e73eb3179c35d207cd6d9808393cbd03",
   "changed_paths": [
     "docs/review-task-deadline-v1.json",
     "pocketchat/task_deadline.py",
@@ -44,7 +44,8 @@
     "C: The source review confirms serialized records contain only relative duration fields and step state, never a monotonic anchor or wall-clock value; restore validates exact fields and arithmetic before re-anchoring.",
     "C: Focused tests cover positive integer validation, whole-task and step expiry, effective capping, reserve/settle/expired idempotency, one active step, resume re-anchoring, closed-step stability, malformed records, backwards clocks and zero file/network/command/signal/wall-clock calls.",
     "C: The full diff stays within issue #15's three paths and adds no CLI, shared queue edit, checkpoint integration, cancellation state machine, provider timeout, tag, Release or package upload.",
-    "V: JSON parsing, Python AST parsing and `git diff --check` passed locally."
+    "V: JSON parsing, Python AST parsing and `git diff --check` passed locally.",
+    "V: GitHub Actions run 41964823728 is attached to implementation candidate 7f94f0b1e73eb3179c35d207cd6d9808393cbd03 and completed 7/7 jobs successfully: Linux, macOS and Windows on CPython 3.9/3.13 plus release-smoke."
   ],
-  "unverified_scope": "Only macOS CPython 3.9.6 focused tests and Ruff E9/F were run locally. The full product suite, package build/install, CPython 3.13, Linux, Windows, exact-SHA GitHub Actions, independent fresh-context review, real checkpoint/task integration, signals, subprocess termination, provider timeout, tag, Release and publication were not run. A green pure-core test does not prove later task cancellation or checkpoint wiring."
+  "unverified_scope": "The author did not run the full product suite or package build/install locally. Exact-SHA GitHub Actions run 41964823728 covers the implementation candidate on Linux, macOS and Windows with CPython 3.9/3.13 plus release-smoke, but an independent fresh-context review, real checkpoint/task integration, signals, subprocess termination, provider timeout, tag, Release and publication were not run. A green pure-core test does not prove later task cancellation or checkpoint wiring."
 }
