@@ -133,22 +133,31 @@
     }
   ],
   "delivery_hold": {
-    "status": "reopened_after_policy_fix",
-    "source_type": "local run (V) + current code/tests/schema (C)",
+    "status": "ready_for_record_update_then_exact_sha_ci",
+    "source_type": "current code/tests/schema (C) + local run (V) + GitHub API readback (R)",
     "verification": "verified",
-    "scope": "The product branch now passes the identity and content gates after control-plane main 263fe413; exact-candidate CI is still pending.",
+    "scope": "a092ec07 passed both publication gates, its exact-SHA workflow and all seven jobs; the record now needs one final metadata commit and its own exact-SHA CI.",
     "reasons": [
-      "Control-plane main 263fe413 admits only API-bound GitHub PR service committers; the product history resolves 12 such merges.",
-      "Product review records now use pocketchat-review-record.v1; the 20 historical schema literals are covered by file-scoped grants.",
-      "The 942d927 candidate’s Git tree scans with zero content hits."
+      "No implementation or release action remains; the final candidate SHA changes when this evidence is committed."
     ],
-    "next_action": "Push the product branch, obtain exact-SHA CI, then land it on product main and update the queue delivered evidence."
+    "next_action": "Commit this record, push, dispatch CI for the new exact SHA, then land on product main."
   },
-  "unverified_scope": "No exact-candidate CI has run yet for 942d927. No real workspace/Git observation, CLI wiring, provider call, local cross-platform matrix, build/install, tag, Release or upload is claimed. The review record schema rename is a metadata migration; the existing source-review findings and their evidence are unchanged.",
+  "unverified_scope": "The exact-SHA CI evidence covers a092ec07. The record update that cites it is a new candidate and has not yet run CI. No real workspace/Git observation, CLI wiring, provider call, build/install, tag, Release or upload is claimed.",
   "technical_review": {
     "status": "reviewed_no_open_code_findings_in_recorded_scope",
     "reviewed_sha": "ca2ff0b10a201d446512e4a2a110420e32d9c5da",
     "not_a_publication_approval": true
   },
-  "product_record_schema_sha": "942d9275d9d8e06c8aae547ff53da4a45eab1301"
+  "product_record_schema_sha": "942d9275d9d8e06c8aae547ff53da4a45eab1301",
+  "ci_evidence": {
+    "candidate_sha": "a092ec07817b59fdd65b94915752c2206b482c0a",
+    "workflow": "pocketchat-ci",
+    "run_id": 41943898159,
+    "url": "https://github.com/barry31-dev/pocketchat/actions/runs/41943898159",
+    "event": "workflow_dispatch",
+    "conclusion": "success",
+    "check_runs": 7,
+    "verified_at": "2026-11-05T08:54:00+08:00",
+    "scope": "Exact candidate SHA; seven check runs succeeded. A later record-only commit needs its own CI before landing."
+  }
 }
