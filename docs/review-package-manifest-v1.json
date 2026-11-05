@@ -1,0 +1,104 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/package-manifest.md",
+    "docs/package-manifest.zh-CN.md",
+    "docs/review-package-manifest-v1.json",
+    "scripts/release_smoke.py",
+    "tests/test_release_smoke.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "PM-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "installed-cli-version-prefix",
+      "reason": "The first real CPython 3.13 smoke reached a valid wheel and installed manifest but compared the stable CLI string `pocketchat 1.1.0` directly with the metadata version `1.1.0`. A red regression now freezes the existing prefix format and validation compares its normalized version value."
+    },
+    {
+      "id": "PM-2",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "wheel-hash-not-manifest-determinism",
+      "reason": "Two real builds produced different ZIP container SHA-256 values while their canonical package manifests were identical. The docs now claim manifest determinism only and explicitly do not claim reproducible wheel container bytes."
+    },
+    {
+      "id": "PM-3",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "legacy-python39-build-frontend",
+      "reason": "Apple Command Line Tools CPython 3.9.6 with pip 21.2.4 built UNKNOWN-0.0.0 even after an isolated setuptools 82 environment; the explicit non-isolated fallback used setuptools 58.0.4 below the repository requirement. Unit coverage passed on 3.9, but a valid CPython 3.9 wheel/install smoke remains unverified in this local toolchain."
+    },
+    {
+      "id": "PM-4",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "repository-wide-full-ruff-baseline",
+      "reason": "`ruff check pocketchat tests` remains red on repository-wide style rules: the unmodified baseline reports 2265 findings and this candidate reports 2263. The actual CI E9/F gate passes for the changed script/test, and the changed test file passes full Ruff; unrelated baseline modernization findings were not changed."
+    },
+    {
+      "id": "PM-5",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "independent-fresh-context-review",
+      "reason": "This session performed the contract, source, diff and verification review, but no independent fresh-context reviewer was dispatched. The branch must not be described as independently reviewed or main-ready until that review is recorded."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/package-manifest.md",
+    "docs/package-manifest.zh-CN.md",
+    "docs/review-package-manifest-v1.json",
+    "scripts/release_smoke.py",
+    "tests/test_release_smoke.py"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main f263ac912f764aed934f3c2832f8347b6f951672 contains the main-reachable PC-PACKAGE-MANIFEST-1 ready row and its approval record; the execution branch was absent before creation and the five approved paths were free of another active writer.",
+    "V: CPython 3.9.6 first ran `python3 -B -m unittest tests.test_release_smoke.PackageManifestTests.test_wheel_manifest_is_stable_and_body_free -v`; it failed with AttributeError because build_package_manifest did not exist, exit 1.",
+    "V: CPython 3.9.6 ran `python3 -B -m unittest tests.test_release_smoke -v`: 17 tests OK, exit 0. The focused tests cover wheel and installed-tree success, stable body-free output, required resources, identity, duplicate/unsafe/case/NFC collision, encrypted/link/symlink refusal, all four limit classes, unknown source kind before I/O, closed manifest validation, wheel/install drift and existing release-smoke fields.",
+    "V: CPython 3.9.6 ran the full product suite: 1287 tests OK in 88.043 seconds, exit 0.",
+    "V: CPython 3.13.9 ran the full product suite: 1287 tests OK in 55.409 seconds, exit 0.",
+    "V: CPython 3.13.9 with pip 25.3 ran the real isolated `scripts/release_smoke.py --json`: wheel build, clean venv install, 67-member wheel and installed manifests, 11 task help commands and payload comparison passed; final observed wheel SHA-256 was edc233bf0f7cb554440bea4ea5094202311f7571a03a84bebe370012f569f980.",
+    "V: Two additional CPython 3.13 builds had different wheel SHA-256 values (c563154f6ce815dab9c048bac166fd08a60596e2e180e6a4fcc655680fa36706 and 33da6dd49ae1f4dfdc767d0878fcca69a323b8e82f4ce429a28d1b70a632fcac) but identical canonical manifest SHA-256 a4abfa4972e2e3cf80462df0eb8aeb3bb4ba50ec8fface137dc37591265a2b87.",
+    "V: The Apple CLT CPython 3.9.6 actual smoke did not reach a valid package: pip 21.2.4 isolated and non-isolated runs produced UNKNOWN-0.0.0; the non-isolated environment exposed setuptools 58.0.4 below pyproject.toml's setuptools>=61 requirement. This failure is recorded as local toolchain scope, not a package compatibility conclusion.",
+    "V: `ruff check --select E9,F scripts/release_smoke.py tests/test_release_smoke.py` passed. The changed test file also passes full Ruff. Repository-wide full Ruff remains red with 2263 findings versus 2265 on the unmodified baseline; no unrelated finding was edited.",
+    "V: CPython 3.9.6 and 3.13.9 compileall for the changed Python files passed; JSON parsing and `git diff --check` passed.",
+    "C: source and diff review confirms the implementation scans only an explicit wheel or the exact PocketChat package/dist-info roots under an explicit site-packages directory, rejects unsafe/non-regular/colliding/over-budget inputs, excludes bodies and absolute paths from reports, ignores only named installer-generated files, compares every other member except mutable RECORD, and does not add a second builder, CLI command, schema, network/provider/credential path or publication action."
+  ],
+  "unverified_scope": "No independent fresh-context review or exact-candidate GitHub CI is recorded yet. Linux and Windows runtime behavior, a valid modern-pip CPython 3.9 wheel/install smoke, arbitrary filesystem race resistance, cryptographic signature/provenance, reproducible wheel container bytes, tag, Release and package-index upload remain unverified. The successful local manifest proves package-byte consistency for the observed build/install, not publication or authenticity.",
+  "review_context": {
+    "why": [
+      "The user requested a non-conflicting PocketChat task; session audit, task diff, JSON input, deadline, context drift, session writer, secret audit and path capability work were already active, while the package-manifest branch/PR/issue and five-file scope were absent.",
+      "The existing release smoke was already the single package build/install path, so extending it avoids a second packaging subsystem."
+    ],
+    "not_doing": [
+      "No package payload, pyproject, CLI command, workflow, CHANGELOG, release ledger, version, tag, Release, upload, provider, network or credential change."
+    ],
+    "diff_walk": [
+      "scripts/release_smoke.py adds one bounded classifier for wheel and installed-tree bytes, a closed manifest validator, pair comparison, and additive release-smoke JSON fields.",
+      "tests/test_release_smoke.py starts from the observed missing API, builds bounded wheel/installed fixtures, covers refusal and budget boundaries, freezes the existing CLI version format and preserves old release-smoke assertions.",
+      "The bilingual docs define the schema, limits, generated-file exclusions, fail-closed cases, release-smoke wiring and exact verification scope.",
+      "This review record separates local runs, baseline lint limitations, fixed findings, deferred independent review and publication exclusions."
+    ],
+    "static_checks": [
+      "The changed paths exactly match the main-reachable ready row.",
+      "No private path, credential, file body, absolute source path, tag or release claim appears in the package manifest contract."
+    ],
+    "gaps": [
+      "Independent fresh-context review and exact-candidate CI are pending before any main integration claim."
+    ]
+  },
+  "landing_sign_off": {
+    "status": "pending",
+    "scope": "The delegated routine technical approval covers development and branch delivery only. Main integration remains pending an independent fresh-context review with no open blocker/major and any exact-SHA CI evidence that is actually available; no tag, Release or package upload is authorized."
+  }
+}
