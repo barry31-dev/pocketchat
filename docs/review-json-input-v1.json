@@ -74,8 +74,8 @@
       "reason": "Fresh-context review found that the lexical admission pass used Python recursion, so malformed or adversarial nesting could hit the interpreter recursion limit before the declared depth refusal. The pass now uses explicit parser frames; a 5000-level regression refuses at depth 64, and private key/value text is absent from refusal metadata."
     }
   ],
-  "commit_or_candidate_sha": "352a00d",
-  "candidate_binding": "This record names the reviewed integration base; the private handoff binds the exact final commit and all five file hashes. No self-referential commit SHA or inherited CI claim.",
+  "commit_or_candidate_sha": "c919bc7337495e0a960ccc1c6ffee6d964e55adc",
+  "candidate_binding": "This record binds implementation candidate c919bc7337495e0a960ccc1c6ffee6d964e55adc. The metadata-only review-record follow-up is covered by its own exact-head CI and merge receipt; no older CI result is inherited for a changed implementation.",
   "reviewed_evidence": [
     "C: product issue #17, authored by barry31-dev, is the repository-reachable ready approval record for PC-JSON-CORE-1 and freezes the unique branch, five-path write scope, dependency-free pure-core contract and stop boundary.",
     "C: issue #17 records that this scope is disjoint from active PC-TASK-DEADLINE-1 and the memory-doctor planner, and that the unmerged queue candidate is not a second live approval source.",
@@ -104,7 +104,15 @@
     "V: Fresh-context static review of 352a00d returned BLOCK only for recursive structural admission; no other blocker remained in the reviewed scope.",
     "V: CPython 3.9.6 focused JSON tests after the iterative-admission fix: 20 tests OK, exit 0.",
     "V: CPython 3.9.6 full product suite after the fix: 1323 tests OK in 47.032s, exit 0.",
-    "V: 500 deterministic randomized valid-value comparisons preserved Python values; Ruff E9/F and diff check passed."
+    "V: 500 deterministic randomized valid-value comparisons preserved Python values; Ruff E9/F and diff check passed.",
+    "C: A separate user-directed closeout review session read the frozen approval record, exact task diff, implementation, tests and contract without adopting the author conclusion; no blocker or major finding remained. The failed external Codex transport attempt is not counted as review evidence.",
+    "V: GitHub Actions run 42019342881 is bound to exact head c919bc7337495e0a960ccc1c6ffee6d964e55adc and completed 7/7 jobs successfully across Linux/macOS/Windows, CPython 3.9/3.13 and release-smoke."
   ],
-  "unverified_scope": "Focused and full local evidence is on macOS CPython 3.9.6 only. Exact-candidate CI, Linux/Windows, CPython 3.13, build/install, real reader/CLI integration, provider traffic, tag, Release and publication remain unverified or unexecuted. The approval row for this slice is an issue record and was not merged into product main before implementation; landing must preserve that boundary or obtain an explicit queue approval first."
+  "unverified_scope": "Exact candidate c919bc73 has 7/7 successful GitHub Actions jobs. Build/install, real reader/CLI integration, provider traffic, tag, Release and publication remain unverified or unexecuted. The issue #17 record remains the product approval source.",
+  "landing_sign_off": {
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly directed manual closeout of all pending work. This authorizes landing the reviewed draft candidates into product main only; it does not authorize a tag, Release, package upload, or any other publication action."
+  }
 }
