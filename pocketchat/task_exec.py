@@ -607,11 +607,15 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                     "owner_sha256": cancellation.owner_sha256,
                     "boundary_index": boundary}
         try:
+            cleaned = _report_steps(root, results)
             validate_cancellation_report({
                 "cancellation": metadata, "spec_sha256": execution.spec_sha256,
                 "plan_sha256": execution.plan_sha256,
-                "steps": _report_steps(root, results), "evidence_issues": issues})
-        except TaskError as exc:
+                "steps": cleaned, "evidence_issues": issues})
+            from .task_recovery import _check_completed
+            for expected, result in zip(execution.steps[:boundary], cleaned[:boundary]):
+                _check_completed(root, expected, result, changes)
+        except (TaskError, TaskRecoveryError) as exc:
             # A nominally completed custom runner without bound artifacts is
             # not a safe cancellation/recovery boundary.
             error = {"type": "TaskExecutionError",

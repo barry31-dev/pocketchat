@@ -328,6 +328,24 @@ class CancellationExecutionTests(unittest.TestCase):
         self.assertEqual(before, files(self.root))
         self.assertEqual(1, self.runner.call_count)
 
+    def test_model_final_message_without_tool_cannot_claim_safe_cancellation(self):
+        self.select_steps(0, 1)
+        self.adapter.responses = [final_response()]
+        owner = self.owner()
+        def finished_without_effect(**values):
+            result = run_task(**values)
+            self.request(owner)
+            return result
+        with self.assertRaises(task_exec.TaskExecutionError) as caught:
+            self.execute(cancellation=owner, run_task=finished_without_effect)
+        self.assertNotIsInstance(caught.exception, task_exec.TaskCancelledError)
+        self.assertEqual("task cancellation needs confirmed step evidence", str(caught.exception))
+        path = self.root / caught.exception.report
+        report = json.loads(path.read_text())
+        self.assertNotIn("cancellation", report)
+        self.assertIn("error", report)
+        self.assertFalse((self.root / "report.md").exists())
+
     def test_unknown_inflight_effect_preserves_failure_not_cancellation(self):
         self.select_steps(1, 2)
         owner = self.owner()
@@ -347,6 +365,54 @@ class CancellationExecutionTests(unittest.TestCase):
                          expected_report_sha256=digest(path))
         self.assertEqual(before, files(self.root))
         self.assertEqual(1, self.runner.call_count)
+
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
+    def test_budgeted_cancellation_checkpoint_preserves_prior_consumption(self):
+        from pocketchat.task_budget import TaskBudget
+        owner = self.owner()
+        def runner(template_id, trace, run_id):
+            command = run_command_template(self.root, self.template,
+                                           trace_path=trace, run_id=run_id)
+            self.request(owner)
+            return command
+        self.runner.side_effect = runner
+        path, payload, _ = self.cancelled(owner, task_budget=TaskBudget(limit_tokens=100000))
+        ledger = payload["task_budget"]
+        self.assertEqual(2, len(ledger["requests"]))
+        checkpoint_path, checkpoint = self.checkpoint(path, payload)
+        canonical = json.dumps(ledger, ensure_ascii=False, sort_keys=True,
+                               separators=(",", ":")).encode("utf-8")
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(),
+                         checkpoint["task_budget_sha256"])
+        for budget in (None, TaskBudget(limit_tokens=99999)):
+            with self.subTest(budget=budget):
+                before = files(self.root)
+                with self.assertRaises(TaskRecoveryError):
+                    self.execute(cancellation=self.owner("2" * 32), task_budget=budget,
+                                 resume_report=path, expected_report_sha256=digest(path))
+                self.assertEqual(before, files(self.root))
+                self.assertEqual(2, len(self.adapter.calls))
+        resolved = resume_from_checkpoint(self.root, checkpoint_path)
+        result = self.execute(cancellation=self.owner("2" * 32),
+                              task_budget=TaskBudget(limit_tokens=100000),
+                              resume_report=resolved["report_path"],
+                              expected_report_sha256=resolved["expected_report_sha256"])
+        successor = json.loads((self.root / result[-1]["execution_report"]).read_text())
+        self.assertEqual(4, len(successor["task_budget"]["requests"]))
+        self.assertEqual(1, self.runner.call_count)
+        self.assertEqual("1", (self.root / "count.txt").read_text())
+        previous = {row["request_id"]: row for row in ledger["requests"]}
+        later = {row["request_id"]: row for row in successor["task_budget"]["requests"]}
+        self.assertTrue(all(later[key] == value for key, value in previous.items()))
+
+    def test_checkpoint_refuses_conflicting_current_and_legacy_archive_digests(self):
+        _, path, payload, _ = self.cancel_after_command()
+        payload["steps"][1]["evidence"]["archive_sha256"] = "e" * 64
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        with self.assertRaisesRegex(CheckpointError,
+                                    "command archive digest declarations disagree"):
+            create_checkpoint(payload, report_path=path,
+                              expected_report_sha256=digest(path))
 
     def test_default_execution_does_not_add_cancellation_metadata(self):
         results = self.execute()

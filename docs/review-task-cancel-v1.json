@@ -26,6 +26,13 @@
       "status": "open",
       "fingerprint": "independent-review-pending",
       "reason": "The first fresh-context review is still running. No clean review conclusion is inferred from local tests."
+    },
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "cancelled-prefix-hashes-do-not-prove-tool-effect",
+      "reason": "A real final-only provider stub returned completed task artifacts without any authorized write. A new regression ran red because cancellation wrongly emitted TaskCancelledError. The executor now reuses the existing completed-step semantic verifier before claiming a safe cancellation; the matching test is green and produces an ordinary execution error instead."
     }
   ],
   "slice_id": "PC-TASK-CANCEL-1",
@@ -50,7 +57,11 @@
     "V: CPython 3.9.6 current CLI callers/model repair/task-state/package independence regressions: 65 tests OK, exit 0.",
     "V: Ruff 0.17.3 E9/F, compileall and git diff --check passed, exit 0.",
     "C: Changes are confined to the eight issue-approved paths. No CLI, provider, session writer, task deadline, shared queue, changelog, schema or package file changed.",
-    "F: Fresh-context review is pending; no independent approval, public push, PR, exact-SHA CI or main landing is claimed."
+    "F: Fresh-context review is pending; no independent approval, public push, PR, exact-SHA CI or main landing is claimed.",
+    "V: Additional budgeted-cancellation/checkpoint-consumption and conflicting current/legacy command archive tests passed on CPython 3.9.6, exit 0.",
+    "V: Self-review effect-semantic regression ran red before its production fix; final 18 focused tests passed on CPython 3.9.6 and 3.14.10, exit 0.",
+    "V: Exact candidate-tree scan for first checkpoint f9aa078 found zero private-context file hits. Controlled publication check passed identity for 190 commits/3 tags plus 13 API-bound GitHub merges but refused 16 inherited commit-message private-context hits, exit 2; no public push occurred."
   ],
-  "unverified_scope": "Local deterministic provider stub and a real bounded local Python command fixture only. Full product suite, remote CI, public push/PR/main integration, cross-platform operation, real provider, signals or process/thread termination, arbitrary-crash exactly-once, deadline wiring, tag/Release and package upload were not run."
+  "unverified_scope": "Current 18 cancellation tests passed on local macOS CPython 3.9.6 and 3.14.10, including real bounded command-template and deterministic provider-stub paths. Existing 106 related and 65 caller regressions passed before the cancellation-only semantic guard addition; default code path is unchanged by that guard. Independent review is pending. Public push is blocked by inherited history policy. Full product suite, exact-SHA CI, public PR/main integration, Linux/Windows execution, real provider, process/thread/signal termination, arbitrary crash exactly-once, deadline wiring, tag/Release and upload were not run.",
+  "commit_or_candidate_sha": "f9aa0781058f9a51977dacea09ea51d424003873"
 }
