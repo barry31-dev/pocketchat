@@ -280,6 +280,166 @@ and sidecar/preview binding as a separate slice.
   branch is reachable from `main`. The implementation branch and exact reviewed
   candidate remain separate; this planning change does not create or claim them.
 
+
+#### `PC-SFILE-AUDIT-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-session-audit-core`
+- **Write scope**: `pocketchat/session_integrity.py`,
+  `tests/test_session_integrity.py`, `docs/session-integrity.md`,
+  `docs/session-integrity.zh-CN.md`, `docs/review-session-integrity-v1.json`
+- **Depends on**: `PC-SFILE-READ-1` (delivered at `c97fe8e`); no session
+  writer, CLI, repair, provider or runtime dependency.
+- **Done when**: A pure
+  `audit_session_records(records, *, max_findings=64, max_omissions=64, max_bytes=65536)`
+  consumes caller-supplied, already-read session records and returns a closed
+  `pocketchat-session-integrity.v1` report with `schema_version=1` and status
+  `complete`, `partial` or `refused`. The audit validates the header and
+  session identity, run/workspace association, message role and content shape,
+  unique and monotonically increasing turn ids, and provider-shaped tool
+  contexts whose calls and results pair exactly and end in explicit terminal
+  states. It distinguishes malformed input from inspected partial coverage and
+  keeps an empty valid record list distinct from corrupt input. Findings use
+  stable order and bounded typed fields such as record index, code and redacted
+  context; report omissions are explicit. Inputs remain unchanged. The core
+  never repairs, truncates or rewrites records, reads a path, executes a
+  command, calls a provider, or returns full request, message, session or
+  credential bodies. Limits reject rather than silently truncate when the
+  minimal envelope cannot fit. Legacy tolerance is limited to the reader's
+  existing accepted schema and derived turn ids; this slice invents no
+  migration or repair behavior. Focused tests cover valid modern and legacy
+  records, empty valid input, malformed header/message/tool records, duplicate
+  and regressing turn ids, cross-record call/result pairing, explicit terminal
+  states, bounded findings/omissions/report size, input immutability, stable
+  output and zero filesystem/command/socket/provider calls. This slice adds no
+  CLI, real session reader integration, repair/copy, writer change, tag,
+  Release or publication.
+- **Evidence**: `pocketchat/session_integrity.py`,
+  `tests/test_session_integrity.py`, `docs/session-integrity.md`,
+  `docs/session-integrity.zh-CN.md` and
+  `docs/review-session-integrity-v1.json`; focused unittest output, exact
+  reviewed candidate SHA and `git diff --check` are recorded in the
+  implementation review. The delivery commit is recorded only after the
+  candidate is examined against this row and merged.
+- **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
+  delegation; this row and `docs/review-session-audit-approval-v1.json`
+  freeze the pure-core contract. This approval does not authorize a CLI, real
+  file/session observation, repair or mutation, provider/network call, tag,
+  Release or package upload.
+- **Approval evidence**: This row and
+  `docs/review-session-audit-approval-v1.json` are the product approval
+  record. The execution branch is not created by this planning change; it may
+  start only after this row is integrated and read back from product `main`,
+  and only if its write scope remains free of an active writer.
+
+#### `PC-CONTEXT-EXPLAIN-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-context-explain`
+- **Write scope**: `pocketchat/context_explain.py`,
+  `tests/test_context_explain.py`, `docs/context-explain.md`,
+  `docs/context-explain.zh-CN.md`, `docs/review-context-explain-v1.json`
+- **Depends on**: `PC-CTXPROJ-1` (delivered on `main`); no context-drift,
+  evidence-link, preflight, memory, provider, CLI or session-writer dependency.
+- **Done when**: A pure
+  `explain_context_projection(projection, *, max_findings=64, max_omissions=64,
+  max_bytes=65536)` consumes one closed explanation input containing the exact
+  `project_context` source payload, its selection parameters and result, plus
+  bounded source descriptors whose stable source ids map entries to the fixed,
+  recent, task, memory and tool layers. It returns deterministic
+  `pocketchat-context-explain.v1` data with `complete`, `partial` or `refused`
+  status, a closed budget account and ordered observations for selected and
+  omitted entries. The function verifies the existing
+  `pocketchat-context-projection.v1` source and projection digests, explains
+  what the existing sidecar records and names unavailable reasons as explicit
+  omissions; it never recomputes or changes selection. Fixed instructions and
+  task state, complete recent turns, and memory/tool evidence are reported with
+  source id, layer, bounded record index, stable reason code and byte count.
+  Duplicate or missing source ids, malformed or unknown input schema, digest
+  drift, sensitive evidence, budget exhaustion and missing sidecar metadata are
+  distinct observations; sensitive or omitted request, message, session,
+  credential and memory bodies are never returned. Reports use stable ordering
+  and refuse rather than silently truncate when the minimal envelope cannot fit
+  within `max_findings`, `max_omissions` or `max_bytes`. Inputs remain unchanged.
+  Focused tests cover all five layers, exact digest binding, duplicate and
+  missing source ids, memory/tool classification, sensitive summaries, fixed
+  and per-entry budget boundaries, malformed sidecars, empty valid projection,
+  explicit partial coverage, stable bytes and zero filesystem, command, socket
+  or provider calls. This slice adds no projection rewrite, reader or CLI
+  integration, file observation, repair, migration, model/provider call, tag,
+  Release or publication.
+- **Evidence**: `pocketchat/context_explain.py`,
+  `tests/test_context_explain.py`, `docs/context-explain.md`,
+  `docs/context-explain.zh-CN.md` and
+  `docs/review-context-explain-v1.json`; the implementation review records the
+  observed red, focused tests, lint/compile/diff evidence and exact candidate
+  SHA. Delivery is recorded only after that candidate is reviewed against this
+  row and integrated.
+- **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
+  delegation and the user 2026-11-05 request for a non-conflicting PocketChat
+  task. This approval covers the bounded read-only explanation core only; it
+  does not authorize projection mutation, a CLI, real file observation, repair,
+  provider/network access, tag, Release or package upload.
+- **Approval evidence**: This row and
+  `docs/review-context-explain-approval-v1.json` are the product approval
+  record. The execution branch is not created by this planning change; it may
+  start only after this row is integrated and read back from product `main`,
+  and only if its five-path write scope remains free of an active writer.
+
+#### `PC-PACKAGE-MANIFEST-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-package-manifest`
+- **Write scope**: `scripts/release_smoke.py`, `tests/test_release_smoke.py`,
+  `docs/package-manifest.md`, `docs/package-manifest.zh-CN.md`,
+  `docs/review-package-manifest-v1.json`
+- **Depends on**: the delivered release-smoke surface in `SLICE-PREP-2`; no
+  runtime, provider, session, memory, task-diff or shared CLI dependency.
+- **Done when**: The existing release-smoke module exposes
+  `build_package_manifest(source, *, source_kind, max_members=2048,
+  max_member_bytes=8388608, max_total_bytes=67108864,
+  max_report_bytes=262144)` for an explicitly selected wheel or installed
+  `site-packages` root. It returns deterministic canonical JSON data with
+  `schema=pocketchat-package-manifest.v1`, `schema_version=1`, source kind,
+  package/version/entry-point identity, stable module/schema/metadata groups,
+  and a sorted record for every admitted regular member containing only its
+  normalized logical path, category, byte length and SHA-256. Wheel and
+  installed-tree inspection share one classification and validation path.
+  Exactly one `pocketchat/` package and one matching
+  `pocketchat-<version>.dist-info/` tree are admitted; the five shipped schemas,
+  existing release-critical modules, `METADATA`, `WHEEL`, `RECORD` and the
+  `pocketchat = pocketchat.cli:main` declaration must be present and consistent.
+  Archive duplicates, absolute/backslash/parent paths, case or Unicode-normalized
+  collisions, encrypted entries, symlinks, non-regular installed entries,
+  unknown source kinds, version/entry-point mismatch, missing required resources
+  and member/count/total/report limit overflow are refused rather than skipped or
+  truncated. The manifest contains no absolute path or file body and does not
+  mutate inputs. `run_release_smoke` includes the wheel manifest and verifies a
+  clean installed-tree manifest before its existing import/version and complete
+  `task ... --help` smoke; it reuses the current build/install path and adds no
+  second builder, package upload, tag, network/provider/credential access or
+  arbitrary workspace scan. Focused tests create two bounded fixture wheels and
+  one installed tree, cover stable bytes, wheel/install agreement, unsafe and
+  missing resources, every limit boundary, input immutability and the existing
+  installed import/help surface. This slice does not change package contents,
+  version, CLI commands, schemas, CI workflow, tag, Release or package-index
+  state.
+- **Evidence**: `scripts/release_smoke.py`, `tests/test_release_smoke.py`, both
+  package-manifest docs and `docs/review-package-manifest-v1.json`; the
+  implementation review records the observed red, focused/full tests, Ruff,
+  compile and diff checks plus the exact candidate SHA. Delivery is recorded
+  only after that candidate is reviewed and integrated.
+- **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
+  delegation and the user 2026-11-05 request for a non-conflicting PocketChat
+  task. This approval covers the bounded package-evidence slice only; it does
+  not authorize a tag, Release, package upload, version change or publication.
+- **Approval evidence**: This row and
+  `docs/review-package-manifest-approval-v1.json` are the product approval
+  record. The execution branch is not created by this planning change; it may
+  start only after this row is integrated and read back from product `main`,
+  and only if its five-path write scope remains free of an active writer.
+
+
 Cancelled and delivered rows are moved to
 [`CHANGELOG.md`](../CHANGELOG.md) rather than deleted, so a later reader can
 see why a slice stopped.

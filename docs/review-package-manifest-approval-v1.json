@@ -1,0 +1,31 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-package-manifest-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-package-manifest-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main 68629cb8f39c3459774e34ab508409eed9f162b5 was fetched before this planning branch; SLICE-PREP-2 and the repository-owned release smoke are delivered, while the queue contains no PC-PACKAGE-MANIFEST-1 row.",
+    "C: before branch creation, the product remote had no task/pocketchat-package-manifest* branch, GitHub had no PC-PACKAGE-MANIFEST-1 issue or open package-manifest PR, and the active PocketChat task-diff, JSON-input, deadline, context-drift, session-writer, session-audit and path-capability work uses disjoint paths.",
+    "C: the execution scope is limited to the existing release-smoke module and its focused test plus two dedicated docs and one review record; it does not include pyproject.toml, package payloads, schemas, shared CLI, CI, CHANGELOG.md, release ledger or publication files.",
+    "C: the approved contract reuses the existing wheel builder, safe member rules and installed CLI smoke; wheel and installed-tree manifests share one classifier instead of adding a second package format or build path.",
+    "C: the closed manifest records normalized logical path, category, bytes and SHA-256 only; absolute paths and bodies are excluded, duplicate/unsafe/colliding/encrypted/symlink/non-regular inputs refuse, and count/member/total/report budgets fail closed rather than truncating.",
+    "Docs-only diff review checked dependency closure, unique branch and write scope, exact function defaults, required package/dist-info resources, wheel/install consistency, deterministic ordering, path normalization, budget boundaries, input immutability, existing import/help smoke, rollback scope and explicit publication exclusions.",
+    "V: product origin/main was read back at c7ee703a6908dc65c8286aacd763f6eeaed6ba27; the ready row and this approval record are main-reachable, with the exact low/quick review fields and six planning evidence entries preserved."
+  ],
+  "unverified_scope": "Planning only: no package-manifest implementation, fixture wheel, installed-tree scan, wheel build, clean install, import/help smoke, focused or full product tests, Ruff, compile check, CI, tag, Release, package upload or publication. Product-main reachability of the approval was read back at c7ee703a6908dc65c8286aacd763f6eeaed6ba27; the execution branch remains uncreated and still requires a fresh write-scope conflict check and separate implementation review."
+}

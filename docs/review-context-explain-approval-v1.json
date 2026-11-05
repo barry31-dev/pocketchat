@@ -1,0 +1,32 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-context-explain-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "e7973191b754a43638b4c6507eac37761c66b7a7",
+  "changed_paths": [
+    "docs/review-context-explain-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main f263ac912f764aed934f3c2832f8347b6f951672 was fetched before this planning branch; PC-CTXPROJ-1 is delivered and the queue contains no PC-CONTEXT-EXPLAIN-1 row.",
+    "C: before branch creation, the product remote had no task/pocketchat-context-explain* branch, no source tree contained context_explain.py or context-explain docs, and no active writer claimed any of the five target paths; package-manifest, session-writer, session-audit, context-drift, JSON-input, deadline, profile-explain and secret-audit work uses disjoint paths.",
+    "C: project_context returns pocketchat-context-projection.v1 with source_sha256, projection_sha256, kept/dropped evidence and turn counts; the sidecar alone does not preserve every omitted turn reason or stable source identity, so the explanation input explicitly binds the exact source payload, selection parameters and bounded source descriptors instead of inventing missing history.",
+    "C: the contract observes the existing projection result and never recomputes or changes selection; source and projection digests bind the explanation to one exact input, while missing metadata becomes a named omission rather than an inferred fact.",
+    "C: the row freezes one pure module, one test module and three dedicated documentation/review paths. Reports contain source ids, layer, record index, reason code, byte counts and bounded flags only; request, message, session, credential, memory and omitted bodies are excluded.",
+    "Docs-only diff review checked dependency closure, unique branch and write scope, closed input/report schemas, five-layer coverage, source identity, digest binding, partial/refused distinctions, fixed and per-entry limits, sensitive-data handling, input immutability, stable ordering, zero-I/O boundaries and explicit publication exclusions.",
+    "V: product origin/main was read back at e7973191b754a43638b4c6507eac37761c66b7a7; the ready row and this approval record are main-reachable, the review JSON parses, and the exact low/quick review fields with six planning evidence entries are preserved.",
+    "V: integration record 675249bdfeded85eb5d7de445ca8fa7c936cd0f2 is reachable from product main; this delivery-metadata commit binds the reviewed approval content to e7973191b754a43638b4c6507eac37761c66b7a7 and keeps the implementation branch uncreated."
+  ],
+  "unverified_scope": "Planning only: no context-explain implementation, projection fixture run, focused or full product tests, real file observation, CLI or reader integration, model/provider call, Ruff, compile check, CI, tag, Release, package upload or publication. Product-main reachability of the approval was read back at e7973191b754a43638b4c6507eac37761c66b7a7; the execution branch remains uncreated and still requires a fresh write-scope conflict check and separate implementation review."
+}
