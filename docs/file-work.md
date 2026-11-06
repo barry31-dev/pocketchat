@@ -143,9 +143,13 @@ The implemented core uses descriptor-relative `O_NOFOLLOW` traversal, private
 0700/0600 store entries, an exclusive identity-bound writer claim, exclusive
 same-directory temporary files, directory/file `fsync`, atomic replace (or
 exclusive link for create), and reopened readback. A runtime missing those
-primitives returns `file_unsupported_runtime`; if the target was changed but the
-durable receipt cannot be saved, the prepared record and writer claim remain for
-recovery inspection instead of reporting a no-op.
+primitives returns `file_unsupported_runtime`. After an observed successful rename/link,
+readback refusal or a receipt-store error is `file_recovery_required` with
+`effect_disposition=applied`, not a pre-write conflict or a no-op. The available
+before-image/record evidence is retained and normal claim release is skipped;
+that decision survives a secondary claim-verification/preservation failure.
+An unavailable store does not prove a durable receipt or current claim ownership,
+and does not authorize replay, automatic recovery or undo.
 
 Preflight hashing plus atomic replace is **not general cross-process CAS**.
 Document the cooperative single-writer/local-filesystem boundary. Detectable

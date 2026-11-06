@@ -95,8 +95,11 @@ conflict、recovery_required。文件记录是事实源，session/trace 只引�
 已实现核心使用 descriptor-relative `O_NOFOLLOW` 遍历、0700/0600 私有存储、
 绑定身份的独占 writer claim、同目录独占临时文件、文件/目录 `fsync`、replace
 原子替换（create 使用独占 link）以及重新打开后的 readback。缺 primitive 时返回
-`file_unsupported_runtime`；若目标已改变但持久回执保存失败，则保留 prepared 记录
-和 writer claim 供恢复检查，不把实际副作用写成 no-op。
+`file_unsupported_runtime`。已观察到 rename/link 成功之后，回读拒绝或回执存储错误
+返回 `file_recovery_required`、`effect_disposition=applied`，不能记成写前 conflict 或 no-op。
+保留现有 before-image/记录证据并跳过正常 claim release；即使 claim 核验/保留再次失败，
+这一恢复分类与不释放决定也不能被覆盖。存储不可用不证明回执已持久化或 claim 当前所有权，
+更不授权重放、自动恢复或 undo。
 
 hash 预检加原子替换**不是通用跨进程 CAS**。明确合作单写者/本地文件系统边界；
 可观察的外部编辑/路径替换必须拒绝且 outside 文件不变，不承诺恶意进程、网络盘或任意崩溃 exactly-once。

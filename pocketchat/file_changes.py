@@ -266,7 +266,12 @@ def _atomic_apply(root: Path, change: Dict[str, Any], candidate: bytes
                     error_type="file_recovery_required",
                     effect_disposition="applied")
             return observed, observed_identity
-        except FileChangeError:
+        except FileChangeError as exc:
+            if replaced:
+                raise FileChangeError(
+                    "file was applied but independent readback could not be verified",
+                    error_type="file_recovery_required",
+                    effect_disposition="applied") from exc
             raise
         except OSError as exc:
             raise FileChangeError(
@@ -799,8 +804,11 @@ def apply_file_change(root: Path, store: FileChangeStore, change_id: str, *,
             observed, after_identity = _atomic_apply(root, change, candidate)
         except FileChangeError as exc:
             if exc.effect_disposition in {"applied", "unknown"}:
-                claim.preserve()
                 preserve_claim = True
+                try:
+                    claim.preserve()
+                except FileChangeStoreError:
+                    pass
             else:
                 _persist_terminal(
                     store, change,
@@ -835,8 +843,11 @@ def apply_file_change(root: Path, store: FileChangeStore, change_id: str, *,
         try:
             store.update_record(change)
         except FileChangeStoreError as exc:
-            claim.preserve()
             preserve_claim = True
+            try:
+                claim.preserve()
+            except FileChangeStoreError:
+                pass
             raise FileChangeError(
                 "file was applied but its durable receipt could not be saved",
                 error_type="file_recovery_required",

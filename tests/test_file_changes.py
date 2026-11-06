@@ -438,6 +438,132 @@ class FileChangeProposalTests(unittest.TestCase):
             self.store.load_record(stale_change["change_id"])["events"][-1]["type"],
         )
 
+    def test_post_commit_readback_refusal_preserves_the_applied_effect(self):
+        from pocketchat import file_changes
+
+        for operation in ("replace", "create"):
+            with self.subTest(operation=operation):
+                root = self.root / operation
+                root.mkdir()
+                store = FileChangeStore(root)
+                target = root / "notes.txt"
+                if operation == "replace":
+                    target.write_bytes(b"old\n")
+                proposed = propose_file_change(
+                    root, "notes.txt", "new\n", store=store, owner=OWNER,
+                    origin=ORIGIN, policy_sha256=POLICY_SHA256,
+                    read_paths=["notes.txt"] if operation == "replace" else [],
+                    write_paths=["notes.txt"],
+                )["change"]
+                confirm_file_change(
+                    store, proposed["change_id"],
+                    proposal_sha256=proposed["proposal_sha256"],
+                    policy_sha256=POLICY_SHA256,
+                    approval_id="approval-readback-refusal",
+                )
+                original_read = file_changes._read_target_at
+
+                def refuse_after_commit(parent_fd, name, *, allow_missing):
+                    if target.exists() and target.read_bytes() == b"new\n":
+                        raise FileChangeError(
+                            "simulated post-commit readback refusal",
+                            error_type="file_conflict")
+                    return original_read(
+                        parent_fd, name, allow_missing=allow_missing)
+
+                with mock.patch(
+                        "pocketchat.file_changes._read_target_at",
+                        side_effect=refuse_after_commit):
+                    with self.assertRaises(FileChangeError) as failed:
+                        apply_file_change(
+                            root, store, proposed["change_id"],
+                            current_policy_sha256=POLICY_SHA256,
+                            write_paths=["notes.txt"],
+                        )
+
+                self.assertEqual(b"new\n", target.read_bytes())
+                stored = store.load_record(proposed["change_id"])
+                self.assertEqual("file_recovery_required",
+                                 failed.exception.error_type)
+                self.assertEqual("applied", failed.exception.effect_disposition)
+                self.assertEqual("prepared", stored["events"][-1]["type"])
+                self.assertTrue((store.root / "writer.lock").is_file())
+
+    def test_post_commit_readback_and_preserve_failures_keep_recovery_classification(self):
+        from pocketchat import file_changes
+
+        target, proposed = self._confirmed_replace(
+            "change_8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c8c")
+        original_read = file_changes._read_target_at
+
+        def refuse_after_commit(parent_fd, name, *, allow_missing):
+            if target.read_bytes() == b"new\n":
+                raise FileChangeError(
+                    "simulated post-commit readback refusal",
+                    error_type="file_conflict")
+            return original_read(parent_fd, name, allow_missing=allow_missing)
+
+        with mock.patch(
+                "pocketchat.file_changes._read_target_at",
+                side_effect=refuse_after_commit), mock.patch(
+                "pocketchat.file_change_store.FileChangeWriterClaim.preserve",
+                side_effect=FileChangeStoreError("simulated preserve failure")):
+            with self.assertRaises((FileChangeError, FileChangeStoreError)) as failed:
+                apply_file_change(
+                    self.root, self.store, proposed["change_id"],
+                    current_policy_sha256=POLICY_SHA256,
+                    write_paths=["notes.txt"],
+                )
+
+        self.assertEqual(b"new\n", target.read_bytes())
+        stored = self.store.load_record(proposed["change_id"])
+        self.assertEqual("prepared", stored["events"][-1]["type"])
+        self.assertIsInstance(failed.exception, FileChangeError)
+        self.assertEqual("file_recovery_required", failed.exception.error_type)
+        self.assertEqual("applied", failed.exception.effect_disposition)
+        self.assertTrue((self.store.root / "writer.lock").is_file())
+
+    def test_receipt_store_replacement_cannot_mask_the_applied_effect(self):
+        target, proposed = self._confirmed_replace(
+            "change_8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d8d")
+        original_update = self.store.update_record
+        moved_store = self.store.root.with_name("changes-outage")
+        saved_claim = None
+
+        def replace_store_during_receipt(record):
+            nonlocal saved_claim
+            if record["events"][-1]["type"] == "applied":
+                saved_claim = (self.store.root / "writer.lock").read_bytes()
+                self.store.root.rename(moved_store)
+                self.store.root.symlink_to(moved_store, target_is_directory=True)
+                raise FileChangeStoreError("simulated receipt store replacement")
+            return original_update(record)
+
+        try:
+            with mock.patch.object(
+                    self.store, "update_record",
+                    side_effect=replace_store_during_receipt):
+                with self.assertRaises((FileChangeError, FileChangeStoreError)) as failed:
+                    apply_file_change(
+                        self.root, self.store, proposed["change_id"],
+                        current_policy_sha256=POLICY_SHA256,
+                        write_paths=["notes.txt"],
+                    )
+        finally:
+            if moved_store.exists():
+                self.store.root.unlink()
+                moved_store.rename(self.store.root)
+
+        self.assertEqual(b"new\n", target.read_bytes())
+        stored = self.store.load_record(proposed["change_id"])
+        self.assertEqual("prepared", stored["events"][-1]["type"])
+        self.assertEqual(b"old\n", self.store.read_object(
+            proposed["before"]["object"], proposed["before"]["sha256"]))
+        self.assertEqual(saved_claim, (self.store.root / "writer.lock").read_bytes())
+        self.assertIsInstance(failed.exception, FileChangeError)
+        self.assertEqual("file_recovery_required", failed.exception.error_type)
+        self.assertEqual("applied", failed.exception.effect_disposition)
+
     def test_candidate_read_failure_after_prepare_requires_recovery(self):
         target, proposed = self._confirmed_replace(
             "change_8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a")
