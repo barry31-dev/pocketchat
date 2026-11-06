@@ -90,6 +90,26 @@ class FileChangeProposalTests(unittest.TestCase):
         self.assertNotIn("before", result["change"])
         self.assertIn("+created", result["diff"])
 
+    def test_unpaired_surrogate_candidate_is_a_controlled_utf8_refusal(self):
+        with self.assertRaisesRegex(
+                FileChangeError, "candidate content must be UTF-8 text"):
+            propose_file_change(
+                self.root,
+                "new.txt",
+                "\ud800",
+                store=self.store,
+                owner=OWNER,
+                origin=ORIGIN,
+                policy_sha256=POLICY_SHA256,
+                read_paths=[],
+                write_paths=["new.txt"],
+                change_id="change_13131313131313131313131313131313",
+            )
+
+        self.assertFalse((self.root / "new.txt").exists())
+        self.assertEqual([], list(self.store.records.iterdir()))
+        self.assertEqual([], list(self.store.objects.iterdir()))
+
     @unittest.skipUnless(shutil.which("git"), "git is required for the dirty fixture")
     def test_dirty_git_file_is_proposed_from_current_user_bytes_not_head(self):
         subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)

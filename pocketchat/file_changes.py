@@ -566,7 +566,11 @@ def propose_file_change(root: Path, path: str, content: str, *,
                               error_type="file_permission_denied")
     if not isinstance(content, str):
         raise FileChangeError("candidate content must be UTF-8 text")
-    after_bytes = content.encode("utf-8")
+    try:
+        after_bytes = content.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise FileChangeError(
+            "candidate content must be UTF-8 text") from exc
     if len(after_bytes) > MAX_CONTENT_BYTES:
         raise FileChangeError("candidate exceeds 16384 bytes",
                               error_type="file_too_large")

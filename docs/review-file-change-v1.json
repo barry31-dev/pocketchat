@@ -19,7 +19,7 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 5,
+  "rounds": 6,
   "round_decision": "review",
   "round_scope": "new-diff-only",
   "findings": [
@@ -64,6 +64,13 @@
       "status": "fixed",
       "fingerprint": "file-change:apply:preserve-failure-classification",
       "reason": "Fresh-context review found that the new recovery handler called the fallible claim-preservation path before committing the no-release decision. If the store was unavailable, the raw store error could escape and finally could release the prepared lock after recovery. The handler now sets preserve_claim before attempting preservation, tolerates a preservation failure, and still returns file_recovery_required with effect_disposition=none; a mocked-outage regression covers the path."
+    },
+    {
+      "id": "FILE-CHANGE-UTF8-PROPOSAL-REFUSAL",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-change:proposal:utf8-encode-error-boundary",
+      "reason": "New-diff review found that a string containing an unpaired surrogate escaped from candidate UTF-8 encoding as UnicodeEncodeError instead of the declared file-change validation boundary. A red regression reproduced the raw exception with the target and private store still empty; encoding errors now become FileChangeError before any proposal persistence."
     }
   ],
   "commit_or_candidate_sha": "self",
@@ -97,9 +104,11 @@
     "C: round 4 exhausted the new prepared-to-candidate-read boundary. A candidate object read failure now preserves the identity-bound writer claim and raises file_recovery_required with effect_disposition=none instead of treating the prepared transaction as an invalid record with an ordinary retry.",
     "V: after the candidate-read recovery fix, CPython 3.9.6 and CPython 3.13.9 each ran python3 -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; 42 tests passed, exit 0; Ruff 0.17.3 E9/F and git diff --check passed.",
     "C: fresh-context round 5 found a P2 in the first candidate-read recovery change: claim.preserve() could fail while the store was unavailable, bypassing recovery classification and allowing normal release. Preserve intent is now set before the fallible call and preservation errors are contained.",
-    "V: after the preserve-failure fix, CPython 3.9.6 and CPython 3.13.9 each ran python3 -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; 43 tests passed, exit 0; Ruff 0.17.3 E9/F and git diff --check passed."
+    "V: after the preserve-failure fix, CPython 3.9.6 and CPython 3.13.9 each ran python3 -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; 43 tests passed, exit 0; Ruff 0.17.3 E9/F and git diff --check passed.",
+    "C: review round 6 found one input-boundary mismatch: an unpaired surrogate raised UnicodeEncodeError before the controlled candidate-content refusal. The red regression verified zero target, record and object effects before the minimal try/except fix.",
+    "V: after the UTF-8 refusal fix, CPython 3.9.6 and CPython 3.13.9 each ran python3 -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; 44 tests passed, exit 0; Ruff 0.17.3 E9/F and git diff --check passed."
   ],
-  "unverified_scope": "Original-scope local checkpoint only. No expanded undo or restart reconciliation, Session/CLI/UI/model wiring, default mutation entry, real provider, full repository suite, Windows/Linux execution, hostile-process race proof, network-filesystem/crash exactly-once behavior, public push/PR/CI/merge, tag, Release or package upload. Tests cover macOS CPython 3.9.6 and 3.13.9 fixtures only; a separate fresh-context review examined the current uncommitted diff (round 5); its full-repository verification was not run.",
+  "unverified_scope": "Original-scope local checkpoint only. No expanded undo or restart reconciliation, Session/CLI/UI/model wiring, default mutation entry, real provider, full repository suite, Windows/Linux execution, hostile-process race proof, network-filesystem/crash exactly-once behavior, public push/PR/CI/merge, tag, Release or package upload. Tests cover macOS CPython 3.9.6 and 3.13.9 fixtures only; a separate fresh-context review examined its current uncommitted diff in round 5, and round 6 reviewed only the new UTF-8 refusal diff; full-repository verification was not run.",
   "review_context": {
     "why": [
       "PC-FILE-CHANGE-1 requires a real non-Git or dirty-Git fixture to persist a closed proposal and before image, bind trusted confirmation, safely apply, independently read back and persist a truthful receipt."
@@ -120,13 +129,15 @@
       "Every successful replace/link is classified before later cleanup/fsync/readback work; durable receipt failure preserves prepared state and writer claim.",
       "No default model or user write path is added by this checkpoint.",
       "After prepared is durable, candidate-object read or verification failure preserves the writer claim and cannot be classified as a zero-effect retry.",
-      "Candidate-read recovery sets the no-release decision before fallible claim preservation; preservation failure cannot degrade the result to a raw store exception."
+      "Candidate-read recovery sets the no-release decision before fallible claim preservation; preservation failure cannot degrade the result to a raw store exception.",
+      "Candidate UTF-8 encoding failures are contained as FileChangeError before private proposal persistence and cannot leak UnicodeEncodeError."
     ],
     "review_notes": [
       "The 12:12 private patch was treated as an untrusted recovery candidate and compared against this live tree; current differences were reviewed and tested under the new lease.",
       "The review record is generated from the repository review ladder core and extended with the product evidence schema.",
       "Round 4 reviewed only the candidate-read recovery diff and its focused regression; earlier reviewed code was not re-opened because no new change touched it.",
-      "Round 5 was an independent fresh-context review of the current uncommitted diff. It found the preserve-failure path; only that finding, the minimal fix and its regression were reviewed in this round."
+      "Round 5 was an independent fresh-context review of the current uncommitted diff. It found the preserve-failure path; only that finding, the minimal fix and its regression were reviewed in this round.",
+      "Round 6 reviewed only the unpaired-surrogate validation diff and its regression; unchanged implementation was not re-opened."
     ],
     "gaps": [
       "Fresh-context review was limited to the current uncommitted diff; real provider, full-suite run and public CI were not available or authorized."
