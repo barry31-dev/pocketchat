@@ -115,6 +115,51 @@ class PackageManifestTests(unittest.TestCase):
         self.assertNotIn("direct_url.json", encoded)
         self.assertNotIn(str(site_packages), encoded)
 
+    def test_generated_metadata_scope_cannot_hide_payload(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            members = _fixture_members()
+            members["pocketchat/evil.dist-info/INSTALLER"] = b"pip\n"
+            members["pocketchat/evil.dist-info/RECORD"] = b"wheel record\n"
+            wheel, _ = _write_fixture_wheel(temp_dir, members=members)
+            site_packages = _write_installed_tree(temp_dir, members)
+            wheel_manifest = release_smoke.build_package_manifest(
+                wheel, source_kind="wheel")
+            installed_manifest = release_smoke.build_package_manifest(
+                site_packages, source_kind="installed_tree")
+
+        nested_installer = "pocketchat/evil.dist-info/INSTALLER"
+        nested_record = "pocketchat/evil.dist-info/RECORD"
+        self.assertIn(
+            nested_installer,
+            [item["path"] for item in wheel_manifest["members"]],
+        )
+        self.assertIn(
+            nested_installer,
+            [item["path"] for item in installed_manifest["members"]],
+        )
+        self.assertIn(
+            nested_record,
+            [item["path"] for item in wheel_manifest["members"]],
+        )
+
+        drifted = copy.deepcopy(installed_manifest)
+        next(item for item in drifted["members"]
+             if item["path"] == nested_record)["sha256"] = "f" * 64
+        with self.assertRaisesRegex(release_smoke.ReleaseSmokeError,
+                                    "payload drift"):
+            release_smoke._validate_manifest_pair(
+                wheel_manifest, drifted)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            members = _fixture_members()
+            members["pocketchat-evil.dist-info/INSTALLER"] = b"pip\n"
+            wheel, _ = _write_fixture_wheel(temp_dir, members=members)
+            with self.assertRaisesRegex(
+                    release_smoke.ReleaseSmokeError,
+                    "one pocketchat dist-info"):
+                release_smoke.build_package_manifest(
+                    wheel, source_kind="wheel")
+
     def test_required_resources_and_identity_fail_closed(self):
         cases = []
         missing_module = _fixture_members()
@@ -151,6 +196,7 @@ class PackageManifestTests(unittest.TestCase):
             ("unsafe", "../escape.py", "unsafe"),
             ("case", "pocketchat/CLI.py", "collid"),
             ("unicode", "pocketchat/e\u0301.py", "collid"),
+            ("noncanonical", "pocketchat//other.py", "unsafe"),
         ]
         for label, name, message in path_cases:
             with self.subTest(label=label), tempfile.TemporaryDirectory() as temp_dir:
@@ -274,6 +320,15 @@ class PackageManifestTests(unittest.TestCase):
         schema_drift = copy.deepcopy(manifest)
         schema_drift["schema_version"] = 2
         mutations.append(schema_drift)
+        dist_info_drift = copy.deepcopy(manifest)
+        for member in dist_info_drift["members"]:
+            member["path"] = member["path"].replace(
+                "pocketchat-1.1.0.dist-info", "pocketchat-9.9.9.dist-info")
+        dist_info_drift["groups"]["metadata"] = [
+            path.replace("pocketchat-1.1.0.dist-info", "pocketchat-9.9.9.dist-info")
+            for path in dist_info_drift["groups"]["metadata"]
+        ]
+        mutations.append(dist_info_drift)
         for candidate in mutations:
             with self.subTest(
                     candidate=candidate.get("schema_version")), \

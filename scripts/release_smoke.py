@@ -107,21 +107,20 @@ def _safe_logical_path(name: str) -> str:
             or "\\" in name):
         raise ReleaseSmokeError("package contains an unsafe member path")
     candidate = PurePosixPath(name)
-    if candidate.is_absolute() or any(part in ("", ".", "..")
-                                     for part in candidate.parts):
+    normalized = candidate.as_posix()
+    if (candidate.is_absolute() or any(part in ("", ".", "..")
+                                       for part in candidate.parts)
+            or normalized != name):
         raise ReleaseSmokeError("package contains an unsafe member path")
-    return candidate.as_posix()
+    return normalized
 
 
-def _is_generated_installed_member(path: str) -> bool:
+def _is_generated_installed_member(path: str, dist_info: str) -> bool:
     parts = PurePosixPath(path).parts
     if "__pycache__" in parts or path.endswith((".pyc", ".pyo")):
         return True
-    if ".dist-info/" in path:
-        leaf = path.rsplit("/", 1)[-1]
-        if leaf in ("INSTALLER", "REQUESTED", "direct_url.json"):
-            return True
-    return False
+    return (len(parts) == 2 and parts[0] == dist_info
+            and parts[1] in ("INSTALLER", "REQUESTED", "direct_url.json"))
 
 
 def _category_for_member(path: str, dist_info: str) -> str:
@@ -152,9 +151,15 @@ def _wheel_entries(path: Path, *, max_members: int, max_member_bytes: int,
     collisions: Dict[str, str] = {}
     try:
         with zipfile.ZipFile(Path(path)) as archive:
+            candidates = []
+            dist_info_roots = set()
             for info in archive.infolist():
                 raw_name = info.filename.rstrip("/")
                 logical = _safe_logical_path(raw_name)
+                candidates.append((info, logical))
+                root = logical.split("/", 1)[0]
+                if root.endswith(".dist-info"):
+                    dist_info_roots.add(root)
                 if info.is_dir():
                     continue
                 if logical in seen:
@@ -167,7 +172,14 @@ def _wheel_entries(path: Path, *, max_members: int, max_member_bytes: int,
                 file_type = stat.S_IFMT(mode)
                 if file_type and not stat.S_ISREG(mode):
                     raise ReleaseSmokeError("wheel contains a non-regular member")
-                if _is_generated_installed_member(logical):
+            if (len(dist_info_roots) != 1
+                    or not next(iter(dist_info_roots)).casefold().startswith("pocketchat-")):
+                raise ReleaseSmokeError("wheel must contain one pocketchat dist-info tree")
+            dist_info = next(iter(dist_info_roots))
+            for info, logical in candidates:
+                if info.is_dir():
+                    continue
+                if _is_generated_installed_member(logical, dist_info):
                     continue
                 if len(entries) >= max_members:
                     raise ReleaseSmokeError("package member count exceeds limit")
@@ -215,6 +227,7 @@ def _installed_entries(path: Path, *, max_members: int, max_member_bytes: int,
     if len(dist_candidates) != 1 or not dist_candidates[0].name.startswith("pocketchat-"):
         raise ReleaseSmokeError("package must contain one pocketchat dist-info tree")
     selected = (package_candidates[0], dist_candidates[0])
+    dist_info = selected[1].name
     for entry in selected:
         if entry.is_symlink():
             raise ReleaseSmokeError("installed package contains a symlink")
@@ -252,7 +265,7 @@ def _installed_entries(path: Path, *, max_members: int, max_member_bytes: int,
                 continue
             if not stat.S_ISREG(child_stat.st_mode):
                 raise ReleaseSmokeError("installed package contains a non-regular member")
-            if _is_generated_installed_member(logical):
+            if _is_generated_installed_member(logical, dist_info):
                 continue
             if len(entries) >= max_members:
                 raise ReleaseSmokeError("package member count exceeds limit")
@@ -361,6 +374,8 @@ def _validate_manifest_shape(manifest: Dict[str, Any]) -> None:
                 "path", "category", "bytes", "sha256"}:
             raise ReleaseSmokeError("package manifest member is invalid")
         path = _safe_logical_path(member["path"])
+        if path != member["path"]:
+            raise ReleaseSmokeError("package manifest member path is not normalized")
         _record_collision(path, collisions)
         category = member["category"]
         if category not in category_groups:
@@ -376,6 +391,20 @@ def _validate_manifest_shape(manifest: Dict[str, Any]) -> None:
         expected_groups[category_groups[category]].append(path)
     if paths != sorted(paths) or len(paths) != len(set(paths)):
         raise ReleaseSmokeError("package manifest member order is invalid")
+    dist_info_roots = {path.split("/", 1)[0] for path in paths
+                       if "/" in path and path.split("/", 1)[0].endswith(".dist-info")}
+    if (len(dist_info_roots) != 1
+            or not next(iter(dist_info_roots)).casefold().startswith("pocketchat-")):
+        raise ReleaseSmokeError("package manifest must contain one pocketchat dist-info tree")
+    dist_info = next(iter(dist_info_roots))
+    root_version = dist_info[len("pocketchat-"):-len(".dist-info")].replace("_", "-")
+    if root_version != manifest["version"].replace("_", "-"):
+        raise ReleaseSmokeError("package manifest dist-info version does not match")
+    for member in members:
+        path = member["path"]
+        expected_category = _category_for_member(path, dist_info)
+        if member["category"] != expected_category:
+            raise ReleaseSmokeError("package manifest member category does not match path")
     if groups != expected_groups:
         raise ReleaseSmokeError("package manifest groups do not match members")
 
@@ -439,9 +468,16 @@ def build_package_manifest(
 
 
 def _manifest_comparable_members(manifest: Dict[str, Any]) -> Dict[str, str]:
+    dist_info_roots = {member["path"].split("/", 1)[0]
+                       for member in manifest["members"]
+                       if "/" in member["path"]
+                       and member["path"].split("/", 1)[0].endswith(".dist-info")}
+    if len(dist_info_roots) != 1:
+        raise ReleaseSmokeError("package manifest must contain one pocketchat dist-info tree")
+    record_path = next(iter(dist_info_roots)) + "/RECORD"
     comparable = {}
     for member in manifest["members"]:
-        if member["path"].endswith(".dist-info/RECORD"):
+        if member["path"] == record_path:
             continue
         comparable[member["path"]] = member["sha256"]
     return comparable

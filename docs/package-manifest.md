@@ -60,11 +60,14 @@ Each sorted `members` row contains exactly `path`, `category`, `bytes` and
 contains a source absolute path or file body. `groups` is a deterministic
 projection of those rows, not a second inventory.
 
-Generated installation-only records are outside the comparable payload:
-`__pycache__`, `.pyc`, `.pyo`, `INSTALLER`, `REQUESTED` and `direct_url.json`.
-`RECORD` is reported but excluded from the wheel-versus-install hash comparison
-because installers are allowed to rewrite it for installed files. All other
-admitted module, schema, package-data and metadata bytes must agree.
+Generated `__pycache__`, `.pyc` and `.pyo` paths are outside the comparable
+payload. Installation metadata `INSTALLER`, `REQUESTED` and `direct_url.json`
+is outside only when directly under the selected `pocketchat-<version>.dist-info/`
+root; a similarly named path nested below `pocketchat/` remains package data.
+`RECORD` is reported, but only the selected dist-info root's `RECORD` is
+excluded from the wheel-versus-install hash comparison because installers may
+rewrite it. All other admitted module, schema, package-data and metadata bytes
+must agree.
 
 ## Required surface and refusals
 

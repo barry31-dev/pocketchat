@@ -55,9 +55,11 @@ build_package_manifest(
 路径是包内 POSIX 相对路径；报告不含源绝对路径或文件正文。`groups` 只是这些行的
 确定投影，不是第二份库存。
 
-安装阶段生成的 `__pycache__`、`.pyc`、`.pyo`、`INSTALLER`、`REQUESTED` 与
-`direct_url.json` 不属于可比 payload。`RECORD` 会登记，但安装器可为已安装文件改写
-它，因此 wheel / 安装树比较时排除其摘要；其余模块、schema、包数据与 metadata
+生成的 `__pycache__`、`.pyc`、`.pyo` 路径不属于可比 payload。安装元数据
+`INSTALLER`、`REQUESTED`、`direct_url.json` 只有直接位于所选
+`pocketchat-<version>.dist-info/` 根下时才排除；嵌套在 `pocketchat/` 下的同名路径
+仍是包数据。`RECORD` 会登记，但 wheel / 安装树比较时只排除所选 dist-info 根下的
+`RECORD`，因为安装器可为已安装文件改写它；其余模块、schema、包数据与 metadata
 必须一致。
 
 ## 必需表面与拒绝

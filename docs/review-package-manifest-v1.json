@@ -13,9 +13,9 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 2,
-  "round_decision": "review",
-  "round_scope": "full",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
   "findings": [
     {
       "id": "PM-1",
@@ -48,9 +48,16 @@
     {
       "id": "PM-5",
       "severity": "minor",
-      "status": "deferred",
+      "status": "fixed",
       "fingerprint": "independent-fresh-context-review",
-      "reason": "This session performed the contract, source, diff and verification review, but no independent fresh-context reviewer was dispatched. The branch must not be described as independently reviewed or main-ready until that review is recorded."
+      "reason": "Round 3 completed an independent fresh-context review of the implementation, tests, docs and the new fix diff. It reproduced and closed PM-6 with no open blocker/major. Exact-candidate CI and public main integration remain separate gates."
+    },
+    {
+      "id": "PM-6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "generated-metadata-root-scope",
+      "reason": "Independent review reproduced two linked integrity gaps: a nested pocketchat/evil.dist-info/INSTALLER path was treated as installation-generated and disappeared from the manifest, and a nested pocketchat/evil.dist-info/RECORD was excluded from wheel/install comparison, allowing payload drift. The fix admits only generated metadata directly under the selected pocketchat-<version>.dist-info root, excludes only that root's RECORD from pair comparison, rejects non-canonical source and manifest paths, mismatched categories and dist-info/version drift, and adds regression coverage for nested payload retention, nested RECORD drift refusal and extra dist-info refusal."
     }
   ],
   "commit_or_candidate_sha": "self",
@@ -72,9 +79,13 @@
     "V: The Apple CLT CPython 3.9.6 actual smoke did not reach a valid package: pip 21.2.4 isolated and non-isolated runs produced UNKNOWN-0.0.0; the non-isolated environment exposed setuptools 58.0.4 below pyproject.toml's setuptools>=61 requirement. This failure is recorded as local toolchain scope, not a package compatibility conclusion.",
     "V: `ruff check --select E9,F scripts/release_smoke.py tests/test_release_smoke.py` passed. The changed test file also passes full Ruff. Repository-wide full Ruff remains red with 2263 findings versus 2265 on the unmodified baseline; no unrelated finding was edited.",
     "V: CPython 3.9.6 and 3.13.9 compileall for the changed Python files passed; JSON parsing and `git diff --check` passed.",
-    "C: source and diff review confirms the implementation scans only an explicit wheel or the exact PocketChat package/dist-info roots under an explicit site-packages directory, rejects unsafe/non-regular/colliding/over-budget inputs, excludes bodies and absolute paths from reports, ignores only named installer-generated files, compares every other member except mutable RECORD, and does not add a second builder, CLI command, schema, network/provider/credential path or publication action."
+    "C: source and diff review confirms the implementation scans only an explicit wheel or the exact PocketChat package/dist-info roots under an explicit site-packages directory, rejects unsafe/non-regular/colliding/over-budget inputs, excludes bodies and absolute paths from reports, treats nested lookalike dist-info paths as package data, compares every member except only the selected dist-info root's mutable RECORD, and does not add a second builder, CLI command, schema, network/provider/credential path or publication action.",
+    "V: Review round 3 started from the clean candidate 6467aae20a3ee0e16eb7fdb4a64da543bf9a28d6 and reproduced the nested generated-metadata omission and nested RECORD drift with a real wheel fixture before editing.",
+    "V: After the fix, CPython 3.13.9 ran `python3 -B -m unittest tests.test_release_smoke -v`: 18 tests OK, exit 0; CPython 3.9.6 ran the same 18-test module: 18 tests OK, exit 0.",
+    "V: `ruff check --select E9,F scripts/release_smoke.py tests/test_release_smoke.py` passed; CPython 3.13.9 and 3.9.6 `py_compile` passed; JSON parsing and `git diff --check` passed.",
+    "C: Review round 3 covered the exact five approved paths and the new fix diff; no queue, CHANGELOG, pyproject, package payload, CLI, provider, workflow, release ledger or publication file was changed."
   ],
-  "unverified_scope": "No independent fresh-context review or exact-candidate GitHub CI is recorded yet. Linux and Windows runtime behavior, a valid modern-pip CPython 3.9 wheel/install smoke, arbitrary filesystem race resistance, cryptographic signature/provenance, reproducible wheel container bytes, tag, Release and package-index upload remain unverified. The successful local manifest proves package-byte consistency for the observed build/install, not publication or authenticity.",
+  "unverified_scope": "Round-3 independent fresh-context review is recorded and PM-5/PM-6 are closed with no open blocker/major. Exact-candidate GitHub CI, a post-fix real release-smoke wheel build/install, Linux/Windows runtime behavior, a valid modern-pip CPython 3.9 wheel/install smoke, arbitrary filesystem race resistance, cryptographic signature/provenance, reproducible wheel container bytes, tag, Release and package-index upload remain unverified. The 1287-test full product suite and the earlier wheel/manifest smoke are historical runs and were not rerun after this review fix; they are not current post-fix evidence. The successful fixture tests prove the corrected manifest scope only, not publication or authenticity.",
   "review_context": {
     "why": [
       "The user requested a non-conflicting PocketChat task; session audit, task diff, JSON input, deadline, context drift, session writer, secret audit and path capability work were already active, while the package-manifest branch/PR/issue and five-file scope were absent.",
@@ -84,21 +95,43 @@
       "No package payload, pyproject, CLI command, workflow, CHANGELOG, release ledger, version, tag, Release, upload, provider, network or credential change."
     ],
     "diff_walk": [
-      "scripts/release_smoke.py adds one bounded classifier for wheel and installed-tree bytes, a closed manifest validator, pair comparison, and additive release-smoke JSON fields.",
-      "tests/test_release_smoke.py starts from the observed missing API, builds bounded wheel/installed fixtures, covers refusal and budget boundaries, freezes the existing CLI version format and preserves old release-smoke assertions.",
-      "The bilingual docs define the schema, limits, generated-file exclusions, fail-closed cases, release-smoke wiring and exact verification scope.",
-      "This review record separates local runs, baseline lint limitations, fixed findings, deferred independent review and publication exclusions."
+      "scripts/release_smoke.py adds one bounded classifier for wheel and installed-tree bytes, a closed manifest validator, pair comparison, and additive release-smoke JSON fields; round 3 narrows generated-metadata and mutable-RECORD exclusions to the selected dist-info root and preserves refusal ordering.",
+      "tests/test_release_smoke.py starts from the observed missing API, builds bounded wheel/installed fixtures, covers refusal and budget boundaries, and now reproduces nested lookalike dist-info payload retention, nested RECORD drift refusal and extra dist-info refusal.",
+      "The bilingual docs define the schema, limits, exact generated-file exclusion scope, fail-closed cases, release-smoke wiring and exact verification scope.",
+      "This review record separates local runs, baseline lint limitations, fixed findings, round-3 independent review and publication exclusions."
     ],
     "static_checks": [
       "The changed paths exactly match the main-reachable ready row.",
-      "No private path, credential, file body, absolute source path, tag or release claim appears in the package manifest contract."
+      "No private path, credential, file body, absolute source path, tag or release claim appears in the package manifest contract.",
+      "Round 3 reproduced both nested lookalike dist-info integrity gaps before the fix and verified the corrected exact-root behavior with regression tests.",
+      "The final implementation keeps generated caches and only selected-root installation metadata outside the comparable payload; nested lookalike paths remain visible and comparable."
     ],
     "gaps": [
-      "Independent fresh-context review and exact-candidate CI are pending before any main integration claim."
+      "Exact-candidate GitHub CI, a post-fix real release-smoke wheel build/install and public main integration remain pending; earlier wheel smoke evidence predates this review fix.",
+      "Cross-platform runtime, race resistance, provenance/signature and publication claims remain outside this development checkpoint."
     ]
   },
   "landing_sign_off": {
-    "status": "pending",
-    "scope": "The delegated routine technical approval covers development and branch delivery only. Main integration remains pending an independent fresh-context review with no open blocker/major and any exact-SHA CI evidence that is actually available; no tag, Release or package upload is authorized."
-  }
+    "status": "required",
+    "scope": "Round-3 independent fresh-context review is complete with no open blocker/major. Development and branch delivery evidence is ready for controlled integration review, but exact-SHA CI readback and the authorized public main action remain required; no tag, Release, package upload or provider call is authorized."
+  },
+  "review_rounds": [
+    {
+      "reviewer": "development-round-B-fresh-context",
+      "date": "2026-11-07T01:40:00+08:00",
+      "scope": "candidate-6467aae-full-read-plus-review-fix-diff",
+      "verdict": "no-open-blocker-major-after-PM-6-fix",
+      "findings": [
+        "PM-6"
+      ],
+      "notes": [
+        "Reviewed the five approved paths, existing release-smoke call sites and the candidate contract independently of the author summary.",
+        "Reproduced the nested generated-metadata omission and nested RECORD drift with a real wheel fixture before editing; the red test failed at the hidden nested INSTALLER assertion.",
+        "After the fix, the full release-smoke module passed on macOS CPython 3.13.9 and 3.9.6 (18 tests each); Ruff E9/F, both py_compile runs, JSON parsing and git diff --check passed.",
+        "No exact-SHA GitHub CI or real release-smoke build/install was run after this fix.",
+        "The final path regression also rejects non-canonical source member names such as pocketchat//other.py before normalization or collision handling.",
+        "Closed-manifest regression also rejects a renamed dist-info root whose version does not match the manifest version."
+      ]
+    }
+  ]
 }
