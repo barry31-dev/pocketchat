@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import errno
 import hashlib
 import os
 import shutil
@@ -247,6 +248,26 @@ class FileChangeProposalTests(unittest.TestCase):
         self.assertEqual(["proposed", "confirmed", "prepared", "applied"],
                          [event["type"] for event in stored["events"]])
         self.assertEqual(receipt, stored["events"][-1]["receipt"])
+
+    def test_safe_apply_uses_only_advertised_descriptor_relative_rename(self):
+        target, proposed = self._confirmed_replace(
+            "change_12121212121212121212121212121212")
+
+        def unsupported_replace(*args, **kwargs):
+            raise OSError(errno.ENOSYS, "descriptor-relative replace unavailable")
+
+        with mock.patch("os.replace", side_effect=unsupported_replace):
+            try:
+                receipt = apply_file_change(
+                    self.root, self.store, proposed["change_id"],
+                    current_policy_sha256=POLICY_SHA256,
+                    write_paths=["notes.txt"],
+                )
+            except FileChangeError as exc:
+                self.fail("descriptor-relative rename should not use os.replace: %s" % exc)
+
+        self.assertEqual("applied", receipt["status"])
+        self.assertEqual("new\n", target.read_text(encoding="utf-8"))
 
     def test_proposal_refuses_a_store_bound_to_another_workspace(self):
         (self.root / "notes.txt").write_text("old\n", encoding="utf-8")

@@ -248,8 +248,8 @@ def _atomic_apply(root: Path, change: Dict[str, Any], candidate: bytes
                 raise FileChangeError("target changed during file preparation",
                                       error_type="file_conflict")
             if change["operation"] == "replace":
-                os.replace(temporary, name, src_dir_fd=parent_fd,
-                           dst_dir_fd=parent_fd)
+                os.rename(temporary, name, src_dir_fd=parent_fd,
+                          dst_dir_fd=parent_fd)
                 replaced = True
             else:
                 os.link(temporary, name, src_dir_fd=parent_fd,

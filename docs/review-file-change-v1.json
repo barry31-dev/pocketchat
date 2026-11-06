@@ -19,9 +19,9 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 2,
+  "rounds": 3,
   "round_decision": "review",
-  "round_scope": "full",
+  "round_scope": "new-diff-only",
   "findings": [
     {
       "id": "FILE-CHANGE-DIFF-PARTIAL-PERSISTENCE",
@@ -43,6 +43,13 @@
       "status": "fixed",
       "fingerprint": "file-change:tests:quota-equality-boundary",
       "reason": "The final suite exposed a test assertion that replayed an unchanged record and expected a quota error at exact capacity. The implementation correctly allows projected size == max_bytes; the regression now uses a larger recovery record and verifies the rejection boundary."
+    },
+    {
+      "id": "FILE-CHANGE-DIRFD-REPLACE-CAPABILITY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:runtime:advertised-atomic-rename",
+      "reason": "New-diff review found that secure-runtime admission checked descriptor-relative os.rename while record and target replacement called os.replace, which is not advertised in os.supports_dir_fd on the current runtime. A simulated ENOSYS replacement failed during prepared persistence before the fix; both call sites now use the checked descriptor-relative os.rename primitive and the regression passes."
     }
   ],
   "commit_or_candidate_sha": "self",
@@ -70,7 +77,9 @@
     "C: deep file-safety review checked closed records and event transitions, normalized workspace-relative paths, sensitive/binary refusal, private 0700/0600 storage, descriptor-relative O_NOFOLLOW traversal, exclusive creation/replacement, before identity+hash checks before and after preparation, independent reopened readback, truthful effect disposition and preserved recovery claim.",
     "C: static call-site review found the helper only in pocketchat/tools.py plus tests/docs; it is not registered in tool_contracts, CLI, Session or UI, and existing read/write tool contracts remain covered by the scoped suite.",
     "C: bilingual file-work and security docs describe the internal store, unregistered helper, cooperative single-writer boundary, unchanged grants/policy checks, independent readback and the explicit absence of undo/default mutation/public release.",
-    "C: review round 1 fixed the two major safety findings with red regressions; review round 2 re-read the final diff and closed the quota-test boundary. No open blocker/major finding remains. No separate fresh-context reviewer was available, so that stronger evidence is listed as unverified."
+    "C: review round 1 fixed the two major safety findings with red regressions; review round 2 re-read the full diff and closed the quota-test boundary.",
+    "C: review round 3 inspected only the new capability regression and two replacement call sites; it confirmed the implementation now uses only primitives present in os.supports_dir_fd and leaves state transitions and scope unchanged.",
+    "V: after the capability fix, CPython 3.9.6 and CPython 3.13.9 each ran the scoped unittest command with 41 tests passed, exit 0; Ruff 0.17.3 E9/F and git diff --check passed. No open blocker/major finding remains. No separate fresh-context reviewer was available, so that stronger evidence is listed as unverified."
   ],
   "unverified_scope": "Original-scope local checkpoint only. No expanded undo or restart reconciliation, Session/CLI/UI/model wiring, default mutation entry, real provider, full repository suite, Windows/Linux execution, hostile-process race proof, network-filesystem/crash exactly-once behavior, public push/PR/CI/merge, tag, Release or package upload. Tests cover macOS CPython 3.9.6 and 3.13.9 fixtures only; a separate fresh-context review was not run.",
   "review_context": {

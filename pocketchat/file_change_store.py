@@ -197,8 +197,8 @@ def _replace(directory_fd: int, name: str, data: bytes) -> None:
     temporary = ".tmp-%s" % uuid4().hex
     try:
         _write_exclusive(directory_fd, temporary, data)
-        os.replace(temporary, name, src_dir_fd=directory_fd,
-                   dst_dir_fd=directory_fd)
+        os.rename(temporary, name, src_dir_fd=directory_fd,
+                  dst_dir_fd=directory_fd)
         os.fsync(directory_fd)
     except Exception:
         try:
