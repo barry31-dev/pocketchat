@@ -75,8 +75,9 @@
     "macOS CPython 3.9.6: python3 -m unittest tests.test_agent -q: 90 tests OK; python3 -m unittest discover -s tests -v: 1462 tests OK in 94.271s.",
     "macOS CPython 3.13.9: python3 -m unittest tests.test_agent -q: 90 tests OK.",
     "Second CI failure evidence: run 42239349092, Windows Python 3.9.13, had 4 errors because _curses is absent. Linux 3.9/3.13, macOS 3.9 and release-smoke passed for this SHA; macOS 3.13 was still running when the failure was inspected.",
-    "After adding capability-gated skips, macOS CPython 3.9.6 and 3.13.9 again ran tests.test_agent with 90 tests OK. No renderer behavior changed; only tests now honor the package fallback boundary."
+    "After adding capability-gated skips, macOS CPython 3.9.6 and 3.13.9 again ran tests.test_agent with 90 tests OK. No renderer behavior changed; only tests now honor the package fallback boundary.",
+    "Exact final candidate 9c8d02e: GitHub Actions run 42240812007 passed 7/7 jobs: release-smoke plus Linux, macOS and Windows on CPython 3.9 and 3.13, including each platform suite and clean venv install. This is CI evidence for this exact SHA only."
   ],
-  "unverified_scope": "Local runs cover macOS CPython 3.9.6 and 3.13.9. Exact-SHA Linux and Windows CI for the final candidate, real provider and publication were not yet run when this record was updated. The PTY probe injected an XTerm wheel-up byte sequence on macOS; it does not prove every terminal, terminal multiplexer or OS reports the same encoding. Windows has no standard-library curses renderer and remains covered by its line-REPL fallback, not by this mouse behavior.",
+  "unverified_scope": "The final candidate is locally verified on macOS CPython 3.9.6 and 3.13.9 and has exact-SHA 7/7 CI on Linux, macOS and Windows for CPython 3.9/3.13. Real provider behavior, a human wheel gesture in every terminal/OS, package-index publication, tag and Release remain unverified. The PTY probe injected an XTerm wheel-up byte sequence on macOS; mouse clicks in the picker or editor remain unsupported by design.",
   "product_issue": "https://github.com/barry31-dev/pocketchat/issues/35"
 }
