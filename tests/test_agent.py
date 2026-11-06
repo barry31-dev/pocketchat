@@ -1215,16 +1215,19 @@ class AgentCommandTests(unittest.TestCase):
             def get_wch(self):
                 return self.codes.pop(0)
 
-        event = (0, 10, 5, 0, curses.BUTTON4_PRESSED)
+        button4 = getattr(curses, "BUTTON4_PRESSED", 65536)
+        event = (0, 10, 5, 0, button4)
         with mock.patch("pocketchat.curses_ui.curses.getmouse",
                         return_value=event):
-            self.assertEqual(read_key(Window()),
-                             ("mouse", curses.BUTTON4_PRESSED))
+            self.assertEqual(read_key(Window()), ("mouse", button4))
 
     def test_tui_mouse_wheel_scrolls_the_transcript(self):
         import curses
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
+
+        button4 = getattr(curses, "BUTTON4_PRESSED", 65536)
+        button5 = getattr(curses, "BUTTON5_PRESSED", button4 << 5)
 
         tui = AgentTUI(
             AgentState(profile="local", model="local-model", session="main"),
@@ -1235,9 +1238,9 @@ class AgentCommandTests(unittest.TestCase):
             tui.transcript.append(("agent", "message %02d" % i))
         state = InputState()
         state.screen_size = (14, 72)
-        apply_key(tui, state, ("mouse", curses.BUTTON4_PRESSED))
+        apply_key(tui, state, ("mouse", button4))
         self.assertGreater(tui.transcript_offset, 0)
-        apply_key(tui, state, ("mouse", curses.BUTTON5_PRESSED))
+        apply_key(tui, state, ("mouse", button5))
         self.assertEqual(tui.transcript_offset, 0)
 
     def test_tui_mouse_event_without_wheel_click_is_ignored(self):

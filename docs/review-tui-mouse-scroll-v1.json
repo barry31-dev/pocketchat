@@ -38,6 +38,13 @@
       "status": "fixed",
       "fingerprint": "wheel-direction-and-accidental-click",
       "detail": "Wheel-up (BUTTON4_PRESSED) now scrolls one line toward older transcript rows and wheel-down (BUTTON5_PRESSED) scrolls one line toward latest. A mouse event with neither wheel bit is ignored, so enabling mouse reporting does not turn ordinary clicks into scrolling."
+    },
+    {
+      "id": "F4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "curses-wheel-constants-vary-by-platform",
+      "detail": "Exact-SHA Linux CPython 3.9 ran the suite and exposed that its curses build has no BUTTON5_PRESSED while macOS Python 3.9 assigns different values to the wheel constants. The renderer and tests now derive wheel-up/down from the platform BUTTON4 bit and the one-button shift family rather than assuming Linux 3.13 constants."
     }
   ],
   "changed_paths": [
@@ -53,11 +60,14 @@
     "Root cause: pocketchat/curses_ui.py had no mousemask() call or KEY_MOUSE/getmouse() path. The only transcript movement was KEY_PPAGE/KEY_NPAGE, so a terminal wheel could not reach the renderer.",
     "Red tests observed before implementation: the wheel action left transcript_offset at 0, the KEY_MOUSE read path returned 409 instead of a mouse action, and the loop never called mousemask().",
     "Implemented the smallest change in pocketchat/curses_ui.py: request BUTTON4_PRESSED|BUTTON5_PRESSED, convert KEY_MOUSE into (mouse, bstate), and map up/down to one-line scroll_transcript calls. No picker, click, paging or editor behavior changed.",
-    "python3 -m unittest tests.test_agent -q: 90 tests OK (macOS CPython 3.13.9, exit 0).",
     "python3 -m unittest discover -s tests -v: 1462 tests OK in 59.983s (macOS CPython 3.13.9, exit 0).",
     "ruff check --select E9,F pocketchat/curses_ui.py tests/test_agent.py: All checks passed; git diff --check: exit 0.",
-    "Real PTY probe on macOS with TERM=xterm-256color: mousemask=2162688; injected XTerm wheel-up encoding produced curses mouse state=65536 (BUTTON4_PRESSED), x=9 y=4. This verifies event delivery at the curses boundary, not a human wheel gesture in every terminal."
+    "Real PTY probe on macOS with TERM=xterm-256color: mousemask=2162688; injected XTerm wheel-up encoding produced curses mouse state=65536 (BUTTON4_PRESSED), x=9 y=4. This verifies event delivery at the curses boundary, not a human wheel gesture in every terminal.",
+    "CI failure evidence: run 42238364588, Linux/Ubuntu Python 3.9.25, tests/test_agent.py line 1240 raised AttributeError because curses.BUTTON5_PRESSED is absent. Python 3.13 Ubuntu and release-smoke passed for the same SHA.",
+    "Local compatibility reproduction: macOS system Python 3.9.6 has BUTTON4_PRESSED=524288 and no BUTTON5_PRESSED, while macOS Python 3.13.9 has BUTTON4_PRESSED=65536 and BUTTON5_PRESSED=2097152. The repaired helper derives the missing BUTTON5 bit as BUTTON4 << 5.",
+    "macOS CPython 3.9.6: python3 -m unittest tests.test_agent -q: 90 tests OK; python3 -m unittest discover -s tests -v: 1462 tests OK in 94.271s.",
+    "macOS CPython 3.13.9: python3 -m unittest tests.test_agent -q: 90 tests OK."
   ],
-  "unverified_scope": "Only local macOS CPython 3.13.9 was run. Python 3.9, Linux, Windows (including no-curses fallback), exact-SHA GitHub Actions, package build, wheel, clean install, real provider and publication were not run. The PTY probe injected an XTerm wheel byte sequence; it does not prove every terminal, terminal multiplexer or OS reports the same encoding. Mouse clicks in the picker or editor remain unsupported by design.",
+  "unverified_scope": "Local runs cover macOS CPython 3.9.6 and 3.13.9. Exact-SHA Linux and Windows CI for the repaired commit, wheel/clean install outside release-smoke, real provider and publication were not yet run when this record was updated. The PTY probe injected an XTerm wheel-up byte sequence on macOS; it does not prove every terminal, terminal multiplexer or OS reports the same encoding. Mouse clicks in the picker or editor remain unsupported by design.",
   "product_issue": "https://github.com/barry31-dev/pocketchat/issues/35"
 }

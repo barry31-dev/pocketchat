@@ -98,9 +98,10 @@ def apply_key(tui: AgentTUI, state: InputState, key) -> str:
         tui.toggle_reasoning()
         return "continue"
     if isinstance(key, tuple) and len(key) == 2 and key[0] == "mouse":
-        if key[1] & getattr(curses, "BUTTON4_PRESSED", 0):
+        wheel = _wheel_button(key[1])
+        if wheel == -1:
             tui.scroll_transcript(1, max(4, 8))
-        elif key[1] & getattr(curses, "BUTTON5_PRESSED", 0):
+        elif wheel == 1:
             tui.scroll_transcript(-1, max(4, 8))
         return "continue"
     if key in (curses.KEY_PPAGE, curses.KEY_NPAGE):
@@ -201,11 +202,39 @@ def read_key(window):
     return value
 
 
+def _wheel_mask() -> int:
+    """Return the wheel bits this curses build can report.
+
+    ``BUTTON5_PRESSED`` is absent from older ncurses builds. The wheel
+    constants are bit-shifted by one button each, so derive the missing pair
+    from BUTTON4 and the platform's BUTTON5 when it exists.
+    """
+    button4 = getattr(curses, "BUTTON4_PRESSED", 0)
+    button5 = getattr(curses, "BUTTON5_PRESSED", 0)
+    if button4 and not button5:
+        button5 = button4 << 5
+    return button4 | button5
+
+
+def _wheel_button(state: int) -> int:
+    """Classify a mouse state as up (-1), down (1) or neither (0)."""
+    button4 = getattr(curses, "BUTTON4_PRESSED", 0)
+    button5 = getattr(curses, "BUTTON5_PRESSED", 0)
+    if not button4:
+        return 0
+    if not button5:
+        button5 = button4 << 5
+    if state & button4:
+        return -1
+    if state & button5:
+        return 1
+    return 0
+
+
 def _enable_mouse_wheel() -> None:
     """Request wheel events without making click reporting a requirement."""
     try:
-        curses.mousemask(getattr(curses, "BUTTON4_PRESSED", 0)
-                         | getattr(curses, "BUTTON5_PRESSED", 0))
+        curses.mousemask(_wheel_mask())
     except (AttributeError, curses.error):
         pass
 
