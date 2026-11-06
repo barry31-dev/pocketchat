@@ -57,7 +57,9 @@ only when asked — `index.sqlite`. The one deliberate exception is
 the records are relative to the workspace; the JSON records
 (`workspace`, `history`, `search`, `diff`) carry no absolute path. There is
 no telemetry, no default upload, no silent default endpoint: a provider is
-used because a profile named it.
+used because a profile named it. Pending file-change objects and records live in
+`.pocketchat/changes/` with private permissions. That directory is internal,
+never model-readable or grantable, and must not be published with a workspace.
 
 ## Local tool boundary
 
@@ -70,6 +72,15 @@ storing full arguments.
 text only, caps writes at 16 KiB, uses atomic replacement, and requires
 `--overwrite` to replace an existing file. It provides no delete, shell,
 execute or network operation.
+
+The file-change checkpoint adds an internal, unregistered proposal helper plus
+separate confirmation and apply primitives. A proposal only writes private
+content-addressed evidence and returns a complete bounded diff; it cannot modify
+the target. Apply requires the exact proposal/policy confirmation, a current
+write grant, unchanged target identity/hash and the exclusive writer claim. It
+uses no-follow descriptor-relative I/O and independently reads the target back.
+It is not present in the model tool contract, CLI, Session or UI, and it exposes
+no general overwrite, delete or undo tool.
 
 Automatic model tool calls are off by default. A profile offers only the local
 tools it explicitly enables (`read_file`, create-only `write_file` or read-only

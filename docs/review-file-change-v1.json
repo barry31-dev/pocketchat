@@ -1,0 +1,104 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/file-work.md",
+    "docs/file-work.zh-CN.md",
+    "docs/review-file-change-v1.json",
+    "docs/security.md",
+    "docs/security.zh-CN.md",
+    "pocketchat/file_change_store.py",
+    "pocketchat/file_changes.py",
+    "pocketchat/tools.py",
+    "tests/test_file_change_store.py",
+    "tests/test_file_changes.py",
+    "tests/test_tools.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "FILE-CHANGE-DIFF-PARTIAL-PERSISTENCE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:proposal:validate-before-persistence",
+      "reason": "A bounded red test showed an over-limit diff could leave a proposed record before the caller received file_too_large. Diff validation now precedes all private object/record writes, and the regression asserts both store directories remain empty."
+    },
+    {
+      "id": "FILE-CHANGE-CREATE-EFFECT-DISPOSITION",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:apply:create-link-effect-classification",
+      "reason": "A bounded red test showed create cleanup failure after a successful exclusive link was reported as zero-effect conflict even though the target existed. The mutation bit is now set immediately after replace/link, so later cleanup or fsync failures report file_recovery_required with effect_disposition=applied and preserve the writer claim."
+    },
+    {
+      "id": "FILE-CHANGE-QUOTA-TEST-EQUALITY",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-change:tests:quota-equality-boundary",
+      "reason": "The final suite exposed a test assertion that replayed an unchanged record and expected a quota error at exact capacity. The implementation correctly allows projected size == max_bytes; the regression now uses a larger recovery record and verifies the rejection boundary."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/file-work.md",
+    "docs/file-work.zh-CN.md",
+    "docs/review-file-change-v1.json",
+    "docs/security.md",
+    "docs/security.zh-CN.md",
+    "pocketchat/file_change_store.py",
+    "pocketchat/file_changes.py",
+    "pocketchat/tools.py",
+    "tests/test_file_change_store.py",
+    "tests/test_file_changes.py",
+    "tests/test_tools.py"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main b42fa5b5d1119040be850ddfce072a5b84621c47 was fetched; PR #34 merge a79c037f4d13e79795221cf2706c3973d4912c49 remains an ancestor and the exact PC-FILE-CHANGE-1 approval-row body hashes to 28d9988ef3f342fbb559ad94c341d87f00d1c1f02ff4406753c81a6cfefff59b.",
+    "Red first: the over-limit diff persistence test and create cleanup effect-classification test failed for their expected reasons before the minimal fixes; both targeted regressions then passed.",
+    "V: CPython 3.9.6 ran python3 -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; 40 tests passed, exit 0.",
+    "V: CPython 3.13.9 ran the same scoped unittest command; 40 tests passed, exit 0.",
+    "V: Ruff 0.17.3 ran python3.13 -m ruff check --select E9,F on the six changed Python files; all checks passed, exit 0.",
+    "V: tests.test_release_process_docs ran 16 documentation/process tests; all passed, exit 0.",
+    "V: git diff --check returned exit 0 after the final candidate.",
+    "C: deep file-safety review checked closed records and event transitions, normalized workspace-relative paths, sensitive/binary refusal, private 0700/0600 storage, descriptor-relative O_NOFOLLOW traversal, exclusive creation/replacement, before identity+hash checks before and after preparation, independent reopened readback, truthful effect disposition and preserved recovery claim.",
+    "C: static call-site review found the helper only in pocketchat/tools.py plus tests/docs; it is not registered in tool_contracts, CLI, Session or UI, and existing read/write tool contracts remain covered by the scoped suite.",
+    "C: bilingual file-work and security docs describe the internal store, unregistered helper, cooperative single-writer boundary, unchanged grants/policy checks, independent readback and the explicit absence of undo/default mutation/public release.",
+    "C: review round 1 fixed the two major safety findings with red regressions; review round 2 re-read the final diff and closed the quota-test boundary. No open blocker/major finding remains. No separate fresh-context reviewer was available, so that stronger evidence is listed as unverified."
+  ],
+  "unverified_scope": "Original-scope local checkpoint only. No expanded undo or restart reconciliation, Session/CLI/UI/model wiring, default mutation entry, real provider, full repository suite, Windows/Linux execution, hostile-process race proof, network-filesystem/crash exactly-once behavior, public push/PR/CI/merge, tag, Release or package upload. Tests cover macOS CPython 3.9.6 and 3.13.9 fixtures only; a separate fresh-context review was not run.",
+  "review_context": {
+    "why": [
+      "PC-FILE-CHANGE-1 requires a real non-Git or dirty-Git fixture to persist a closed proposal and before image, bind trusted confirmation, safely apply, independently read back and persist a truthful receipt."
+    ],
+    "not_doing": [
+      "No expanded undo package, restart reconciliation, tool-contract registration, CLI/Session/UI/model wiring, default write entry, shared queue/CHANGELOG edit or public action."
+    ],
+    "diff_walk": [
+      "pocketchat/file_change_store.py: private content-addressed objects, closed JSON records, quota checks, duplicate-member rejection and identity-bound cooperative writer claims.",
+      "pocketchat/file_changes.py: closed proposal/confirmation/apply state machine, bounded paths/content/diff, before identity+hash binding, no-follow target traversal, atomic replace/create, independent readback and recovery-required receipt failures.",
+      "pocketchat/tools.py: one unregistered proposal helper that persists pending evidence only and exposes no immediate overwrite.",
+      "tests: real temporary filesystem and dirty-Git fixtures cover create/replace, stale/revoked grants, path replacement, secure-runtime refusal, quota, prepare/receipt failures, writer collision and effect disposition.",
+      "bilingual docs: record the internal store and safety boundary without claiming a command surface, undo path or release."
+    ],
+    "static_checks": [
+      "The immutable proposal digest covers schema, id, owner, origin, policy, path, operation, after object and before image.",
+      "Target mutation requires exact confirmation, unchanged current policy/write grant, matching target identity/hash and the live writer claim.",
+      "Every successful replace/link is classified before later cleanup/fsync/readback work; durable receipt failure preserves prepared state and writer claim.",
+      "No default model or user write path is added by this checkpoint."
+    ],
+    "review_notes": [
+      "The 12:12 private patch was treated as an untrusted recovery candidate and compared against this live tree; current differences were reviewed and tested under the new lease.",
+      "The review record is generated from the repository review ladder core and extended with the product evidence schema."
+    ],
+    "gaps": [
+      "A separate fresh-context reviewer, real provider, full-suite run and public CI were not available or authorized."
+    ]
+  }
+}

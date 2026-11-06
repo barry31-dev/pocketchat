@@ -1,6 +1,7 @@
 # Chat and file work: first closed-loop design
 
-> Selected design, not an implemented command surface or a release claim.
+> The original-scope proposal/confirmation/apply core now exists as library
+> primitives; it is not an implemented command surface, undo path or release claim.
 > The user requested the first usable chat-and-file-work loop on 2026-11-05.
 > Approval reachability and scheduling live in [the slice queue](slice-queue.md).
 > Publication status stays in [the release ledger](release-ledger.md).
@@ -99,6 +100,13 @@ use private directory/file permissions where supported. A hidden directory is
 not a Git exclusion: documentation must tell users not to publish these records.
 There is no automatic cleanup of undoable records.
 
+The current original-scope checkpoint lives in `pocketchat.file_changes`,
+`pocketchat.file_change_store` and the unregistered
+`tools.execute_propose_file_change` helper. It persists the closed proposal,
+before/candidate objects, trusted confirmation, prepared boundary and verified
+apply receipt. It is not registered in `tool_contracts`, the CLI, Session or UI;
+undo, restart reconciliation and default mutation remain later package work.
+
 Bounds: UTF-8 text only, at most the existing 16 KiB per input/candidate file;
 64 KiB per rendered diff, 64 KiB per metadata record, 16 MiB per workspace change
 store, one pending proposal per turn. Count encoded bytes, including events and
@@ -130,6 +138,14 @@ Missing runtime primitives or unverifiable ownership must refuse file mutation;
 chat/read behavior has its own capability contract. A declared primitive is not
 an execution result. Keep the existing OS/Python CI matrix; prioritize actual
 macOS CPython 3.13 fixture evidence for the new loop.
+
+The implemented core uses descriptor-relative `O_NOFOLLOW` traversal, private
+0700/0600 store entries, an exclusive identity-bound writer claim, exclusive
+same-directory temporary files, directory/file `fsync`, atomic replace (or
+exclusive link for create), and reopened readback. A runtime missing those
+primitives returns `file_unsupported_runtime`; if the target was changed but the
+durable receipt cannot be saved, the prepared record and writer claim remain for
+recovery inspection instead of reporting a no-op.
 
 Preflight hashing plus atomic replace is **not general cross-process CAS**.
 Document the cooperative single-writer/local-filesystem boundary. Detectable

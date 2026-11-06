@@ -45,7 +45,9 @@
 `index.sqlite`。唯一有意的例外是 `export --out`：操作者指哪里就写哪里。
 记录内的路径都相对工作区；JSON 记录（`workspace`、`history`、`search`、
 `diff`）不携带绝对路径。没有 telemetry、没有默认上传、没有静默默认端点：
-某个 provider 被使用，是因为某个 profile 点了它的名。
+某个 provider 被使用，是因为某个 profile 点了它的名。待确认文件变更的对象与记录位于
+`.pocketchat/changes/`，使用私有权限；该目录是内部状态，模型不可读、不可授权，也不得随
+工作区公开发布。
 
 ## 本地工具边界
 
@@ -55,6 +57,12 @@
 `tool write` 是独立的显式 allowlist 写入面：只接受 UTF-8 文本，上限 16 KiB，
 使用原子替换，替换已有文件必须显式 `--overwrite`；不提供删除、shell、执行或网络
 操作。
+
+文件变更检查点新增内部、未注册的提案 helper，以及分离的确认/apply 原语。提案只写私有的
+content-addressed 证据并返回完整有界 diff，不修改目标；apply 必须同时满足精确的
+proposal/policy 确认、当前写授权、未变化的目标 identity/hash 与独占 writer claim，
+并通过 no-follow descriptor-relative I/O 写入后独立回读。它没有进入模型 tool contract、
+CLI、Session 或 UI，也不提供通用 overwrite、delete 或 undo 工具。
 
 模型自动 tool call 默认关闭。profile 只提供它显式启用的本地工具（`read_file`、
 create-only `write_file` 或只读 `memory_search`），路径来自显式 allowlist，

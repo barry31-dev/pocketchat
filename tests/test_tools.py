@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
+from pocketchat.file_change_store import FileChangeStore
 from pocketchat.tools import (ToolError, ToolPermissionError,
-                              execute_read_file, execute_write_file)
+                              execute_propose_file_change, execute_read_file,
+                              execute_write_file)
 from pocketchat.trace import TraceRecorder
 from tests._helpers import run_cli
 
@@ -160,6 +163,34 @@ class ReadFileToolTests(unittest.TestCase):
                     execute_write_file(
                         self.root, path, content, allowed_paths=[path],
                         recorder=recorder)
+
+    def test_propose_file_change_is_pending_and_does_not_expose_immediate_overwrite(self):
+        (self.root / "proposal.txt").write_text("old\n", encoding="utf-8")
+        store = FileChangeStore(self.root)
+        policy_sha256 = hashlib.sha256(b"tool-policy").hexdigest()
+        result = execute_propose_file_change(
+            self.root, "proposal.txt", "new\n",
+            read_paths=["proposal.txt"], write_paths=["proposal.txt"],
+            store=store,
+            owner={
+                "workspace_sha256": hashlib.sha256(b"workspace").hexdigest(),
+                "session_id": "session-tool",
+                "conversation_id": "conversation-tool",
+                "branch": "main",
+            },
+            origin={
+                "run_id": "run-tool",
+                "tool_call_id": "tool-proposal",
+                "profile_id": "profile-tool",
+            },
+            policy_sha256=policy_sha256,
+            change_id="change_34343434343434343434343434343434",
+        )
+
+        self.assertEqual("pending", result["status"])
+        self.assertEqual("old\n",
+                         (self.root / "proposal.txt").read_text(encoding="utf-8"))
+        self.assertIn("+new", result["diff"])
 
     def test_write_records_permission_and_tool_events(self):
         trace = self.root / "write.jsonl"

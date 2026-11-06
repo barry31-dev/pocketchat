@@ -1,6 +1,7 @@
 # 聊天与文件工作：首个闭环设计
 
-> 已选定设计，**不是现有命令、实现结果或发布声明**。依据用户 2026-11-05 的首个聊天/读写闭环要求。
+> 原范围的提案/确认/apply 核心已作为库级原语实现；**它仍不是现有命令、undo 路径或发布声明**。
+> 依据用户 2026-11-05 的首个聊天/读写闭环要求。
 > 批准记录与顺序见 [slice queue](slice-queue.md)，发布事实只见 [release ledger](release-ledger.md)。
 > [English](file-work.md)
 
@@ -67,6 +68,13 @@ operation 只允许 create/replace。proposal digest 不含自身、approval 和
 支持的系统上使用私有文件/目录权限。隐藏不等于 Git 忽略，文档必须提醒用户不要公开这些记录。
 不自动清理仍可撤销的记录。
 
+当前原范围检查点位于 `pocketchat.file_changes`、
+`pocketchat.file_change_store` 与尚未注册的
+`tools.execute_propose_file_change` helper：保存封闭提案、before/candidate
+对象、可信确认、prepared 边界和已回读的 apply 回执。它没有注册进
+`tool_contracts`、CLI、Session 或 UI；undo、重启 reconcile 与默认修改入口
+仍属于后续包内工作。
+
 边界：UTF-8，单原文件/候选文件沿用 16 KiB；完整 diff 64 KiB，元数据记录 64 KiB，
 每 workspace 修改存储 16 MiB，每 turn 一个 pending。按编码后字节计数，包含事件和对象文件。
 超额先拒绝新操作，不丢旧 before image；截断/不完整 diff 不能批准。
@@ -83,6 +91,12 @@ conflict、recovery_required。文件记录是事实源，session/trace 只引�
 同目录排他临时文件、合作写者所有权、目标身份/hash 再核对、原子替换及独立写后回读。
 缺必需原语或无法证明所有权时拒绝变更，聊天/只读按各自能力合同；原语存在不等于运行通过。
 保留现有 OS/Python CI，首要实际验证环境 macOS CPython 3.13。
+
+已实现核心使用 descriptor-relative `O_NOFOLLOW` 遍历、0700/0600 私有存储、
+绑定身份的独占 writer claim、同目录独占临时文件、文件/目录 `fsync`、replace
+原子替换（create 使用独占 link）以及重新打开后的 readback。缺 primitive 时返回
+`file_unsupported_runtime`；若目标已改变但持久回执保存失败，则保留 prepared 记录
+和 writer claim 供恢复检查，不把实际副作用写成 no-op。
 
 hash 预检加原子替换**不是通用跨进程 CAS**。明确合作单写者/本地文件系统边界；
 可观察的外部编辑/路径替换必须拒绝且 outside 文件不变，不承诺恶意进程、网络盘或任意崩溃 exactly-once。
