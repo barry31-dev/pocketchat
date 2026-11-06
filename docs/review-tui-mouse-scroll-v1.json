@@ -45,6 +45,13 @@
       "status": "fixed",
       "fingerprint": "curses-wheel-constants-vary-by-platform",
       "detail": "Exact-SHA Linux CPython 3.9 ran the suite and exposed that its curses build has no BUTTON5_PRESSED while macOS Python 3.9 assigns different values to the wheel constants. The renderer and tests now derive wheel-up/down from the platform BUTTON4 bit and the one-button shift family rather than assuming Linux 3.13 constants."
+    },
+    {
+      "id": "F5",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "no-curses-windows-tests",
+      "detail": "Exact-SHA Windows CPython 3.9 has the curses package stub but no _curses module, so the new mouse unit tests failed during import and the existing page-key test would fail the same way once executed on that platform. These renderer tests now skip on non-POSIX platforms, matching the documented line-REPL fallback rather than treating a no-curses platform as a renderer failure."
     }
   ],
   "changed_paths": [
@@ -66,8 +73,10 @@
     "CI failure evidence: run 42238364588, Linux/Ubuntu Python 3.9.25, tests/test_agent.py line 1240 raised AttributeError because curses.BUTTON5_PRESSED is absent. Python 3.13 Ubuntu and release-smoke passed for the same SHA.",
     "Local compatibility reproduction: macOS system Python 3.9.6 has BUTTON4_PRESSED=524288 and no BUTTON5_PRESSED, while macOS Python 3.13.9 has BUTTON4_PRESSED=65536 and BUTTON5_PRESSED=2097152. The repaired helper derives the missing BUTTON5 bit as BUTTON4 << 5.",
     "macOS CPython 3.9.6: python3 -m unittest tests.test_agent -q: 90 tests OK; python3 -m unittest discover -s tests -v: 1462 tests OK in 94.271s.",
-    "macOS CPython 3.13.9: python3 -m unittest tests.test_agent -q: 90 tests OK."
+    "macOS CPython 3.13.9: python3 -m unittest tests.test_agent -q: 90 tests OK.",
+    "Second CI failure evidence: run 42239349092, Windows Python 3.9.13, had 4 errors because _curses is absent. Linux 3.9/3.13, macOS 3.9 and release-smoke passed for this SHA; macOS 3.13 was still running when the failure was inspected.",
+    "After adding capability-gated skips, macOS CPython 3.9.6 and 3.13.9 again ran tests.test_agent with 90 tests OK. No renderer behavior changed; only tests now honor the package fallback boundary."
   ],
-  "unverified_scope": "Local runs cover macOS CPython 3.9.6 and 3.13.9. Exact-SHA Linux and Windows CI for the repaired commit, wheel/clean install outside release-smoke, real provider and publication were not yet run when this record was updated. The PTY probe injected an XTerm wheel-up byte sequence on macOS; it does not prove every terminal, terminal multiplexer or OS reports the same encoding. Mouse clicks in the picker or editor remain unsupported by design.",
+  "unverified_scope": "Local runs cover macOS CPython 3.9.6 and 3.13.9. Exact-SHA Linux and Windows CI for the final candidate, real provider and publication were not yet run when this record was updated. The PTY probe injected an XTerm wheel-up byte sequence on macOS; it does not prove every terminal, terminal multiplexer or OS reports the same encoding. Windows has no standard-library curses renderer and remains covered by its line-REPL fallback, not by this mouse behavior.",
   "product_issue": "https://github.com/barry31-dev/pocketchat/issues/35"
 }

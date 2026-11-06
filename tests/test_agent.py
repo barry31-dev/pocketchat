@@ -1203,6 +1203,7 @@ class AgentCommandTests(unittest.TestCase):
                                                max_iterations=1), 0)
         self.assertTrue(mousemask.called)
 
+    @unittest.skipUnless(os.name == "posix", "requires curses")
     def test_tui_read_key_turns_a_mouse_event_into_a_wheel_action(self):
         import curses
 
@@ -1221,6 +1222,7 @@ class AgentCommandTests(unittest.TestCase):
                         return_value=event):
             self.assertEqual(read_key(Window()), ("mouse", button4))
 
+    @unittest.skipUnless(os.name == "posix", "requires curses")
     def test_tui_mouse_wheel_scrolls_the_transcript(self):
         import curses
         from pocketchat.curses_ui import InputState, apply_key
@@ -1243,6 +1245,7 @@ class AgentCommandTests(unittest.TestCase):
         apply_key(tui, state, ("mouse", button5))
         self.assertEqual(tui.transcript_offset, 0)
 
+    @unittest.skipUnless(os.name == "posix", "requires curses")
     def test_tui_mouse_event_without_wheel_click_is_ignored(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI
@@ -1259,6 +1262,7 @@ class AgentCommandTests(unittest.TestCase):
         apply_key(tui, state, ("mouse", 0))
         self.assertEqual(tui.transcript_offset, 3)
 
+    @unittest.skipUnless(os.name == "posix", "requires curses")
     def test_tui_transcript_can_scroll_with_page_keys(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI, compose_screen
