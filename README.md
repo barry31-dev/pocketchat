@@ -231,9 +231,9 @@ Bare `pocketchat` enters the interactive agent. On a terminal with the
 standard-library curses module it opens a full-screen interface with a compact
 intro, compact message gutters and separators, a persistent status rule, scrolling conversation, input
 history and slash-command completion. `Enter` sends,
-`Ctrl+J` inserts a newline, `Up`/`Down` recall history, `Ctrl+T`
-expands or collapses reasoning, `PgUp`/`PgDn` move through transcript
-history, `Ctrl+C` interrupts an in-flight reply and `Ctrl+D` exits. Type `/` to select a command with Up/Down and Tab; Enter first completes a
+`Ctrl+J` inserts a newline, `Up`/`Down` recall history, the mouse wheel and
+`PgUp`/`PgDn` move through transcript history, `Ctrl+T` expands or collapses
+reasoning, `Ctrl+C` interrupts an in-flight reply and `Ctrl+D` exits. Type `/` to select a command with Up/Down and Tab; Enter first completes a
 partial command, then executes the completed command. On platforms whose
 standard library does not provide curses (including standard Windows Python),
 the same command falls back to the line interface instead of importing a
