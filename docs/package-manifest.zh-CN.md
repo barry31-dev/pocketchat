@@ -103,6 +103,17 @@ wheel 容器摘要不同（`c563154f...` / `33da6dd4...`），但 canonical mani
 `a4abfa4972e2e3cf80462df0eb8aeb3bb4ba50ec8fface137dc37591265a2b87`。因此本轮证明的是
 清单确定性，不声称 ZIP 容器可复现。
 
+2026-11-07 又在 post-fix 候选
+`fefb970bd112bd0ed32f943a2b917da4646318ad` 上用 macOS、CPython 3.13.9 与
+pip 25.3 复核。默认隔离构建在真正构建 PocketChat 之前，因配置的代理在 pip
+获取 `setuptools>=61` 时握手超时而停止；这是环境失败，不是产品结果。同一解释器
+已安装满足要求的 setuptools 80.9.0 与 wheel 0.48.0，因此按文档使用
+`--no-build-isolation` 回退后，wheel 构建、干净 venv 安装、两份 manifest 配对
+以及 11 条 task help 命令全部完成；产出 277450 字节 wheel，SHA-256 为
+`7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7`，wheel /
+安装树 manifest 各纳入 67 个成员。这只证明该次本地回退运行；精确 SHA CI、
+Linux/Windows、post-fix 隔离构建成功与 public main 集成仍未验证。
+
 Apple Command Line Tools 的 CPython 3.9.6 使用 pip 21.2.4：隔离构建生成了
 `UNKNOWN-0.0.0`；显式非隔离回退又使用低于本仓 `setuptools>=61` 要求的
 setuptools 58.0.4。两条失败都没有进入有效 PocketChat 包清单，不能外推成“所有

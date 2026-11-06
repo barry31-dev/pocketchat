@@ -117,6 +117,19 @@ SHA-256 `a4abfa4972e2e3cf80462df0eb8aeb3bb4ba50ec8fface137dc37591265a2b87`. The
 manifest is deterministic for those runs; the ZIP container is not claimed to
 be reproducible.
 
+On 2026-11-07, the post-fix candidate `fefb970bd112bd0ed32f943a2b917da4646318ad`
+was checked again on macOS with CPython 3.13.9 and pip 25.3. The default isolated
+build stopped before building PocketChat because the configured proxy timed out
+while pip was fetching `setuptools>=61`; that is an environment failure, not a
+package result. The same interpreter already had setuptools 80.9.0 and wheel
+0.48.0, so the documented `--no-build-isolation` fallback used those compatible
+local dependencies and completed the wheel build, clean-venv install, manifest
+pair check and all 11 task help commands. It reported a 277450-byte wheel with
+SHA-256 `7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7` and
+67 admitted members in each manifest. This proves only that exact local fallback
+run; exact-SHA CI, Linux/Windows, a successful post-fix isolated build and public
+main integration remain unverified.
+
 The Apple Command Line Tools CPython 3.9.6 environment uses pip 21.2.4. Its
 isolated build produced `UNKNOWN-0.0.0`, and its explicit non-isolated fallback
 used setuptools 58.0.4, below this repository's `setuptools>=61` requirement.

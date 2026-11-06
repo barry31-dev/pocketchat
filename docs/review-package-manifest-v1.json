@@ -83,9 +83,12 @@
     "V: Review round 3 started from the clean candidate 6467aae20a3ee0e16eb7fdb4a64da543bf9a28d6 and reproduced the nested generated-metadata omission and nested RECORD drift with a real wheel fixture before editing.",
     "V: After the fix, CPython 3.13.9 ran `python3 -B -m unittest tests.test_release_smoke -v`: 18 tests OK, exit 0; CPython 3.9.6 ran the same 18-test module: 18 tests OK, exit 0.",
     "V: `ruff check --select E9,F scripts/release_smoke.py tests/test_release_smoke.py` passed; CPython 3.13.9 and 3.9.6 `py_compile` passed; JSON parsing and `git diff --check` passed.",
-    "C: Review round 3 covered the exact five approved paths and the new fix diff; no queue, CHANGELOG, pyproject, package payload, CLI, provider, workflow, release ledger or publication file was changed."
+    "C: Review round 3 covered the exact five approved paths and the new fix diff; no queue, CHANGELOG, pyproject, package payload, CLI, provider, workflow, release ledger or publication file was changed.",
+    "V: On 2026-11-07 at implementation candidate fefb970bd112bd0ed32f943a2b917da4646318ad, macOS CPython 3.13.9 / pip 25.3 ran the default isolated release smoke. It exited 1 before building PocketChat because pip timed out through the configured proxy while fetching setuptools>=61; no product wheel/install/manifest conclusion was drawn from that environment failure. The private work-dir and complete machine JSON remain in the local checkpoint rather than this public record.",
+    "C: The same CPython 3.13.9 environment reported setuptools 80.9.0 and wheel 0.48.0 already installed, satisfying pyproject.toml's only build requirement setuptools>=61, so the documented --no-build-isolation fallback was applicable without changing product code.",
+    "V: `python3.13 -B scripts/release_smoke.py --repo \"$PWD\" --work-dir <private-work-dir> --no-build-isolation --json` completed at implementation candidate fefb970bd112bd0ed32f943a2b917da4646318ad, exit 0. It built and clean-installed pocketchat-1.1.0-py3-none-any.whl (277450 bytes, SHA-256 7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7), produced 67-member wheel and installed manifests, verified their comparable payload and all five schemas, and exercised all 11 task help commands. This is one macOS fallback run, not isolated-build, CI or cross-platform evidence."
   ],
-  "unverified_scope": "Round-3 independent fresh-context review is recorded and PM-5/PM-6 are closed with no open blocker/major. Exact-candidate GitHub CI, a post-fix real release-smoke wheel build/install, Linux/Windows runtime behavior, a valid modern-pip CPython 3.9 wheel/install smoke, arbitrary filesystem race resistance, cryptographic signature/provenance, reproducible wheel container bytes, tag, Release and package-index upload remain unverified. The 1287-test full product suite and the earlier wheel/manifest smoke are historical runs and were not rerun after this review fix; they are not current post-fix evidence. The successful fixture tests prove the corrected manifest scope only, not publication or authenticity.",
+  "unverified_scope": "Round-3 independent fresh-context review is recorded and PM-5/PM-6 are closed with no open blocker/major. A post-fix CPython 3.13.9 real wheel build, clean install and manifest-pair smoke succeeded through the documented no-build-isolation fallback. Exact-candidate GitHub CI, a successful post-fix isolated build, Linux/Windows runtime behavior, a valid modern-pip CPython 3.9 wheel/install smoke, arbitrary filesystem race resistance, cryptographic signature/provenance, reproducible wheel container bytes, tag, Release and package-index upload remain unverified. The 1287-test full product suite was not rerun after this review fix. The successful local fallback smoke proves only that exact macOS run, not publication, isolated dependency acquisition or cross-platform behavior.",
   "review_context": {
     "why": [
       "The user requested a non-conflicting PocketChat task; session audit, task diff, JSON input, deadline, context drift, session writer, secret audit and path capability work were already active, while the package-manifest branch/PR/issue and five-file scope were absent.",
@@ -107,13 +110,13 @@
       "The final implementation keeps generated caches and only selected-root installation metadata outside the comparable payload; nested lookalike paths remain visible and comparable."
     ],
     "gaps": [
-      "Exact-candidate GitHub CI, a post-fix real release-smoke wheel build/install and public main integration remain pending; earlier wheel smoke evidence predates this review fix.",
+      "Exact-candidate GitHub CI, a successful post-fix isolated build and public main integration remain pending. The post-fix no-build-isolation release smoke now has one exact-candidate macOS success; the isolated attempt stopped at proxy dependency acquisition before package build.",
       "Cross-platform runtime, race resistance, provenance/signature and publication claims remain outside this development checkpoint."
     ]
   },
   "landing_sign_off": {
     "status": "required",
-    "scope": "Round-3 independent fresh-context review is complete with no open blocker/major. Development and branch delivery evidence is ready for controlled integration review, but exact-SHA CI readback and the authorized public main action remain required; no tag, Release, package upload or provider call is authorized."
+    "scope": "Round-3 independent fresh-context review and one post-fix macOS no-build-isolation wheel/install smoke are complete with no open blocker/major. Exact-SHA CI readback, human landing sign-off and the authorized public main action remain required; no tag, Release, package upload or provider call is authorized."
   },
   "review_rounds": [
     {
@@ -128,7 +131,7 @@
         "Reviewed the five approved paths, existing release-smoke call sites and the candidate contract independently of the author summary.",
         "Reproduced the nested generated-metadata omission and nested RECORD drift with a real wheel fixture before editing; the red test failed at the hidden nested INSTALLER assertion.",
         "After the fix, the full release-smoke module passed on macOS CPython 3.13.9 and 3.9.6 (18 tests each); Ruff E9/F, both py_compile runs, JSON parsing and git diff --check passed.",
-        "No exact-SHA GitHub CI or real release-smoke build/install was run after this fix.",
+        "At the round-3 close, no exact-SHA GitHub CI or post-fix real release-smoke build/install had run. A later evidence-only follow-up ran the documented CPython 3.13 no-build-isolation smoke successfully; exact-SHA CI and isolated post-fix build success remain unverified.",
         "The final path regression also rejects non-canonical source member names such as pocketchat//other.py before normalization or collision handling.",
         "Closed-manifest regression also rejects a renamed dist-info root whose version does not match the manifest version."
       ]
