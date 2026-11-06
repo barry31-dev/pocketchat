@@ -783,7 +783,14 @@ def apply_file_change(root: Path, store: FileChangeStore, change_id: str, *,
             candidate = store.read_object(
                 change["after"]["object"], change["after"]["sha256"])
         except FileChangeStoreError as exc:
-            _raise_store_error(exc)
+            preserve_claim = True
+            try:
+                claim.preserve()
+            except FileChangeStoreError:
+                pass
+            raise FileChangeError(
+                "file change preparation is incomplete; recovery is required",
+                error_type="file_recovery_required") from exc
         try:
             observed, after_identity = _atomic_apply(root, change, candidate)
         except FileChangeError as exc:

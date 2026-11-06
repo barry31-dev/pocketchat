@@ -418,6 +418,56 @@ class FileChangeProposalTests(unittest.TestCase):
             self.store.load_record(stale_change["change_id"])["events"][-1]["type"],
         )
 
+    def test_candidate_read_failure_after_prepare_requires_recovery(self):
+        target, proposed = self._confirmed_replace(
+            "change_8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a")
+        with mock.patch.object(
+                self.store, "read_object",
+                side_effect=FileChangeStoreError("simulated missing candidate")):
+            with self.assertRaises(FileChangeError) as failed:
+                apply_file_change(
+                    self.root, self.store, proposed["change_id"],
+                    current_policy_sha256=POLICY_SHA256,
+                    write_paths=["notes.txt"],
+                )
+
+        self.assertEqual("file_recovery_required", failed.exception.error_type)
+        self.assertEqual("none", failed.exception.effect_disposition)
+        self.assertEqual("old\n", target.read_text(encoding="utf-8"))
+        stored = self.store.load_record(proposed["change_id"])
+        self.assertEqual("prepared", stored["events"][-1]["type"])
+        self.assertTrue((self.store.root / "writer.lock").is_file())
+
+    def test_candidate_store_unavailable_preserves_recovery_classification(self):
+        target, proposed = self._confirmed_replace(
+            "change_8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b")
+        claim = self.store.acquire_writer(
+            proposed["change_id"], owner="test")
+        try:
+            with mock.patch.object(
+                    self.store, "read_object",
+                    side_effect=FileChangeStoreError("simulated store outage")), \
+                    mock.patch.object(
+                        self.store, "acquire_writer", return_value=claim), \
+                    mock.patch.object(
+                        claim, "preserve",
+                        side_effect=FileChangeStoreError(
+                            "simulated preserve failure")):
+                with self.assertRaises(FileChangeError) as failed:
+                    apply_file_change(
+                        self.root, self.store, proposed["change_id"],
+                        current_policy_sha256=POLICY_SHA256,
+                        write_paths=["notes.txt"],
+                    )
+            self.assertEqual("file_recovery_required",
+                             failed.exception.error_type)
+            self.assertEqual("none", failed.exception.effect_disposition)
+            self.assertEqual("old\n", target.read_text(encoding="utf-8"))
+            stored = self.store.load_record(proposed["change_id"])
+            self.assertEqual("prepared", stored["events"][-1]["type"])
+        finally:
+            claim.release()
+
     def test_prepare_record_failure_leaves_the_target_unchanged(self):
         target, proposed = self._confirmed_replace(
             "change_88888888888888888888888888888888")
