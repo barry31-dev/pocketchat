@@ -97,6 +97,12 @@ def apply_key(tui: AgentTUI, state: InputState, key) -> str:
     if isinstance(key, str) and key == "\x14":
         tui.toggle_reasoning()
         return "continue"
+    if isinstance(key, tuple) and len(key) == 2 and key[0] == "mouse":
+        if key[1] & getattr(curses, "BUTTON4_PRESSED", 0):
+            tui.scroll_transcript(1, max(4, 8))
+        elif key[1] & getattr(curses, "BUTTON5_PRESSED", 0):
+            tui.scroll_transcript(-1, max(4, 8))
+        return "continue"
     if key in (curses.KEY_PPAGE, curses.KEY_NPAGE):
         height, _ = getattr(state, "screen_size", (24, 80))
         page = max(4, height - 8)
@@ -167,6 +173,12 @@ def read_key(window):
         value = window.getch()
         if value == -1:
             raise
+    if value == curses.KEY_MOUSE:
+        try:
+            _id, _x, _y, _z, state = curses.getmouse()
+        except curses.error:
+            return value
+        return ("mouse", state)
     if value == "\x1b" or value == 27:
         try:
             second = window.getch()
@@ -187,6 +199,15 @@ def read_key(window):
     if isinstance(value, int) and 0 <= value < 256:
         return chr(value)
     return value
+
+
+def _enable_mouse_wheel() -> None:
+    """Request wheel events without making click reporting a requirement."""
+    try:
+        curses.mousemask(getattr(curses, "BUTTON4_PRESSED", 0)
+                         | getattr(curses, "BUTTON5_PRESSED", 0))
+    except (AttributeError, curses.error):
+        pass
 
 
 def _draw(stdscr, tui: AgentTUI, state: InputState) -> None:
@@ -222,6 +243,7 @@ def _loop(stdscr, tui: AgentTUI, max_iterations=None, sleeper=None) -> int:
     except curses.error:
         pass
     stdscr.keypad(True)
+    _enable_mouse_wheel()
     stdscr.nodelay(True)
     state = InputState()
     iterations = 0

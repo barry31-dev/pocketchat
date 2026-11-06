@@ -12,6 +12,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -1158,6 +1159,103 @@ class AgentCommandTests(unittest.TestCase):
         self.assertIn("/session", text)
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
+    def test_tui_loop_enables_mouse_wheel_reporting(self):
+        from pocketchat.curses_ui import run_loop_for_test
+        from pocketchat.tui import AgentTUI
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+
+        class Window:
+            def keypad(self, value):
+                pass
+
+            def nodelay(self, value):
+                pass
+
+            def getmaxyx(self):
+                return (20, 80)
+
+            def erase(self):
+                pass
+
+            def addnstr(self, *args):
+                pass
+
+            def move(self, *args):
+                pass
+
+            def refresh(self):
+                pass
+
+            def get_wch(self):
+                return "\x04"
+
+            def getch(self):
+                raise AssertionError("getch should not be needed")
+
+        with mock.patch("pocketchat.curses_ui.curses.mousemask",
+                        return_value=(0, 0)) as mousemask:
+            self.assertEqual(run_loop_for_test(Window(), tui,
+                                               max_iterations=1), 0)
+        self.assertTrue(mousemask.called)
+
+    def test_tui_read_key_turns_a_mouse_event_into_a_wheel_action(self):
+        import curses
+
+        from pocketchat.curses_ui import read_key
+
+        class Window:
+            def __init__(self):
+                self.codes = [curses.KEY_MOUSE]
+
+            def get_wch(self):
+                return self.codes.pop(0)
+
+        event = (0, 10, 5, 0, curses.BUTTON4_PRESSED)
+        with mock.patch("pocketchat.curses_ui.curses.getmouse",
+                        return_value=event):
+            self.assertEqual(read_key(Window()),
+                             ("mouse", curses.BUTTON4_PRESSED))
+
+    def test_tui_mouse_wheel_scrolls_the_transcript(self):
+        import curses
+        from pocketchat.curses_ui import InputState, apply_key
+        from pocketchat.tui import AgentTUI
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+        for i in range(30):
+            tui.transcript.append(("agent", "message %02d" % i))
+        state = InputState()
+        state.screen_size = (14, 72)
+        apply_key(tui, state, ("mouse", curses.BUTTON4_PRESSED))
+        self.assertGreater(tui.transcript_offset, 0)
+        apply_key(tui, state, ("mouse", curses.BUTTON5_PRESSED))
+        self.assertEqual(tui.transcript_offset, 0)
+
+    def test_tui_mouse_event_without_wheel_click_is_ignored(self):
+        from pocketchat.curses_ui import InputState, apply_key
+        from pocketchat.tui import AgentTUI
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+        for i in range(30):
+            tui.transcript.append(("agent", "message %02d" % i))
+        state = InputState()
+        tui.transcript_offset = 3
+        apply_key(tui, state, ("mouse", 0))
+        self.assertEqual(tui.transcript_offset, 3)
+
     def test_tui_transcript_can_scroll_with_page_keys(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI, compose_screen
