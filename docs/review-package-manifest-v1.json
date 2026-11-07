@@ -86,9 +86,10 @@
     "C: Review round 3 covered the exact five approved paths and the new fix diff; no queue, CHANGELOG, pyproject, package payload, CLI, provider, workflow, release ledger or publication file was changed.",
     "V: On 2026-11-07 at implementation candidate fefb970bd112bd0ed32f943a2b917da4646318ad, macOS CPython 3.13.9 / pip 25.3 ran the default isolated release smoke. It exited 1 before building PocketChat because pip timed out through the configured proxy while fetching setuptools>=61; no product wheel/install/manifest conclusion was drawn from that environment failure. The private work-dir and complete machine JSON remain in the local checkpoint rather than this public record.",
     "C: The same CPython 3.13.9 environment reported setuptools 80.9.0 and wheel 0.48.0 already installed, satisfying pyproject.toml's only build requirement setuptools>=61, so the documented --no-build-isolation fallback was applicable without changing product code.",
-    "V: `python3.13 -B scripts/release_smoke.py --repo \"$PWD\" --work-dir <private-work-dir> --no-build-isolation --json` completed at implementation candidate fefb970bd112bd0ed32f943a2b917da4646318ad, exit 0. It built and clean-installed pocketchat-1.1.0-py3-none-any.whl (277450 bytes, SHA-256 7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7), produced 67-member wheel and installed manifests, verified their comparable payload and all five schemas, and exercised all 11 task help commands. This is one macOS fallback run, not isolated-build, CI or cross-platform evidence."
+    "V: `python3.13 -B scripts/release_smoke.py --repo \"$PWD\" --work-dir <private-work-dir> --no-build-isolation --json` completed at implementation candidate fefb970bd112bd0ed32f943a2b917da4646318ad, exit 0. It built and clean-installed pocketchat-1.1.0-py3-none-any.whl (277450 bytes, SHA-256 7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7), produced 67-member wheel and installed manifests, verified their comparable payload and all five schemas, and exercised all 11 task help commands. This is one macOS fallback run, not isolated-build, CI or cross-platform evidence.",
+    "V: On 2026-11-07, macOS CPython 3.9.6 ran python3 -B -m unittest discover -s tests -v once at exact candidate d088fee36e7166c6e068fc72a2245d01399aecce after the PM-6 fix: 1288 tests OK in 80.085 seconds, exit 0. The scripts/release_smoke.py and tests/test_release_smoke.py bytes exactly match the previously reviewed implementation fefb970bd112bd0ed32f943a2b917da4646318ad. No previously green focused/Ruff/build/install smoke was repeated."
   ],
-  "unverified_scope": "Round-3 independent fresh-context review is recorded and PM-5/PM-6 are closed with no open blocker/major. A post-fix CPython 3.13.9 real wheel build, clean install and manifest-pair smoke succeeded through the documented no-build-isolation fallback. Exact-candidate GitHub CI, a successful post-fix isolated build, Linux/Windows runtime behavior, a valid modern-pip CPython 3.9 wheel/install smoke, arbitrary filesystem race resistance, cryptographic signature/provenance, reproducible wheel container bytes, tag, Release and package-index upload remain unverified. The 1287-test full product suite was not rerun after this review fix. The successful local fallback smoke proves only that exact macOS run, not publication, isolated dependency acquisition or cross-platform behavior.",
+  "unverified_scope": "Round-3 independent fresh-context review is recorded and PM-5/PM-6 are closed with no open blocker/major. A post-fix CPython 3.13.9 real wheel build, clean install and manifest-pair smoke succeeded through the documented no-build-isolation fallback. Exact-candidate GitHub CI, a successful post-fix isolated build, Linux/Windows runtime behavior, a valid modern-pip CPython 3.9 wheel/install smoke, arbitrary filesystem race resistance, cryptographic signature/provenance, reproducible wheel container bytes, tag, Release and package-index upload remain unverified. A subsequent evidence-only continuation ran the full product suite once on macOS CPython 3.9.6 at d088fee36e7166c6e068fc72a2245d01399aecce: 1288 tests OK in 80.085 seconds, exit 0. This is not CI, cross-platform or publication evidence. The successful local fallback smoke proves only that exact macOS run, not publication, isolated dependency acquisition or cross-platform behavior.",
   "review_context": {
     "why": [
       "The user requested a non-conflicting PocketChat task; session audit, task diff, JSON input, deadline, context drift, session writer, secret audit and path capability work were already active, while the package-manifest branch/PR/issue and five-file scope were absent.",
@@ -101,7 +102,8 @@
       "scripts/release_smoke.py adds one bounded classifier for wheel and installed-tree bytes, a closed manifest validator, pair comparison, and additive release-smoke JSON fields; round 3 narrows generated-metadata and mutable-RECORD exclusions to the selected dist-info root and preserves refusal ordering.",
       "tests/test_release_smoke.py starts from the observed missing API, builds bounded wheel/installed fixtures, covers refusal and budget boundaries, and now reproduces nested lookalike dist-info payload retention, nested RECORD drift refusal and extra dist-info refusal.",
       "The bilingual docs define the schema, limits, exact generated-file exclusion scope, fail-closed cases, release-smoke wiring and exact verification scope.",
-      "This review record separates local runs, baseline lint limitations, fixed findings, round-3 independent review and publication exclusions."
+      "This review record separates local runs, baseline lint limitations, fixed findings, round-3 independent review and publication exclusions.",
+      "Evidence-only post-fix continuation records the previously missing full regression on macOS CPython 3.9.6. No implementation/test/doc-contract byte changed and no new full review round was opened."
     ],
     "static_checks": [
       "The changed paths exactly match the main-reachable ready row.",
@@ -116,7 +118,7 @@
   },
   "landing_sign_off": {
     "status": "required",
-    "scope": "Round-3 independent fresh-context review and one post-fix macOS no-build-isolation wheel/install smoke are complete with no open blocker/major. Exact-SHA CI readback, human landing sign-off and the authorized public main action remain required; no tag, Release, package upload or provider call is authorized."
+    "scope": "Round-3 independent review, post-fix macOS no-build-isolation wheel/install smoke and post-fix CPython 3.9.6 full regression are recorded with no open blocker/major. Exact-SHA CI readback, human landing sign-off and authorized public main action remain required; no tag, Release, package upload or provider call is authorized."
   },
   "review_rounds": [
     {
@@ -136,5 +138,26 @@
         "Closed-manifest regression also rejects a renamed dist-info root whose version does not match the manifest version."
       ]
     }
-  ]
+  ],
+  "postfix_full_suite": {
+    "observed_candidate": "d088fee36e7166c6e068fc72a2245d01399aecce",
+    "implementation_candidate": "fefb970bd112bd0ed32f943a2b917da4646318ad",
+    "source_kind": "local run (V)",
+    "verification": "verified",
+    "scope": "macOS CPython 3.9.6 full unittest suite only",
+    "command": "python3 -B -m unittest discover -s tests -v",
+    "tests": 1288,
+    "seconds": 80.085,
+    "exit_code": 0,
+    "output_sha256": "d3c156ac98ff7f8aea1650365355ff56bb64722816ea42f3258431bea781f1f6",
+    "source_unchanged": true,
+    "review_rounds_unchanged": true,
+    "not_run": [
+      "Current Python 3.13 full suite",
+      "CI / Linux / Windows",
+      "Repeated focused tests, Ruff, wheel build or install smoke",
+      "Successful isolated post-fix build",
+      "Public push/PR/main integration, human sign-off, tag, Release or upload"
+    ]
+  }
 }
