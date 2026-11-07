@@ -281,6 +281,53 @@ and sidecar/preview binding as a separate slice.
   candidate remain separate; this planning change does not create or claim them.
 
 
+#### `PC-CHAT-LIFECYCLE-1`
+
+- **State**: `ready`
+- **Branch**: `task/pocketchat-chat-lifecycle`
+- **Write scope**: `pocketchat/tui.py`, `pocketchat/provider.py`,
+  `tests/test_agent.py`, `tests/test_kernel.py`, `tests/test_tool_calls.py`,
+  `docs/provider-adapters.md`, `docs/provider-adapters.zh-CN.md`,
+  `docs/review-chat-lifecycle-v1.json`
+- **Depends on**: `PC-SFILE-FENCE-1` (delivered at `4877e5e`) and
+  `PC-RUNTIME-HARDEN-1` (delivered); no CLI, file-work, schema, workflow or
+  release dependency. Session storage and provider normalization remain the
+  owners of their existing formats and contracts.
+- **Done when**: A same-profile, same-session `AgentTUI` performs three
+  successful sends, and the resulting session file contains its header plus
+  all three user/assistant exchanges. The second and third provider requests
+  carry the preceding conversation context; a persistence failure is visible
+  rather than silently dropping later appends. The TUI either reacquires
+  writer ownership for each run or uses one explicit open/close lifecycle; it
+  never reuses a released token. Streamed provider responses normalize text,
+  tool calls and usage to the same closed response contract as non-streaming
+  responses: text-only, tool-only, text plus fragmented tool arguments, and
+  usage-only events with `choices=[]` are covered. Tool calls are returned only
+  after their complete arguments decode, malformed or incomplete fragments
+  fail closed, and reported usage is retained rather than replaced by zero.
+  Focused tests must be observed red for the fixed-SHA defects before the
+  smallest implementation. Existing CLI/file/TUI behavior outside these paths,
+  prompt bytes, request snapshots, stable schemas and exit-code classes remain
+  compatible. This slice does not add shell/network tools, provider fallback,
+  a second session format, a second executor, UI features or public release.
+- **Evidence**: `tests/test_agent.py`, `tests/test_kernel.py`,
+  `tests/test_tool_calls.py`, `pocketchat/tui.py`, `pocketchat/provider.py`,
+  both provider-adapter docs and `docs/review-chat-lifecycle-v1.json`; the
+  implementation review records the observed red, focused tests, exact
+  candidate SHA and appropriate lint/diff evidence. Delivery is recorded only
+  after that reviewed candidate is integrated and read back from `main`.
+- **Approved by**: agent under the user 2026-11-07 planning/timer optimization
+  authorization and the existing 2026-11-04 PocketChat routine delegation.
+  This approval covers one bounded P0 chat lifecycle slice only; it does not
+  authorize a paid provider call, a provider switch, tag, Release, package
+  upload or publication.
+- **Approval evidence**: This row and
+  `docs/review-chat-lifecycle-approval-v1.json` are the approval record. The
+  execution branch is not created by this planning change; it may start only
+  after this row is integrated and read back from product `main`, and only if
+  its exact write scope remains free of an active writer.
+
+
 #### `PC-SFILE-AUDIT-1`
 
 - **State**: `ready`
