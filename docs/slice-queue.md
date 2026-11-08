@@ -330,7 +330,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-SFILE-AUDIT-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-session-audit-core`
 - **Write scope**: `pocketchat/session_integrity.py`,
   `tests/test_session_integrity.py`, `docs/session-integrity.md`,
@@ -364,10 +364,12 @@ and sidecar/preview binding as a separate slice.
 - **Evidence**: `pocketchat/session_integrity.py`,
   `tests/test_session_integrity.py`, `docs/session-integrity.md`,
   `docs/session-integrity.zh-CN.md` and
-  `docs/review-session-integrity-v1.json`; focused unittest output, exact
-  reviewed candidate SHA and `git diff --check` are recorded in the
-  implementation review. The delivery commit is recorded only after the
-  candidate is examined against this row and merged.
+  `docs/review-session-integrity-v1.json`; reviewed implementation
+  `24bea6cc86a8e1de3ad60a722b1c27aacb490800` and evidence-bearing tip
+  `6e8a0a2724bc68fc218541207eedab0aaa2c9f44` merged by PR #28 as
+  `b5fbaa613bef79cc0ef6b537bfea9125931bd659`. Exact-SHA runs
+  `42002841536` and `42003912267` each report seven successful jobs; the
+  review record also binds the final closeout review and landing sign-off.
 - **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
   delegation; this row and `docs/review-session-audit-approval-v1.json`
   freeze the pure-core contract. This approval does not authorize a CLI, real
@@ -381,7 +383,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-CONTEXT-EXPLAIN-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-context-explain`
 - **Write scope**: `pocketchat/context_explain.py`,
   `tests/test_context_explain.py`, `docs/context-explain.md`,
@@ -418,10 +420,12 @@ and sidecar/preview binding as a separate slice.
 - **Evidence**: `pocketchat/context_explain.py`,
   `tests/test_context_explain.py`, `docs/context-explain.md`,
   `docs/context-explain.zh-CN.md` and
-  `docs/review-context-explain-v1.json`; the implementation review records the
-  observed red, focused tests, lint/compile/diff evidence and exact candidate
-  SHA. Delivery is recorded only after that candidate is reviewed against this
-  row and integrated.
+  `docs/review-context-explain-v1.json`; reviewed implementation
+  `0480cd110c6eb33af791bb4533340011bf06622c`, source candidate
+  `a08ddd51161a65df5f3b9ae3e5cb12b9abb5d4f7` and merge
+  `2f3c7f3d74764fca6354b6cabcf282b0ac9f5c47` are recorded in the review record
+  and the fleet delivery receipt. The receipt binds the candidate to main and
+  records a green seven-check exact-SHA gate.
 - **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
   delegation and the user 2026-11-05 request for a non-conflicting PocketChat
   task. This approval covers the bounded read-only explanation core only; it
@@ -519,7 +523,7 @@ belongs to integration/release, not every overlapping worker.
 
 #### `PC-FILE-PLAN-1`
 
-- **State**: `queued` (not an implementation or a lease).
+- **State**: `delivered`.
 - **Branch**: `task/pocketchat-file-work-plan`.
 - **Depends on**: the selected user goal and a lawful product approval-record path.
 - **Write scope**:
@@ -528,7 +532,7 @@ belongs to integration/release, not every overlapping worker.
   - `docs/review-file-plan-v1.json`
   - `docs/slice-queue.md`
 - **Done when**: Freeze the independent file-work contract and these bounded approval records. No product implementation, version change, provider call or publication. Completion requires the exact reviewed planning candidate to be integrated and read back from main.
-- **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
+- **Evidence**: reviewed four-path planning candidate merged by PR #34 as `a79c037f4d13e79795221cf2706c3973d4912c49`; `docs/review-file-plan-v1.json` records the two fixed design findings and the bounded independent second review.
 - **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
 - **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
 
