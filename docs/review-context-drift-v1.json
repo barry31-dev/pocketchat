@@ -1,0 +1,84 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/context_drift.py",
+    "tests/test_context_drift.py",
+    "docs/context-drift.md",
+    "docs/context-drift.zh-CN.md",
+    "docs/review-context-drift-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "CD-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "partial-coverage-can-still-allow",
+      "reason": "The first implementation returned allow when a partial observation happened to include every selected path. The contract now treats partial coverage as an explicit coverage_partial unknown even when all selected rows are present."
+    },
+    {
+      "id": "CD-2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "checked-files-counted-unobserved-rows",
+      "reason": "The first implementation counted every selected snapshot row as checked. checked_files now counts only selected paths that had a supplied observation; omitted rows remain explicit unknowns or refusals."
+    },
+    {
+      "id": "CD-3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "snapshot-contract-not-fully-producer-bounded",
+      "reason": "The first validator accepted query terms and selection counts beyond the existing selection producer limits. It now enforces the shipped query-term, selected-file and tree-file limits and checks UTF-8 text bytes plus SHA-256 before comparison."
+    },
+    {
+      "id": "CD-4",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "unused-test-imports",
+      "reason": "Ruff E9/F found unused socket and subprocess imports in the focused test file; both were removed and the focused Ruff run passed."
+    },
+    {
+      "id": "CD-5",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "independent-fresh-context-review",
+      "reason": "A separate user-directed closeout review read issue #21, the exact five-path diff, implementation, tests and bilingual contract. It found no blocker or major finding; the failed external transport attempt is not counted as evidence."
+    }
+  ],
+  "commit_or_candidate_sha": "b37238042b0e07750bc31a65025c9a6601d5e7a7",
+  "changed_paths": [
+    "pocketchat/context_drift.py",
+    "tests/test_context_drift.py",
+    "docs/context-drift.md",
+    "docs/context-drift.zh-CN.md",
+    "docs/review-context-drift-v1.json"
+  ],
+  "reviewed_evidence": [
+    "C: product issue #21, authored by barry31-dev, is the repository-reachable ready approval record for PC-CONTEXT-DRIFT-1 and freezes the unique branch, five-path write scope, dependency, contract and stop boundary.",
+    "V: CPython 3.13.9 first ran `python3 -B -m unittest tests.test_context_drift -v` before implementation; collection failed with ModuleNotFoundError for pocketchat.context_drift, exit 1.",
+    "V: After the first implementation, focused tests exposed producer-contract fixture failures, unchecked partial-coverage semantics, checked_files overcounting and report-budget ambiguity; each was fixed in the pure core and focused tests.",
+    "V: CPython 3.13.9 ran `python3 -B -m unittest tests.test_context_drift -v`: 20 tests OK, exit 0.",
+    "V: Ruff 0.17.3 ran `ruff check --select E9,F pocketchat/context_drift.py tests/test_context_drift.py`: all checks passed, exit 0.",
+    "V: CPython 3.13.9 ran the adjacent `tests.test_task_snapshot`, `tests.test_task_selection` and `tests.test_task_preflight` suites: 59 tests OK, exit 0; the full product suite then ran 1298 tests OK in 51.426s, exit 0.",
+    "C: The source review confirms the core validates the full shipped snapshot contract, never reads files or calls provider/command/network, never mutates either input, and never upgrades partial coverage to allow.",
+    "C: Focused tests cover unchanged, content/byte change, missing and type replacement, unselected observation ignore, partial/complete coverage, refusal precedence, forged snapshot fields, duplicate/unsafe paths, observation and report limits, zero selected files, input immutability, stable digest and zero filesystem/Git/environment/socket/command/provider calls.",
+    "C: The full diff stays within issue #21's five paths and adds no CLI, live collector, snapshot refresh, executor/provider integration, automatic replanning, shared queue edit, tag, Release or package upload.",
+    "C: A separate user-directed closeout review session read the frozen approval record, exact task diff, implementation, tests and contract without adopting the author conclusion; no blocker or major finding remained. The failed external Codex transport attempt is not counted as review evidence.",
+    "V: GitHub Actions run 41979628542 is bound to exact head 081ec32daea82aba32507fcbf98e76b119248755 and completed 7/7 jobs successfully across Linux/macOS/Windows, CPython 3.9/3.13 and release-smoke."
+  ],
+  "unverified_scope": "Package build/install, live filesystem/Git observation, race behavior, CLI/executor wiring, automatic replanning, provider/command integration, tag, Release and publication remain unverified. The independent review and exact-head GitHub Actions are recorded above. A green pure-core test does not prove that the supplied observations are honest or race-free.",
+  "landing_sign_off": {
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly directed manual closeout of all pending work. This authorizes landing the reviewed draft candidates into product main only; it does not authorize a tag, Release, package upload, or any other publication action."
+  }
+}

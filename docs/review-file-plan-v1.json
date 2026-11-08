@@ -1,0 +1,51 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/file-work.md",
+    "docs/file-work.zh-CN.md",
+    "docs/review-file-plan-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "FILE-WORK-UNDO-IDENTITY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:atomic-undo:predecessor-identity",
+      "reason": "Design review found that atomic restore creates a new inode, so repeated undo cannot require the predecessor's original inode. The contract now requires a verified compensation receipt linking the predecessor and new observed identity; arbitrary same-hash replacement remains a conflict. This is a design correction, not a runtime test."
+    },
+    {
+      "id": "FILE-WORK-FINAL-ARTIFACT-E2E",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:release:final-artifact-binding",
+      "reason": "The E2E slice produces the reusable fixture and development evidence. Release now finishes version/packaging/docs before freezing the final SHA/wheel, reruns the golden path against that artifact, stores evidence outside the frozen tree, and only then requests exact authorization. Its scope owns final validation/evidence registration after publication without moving the tag."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/file-work.md",
+    "docs/file-work.zh-CN.md",
+    "docs/review-file-plan-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: source scope was read at product main 7fcb197351e10b7e8dab87e32ed52964fb1193ac; current automatic write_file is create-only and task snapshot overwrite requires a clean Git target.",
+    "C: the design keeps old modes compatible, makes file grants explicit, separates proposal/model completion from file side effects, and retains candidate-specific publication boundaries.",
+    "C: seven new PC-FILE planning rows are queued rather than ready; each has a branch, exact write scope, dependencies, completion evidence and stop/rollback. No operational lease or implementation state is claimed.",
+    "V: focused documentation check resolved seven newly introduced relative links, found seven unique queued planning ids, and returned exit 0.",
+    "V: git diff --check returned exit 0 for the planning change; no product test/build/provider command was executed.",
+    "C: bounded planning review correction binds repeated undo to confirmed compensation lineage and release acceptance to the final frozen artifact. No runtime result is claimed.",
+    "C: independent fresh-context review closed both design findings after a bounded second review of the new changes; no new blocking finding was reported. This does not verify runtime behavior or publication readiness.",
+    "V: seven planned code/document write scopes match the coordinating design exactly; dependency identifiers agree and the new seven-slice dependency graph is acyclic."
+  ],
+  "unverified_scope": "Documentation candidate only. No file-work code, new command execution, product tests, exact-candidate CI, real provider, manual UI, build/install, main reachability, public push/merge, tag, Release or package upload. External privacy/identity and action-authorization gates are separate and are not passed by this record."
+}

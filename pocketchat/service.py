@@ -41,6 +41,173 @@ from .sessions import (SessionFileError, looks_like_session,
 from .workspace import (WorkspaceError, as_dict, collect_workspace,  # noqa: F401
                         render_lines)
 
+EVIDENCE_INPUT_BYTES = 1024 * 1024
+_EVIDENCE_SCOPE = {"scope": "supplied_observations", "files_rechecked": False}
+_ARTIFACT_KEYS = frozenset({
+    "id", "kind", "path", "whole_file_sha256", "observed_whole_file_sha256",
+    "semantic_sha256", "semantic_scope", "identity", "read_coverage",
+    "required", "present",
+})
+_RELATION_KEYS = frozenset({"id", "source", "target", "kind", "fields", "required"})
+
+
+def _evidence_refusal(reason: str, digest=None) -> Dict[str, Any]:
+    return {"ok": False, "schema_version": "1", "status": "refused",
+            "error": "evidence", "reason": reason,
+            "message": "Evidence observations were refused.",
+            "source_sha256": digest, **_EVIDENCE_SCOPE}
+
+
+def _evidence_metadata(payload: Dict[str, Any]) -> None:
+    """Bound metadata before the pure core, without copying diagnostic values."""
+    from .acceptance import AcceptanceError, _IDENTIFIER, _path
+    from .evidence_links import IDENTITY_FIELDS, DIGEST_FIELDS
+
+    def identifier(value):
+        return isinstance(value, str) and _IDENTIFIER.fullmatch(value) is not None
+
+    for item in payload["artifacts"]:
+        required = _ARTIFACT_KEYS - {"required", "present"}
+        if not isinstance(item, dict) or set(item) - _ARTIFACT_KEYS or required - set(item):
+            raise AcceptanceError("invalid metadata")
+        if not identifier(item["id"]):
+            raise AcceptanceError("invalid metadata")
+        _path(item["path"])
+        for name in (*DIGEST_FIELDS, "kind", "semantic_scope", "read_coverage"):
+            if not isinstance(item[name], str) or len(item[name]) > 64:
+                raise AcceptanceError("invalid metadata")
+        for name in ("required", "present"):
+            if name in item and not isinstance(item[name], bool):
+                raise AcceptanceError("invalid metadata")
+        identity = item["identity"]
+        if not isinstance(identity, dict) or set(identity) - IDENTITY_FIELDS:
+            raise AcceptanceError("invalid metadata")
+        for name, value in identity.items():
+            if name == "turn":
+                valid = type(value) is int and 1 <= value <= 2 ** 31 - 1
+            elif name == "run_ids":
+                valid = (isinstance(value, list) and len(value) <= 256
+                         and all(identifier(entry) for entry in value)
+                         and len(set(value)) == len(value))
+            elif name in ("spec_sha256", "plan_sha256"):
+                valid = (isinstance(value, str) and len(value) == 64
+                         and all(char in "0123456789abcdef" for char in value))
+            else:
+                valid = identifier(value)
+            if not valid:
+                raise AcceptanceError("invalid metadata")
+    fields = IDENTITY_FIELDS | frozenset((*DIGEST_FIELDS, "semantic_scope"))
+    for item in payload["relations"]:
+        if (not isinstance(item, dict) or set(item) - _RELATION_KEYS
+                or (_RELATION_KEYS - {"required"}) - set(item)):
+            raise AcceptanceError("invalid metadata")
+        if any(not identifier(item[name]) for name in ("id", "source", "target")):
+            raise AcceptanceError("invalid metadata")
+        if not isinstance(item["kind"], str) or len(item["kind"]) > 64:
+            raise AcceptanceError("invalid metadata")
+        if "required" in item and not isinstance(item["required"], bool):
+            raise AcceptanceError("invalid metadata")
+        names = item["fields"]
+        if (not isinstance(names, list) or not names or len(names) > len(fields)
+                or any(not isinstance(name, str) or name not in fields for name in names)):
+            raise AcceptanceError("invalid metadata")
+
+
+def _evidence_projection(report: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+    """The core owns reason codes; discard all caller text and diagnostic detail."""
+    from .evidence_links import ARTIFACT_KINDS
+
+    locations = {}
+    for name in ("artifacts", "relations"):
+        for index, item in enumerate(payload[name]):
+            locations.setdefault(item["id"], []).append((name, index))
+
+    def location(identifier):
+        matches = locations.get(identifier, [])
+        if len(matches) == 1:
+            return {"target": matches[0][0], "index": matches[0][1]}
+        return {"target": "input", "index": None}
+
+    def rows(name, source):
+        indexes = {}
+        for index, item in enumerate(payload[source]):
+            indexes.setdefault(item["id"], []).append(index)
+        result = []
+        for item in report[name]:
+            available = indexes.get(item["id"], [])
+            index = available.pop(0) if available else None
+            row = {"index": index, "status": item["status"], "reason": item.get("reason")}
+            if name == "artifacts":
+                row["kind"] = item["kind"] if item["kind"] in ARTIFACT_KINDS else "invalid"
+            result.append(row)
+        return sorted(result, key=lambda row: (-1 if row["index"] is None else row["index"]))
+
+    def findings(name):
+        global_reasons = {"artifact_limit", "relation_limit", "report_limit", "invalid_input"}
+        return [{**({"target": "input", "index": None}
+                    if item["reason"] in global_reasons else location(item["id"])),
+                 "reason": item["reason"]} for item in report[name]]
+
+    return {"schema": report["schema"], "schema_version": report["schema_version"],
+            "status": report["status"], "artifacts": rows("artifacts", "artifacts"),
+            "edges": rows("edges", "relations"), "unknowns": findings("unknowns"),
+            "omissions": findings("omissions"), "limits": dict(report["limits"])}
+
+
+def verify_evidence_observations(target: str, workspace=None) -> Dict[str, Any]:
+    """Read exactly one explicit observation document, not its referenced artifacts."""
+    from .acceptance import AcceptanceError, _ReadIssue, _canonical, _decode, _read_file
+    from .evidence_links import MAX_ARTIFACTS, MAX_RELATIONS, MAX_REPORT_BYTES, verify_evidence_links
+
+    digest = None
+    if any(not hasattr(os, flag) for flag in ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK")):
+        return _evidence_refusal("unsupported_platform")
+    try:
+        data = _read_file(Path(workspace) if workspace is not None else Path.cwd(),
+                          target, EVIDENCE_INPUT_BYTES)
+    except _ReadIssue as exc:
+        return _evidence_refusal(exc.reason)
+    except (AcceptanceError, OSError, ValueError):
+        return _evidence_refusal("unsafe_input_path")
+    digest = hashlib.sha256(data).hexdigest()
+    try:
+        payload = _decode(data)
+        # The shared decoder checks finite JSON; canonical encoding additionally
+        # rejects escaped unpaired surrogates before the core serializes them.
+        _canonical(payload)
+        if (not isinstance(payload, dict)
+                or set(payload) != {"schema_version", "artifacts", "relations"}
+                or type(payload["schema_version"]) is not int or payload["schema_version"] != 1
+                or not isinstance(payload["artifacts"], list)
+                or not isinstance(payload["relations"], list)):
+            return _evidence_refusal("invalid_input", digest)
+    except AcceptanceError:
+        return _evidence_refusal("invalid_json", digest)
+    if not payload["artifacts"]:
+        return _evidence_refusal("empty_artifacts", digest)
+    if len(payload["artifacts"]) > MAX_ARTIFACTS:
+        return _evidence_refusal("artifact_limit", digest)
+    if len(payload["relations"]) > MAX_RELATIONS:
+        return _evidence_refusal("relation_limit", digest)
+    try:
+        _evidence_metadata(payload)
+    except AcceptanceError:
+        return _evidence_refusal("invalid_metadata", digest)
+    report = verify_evidence_links(payload["artifacts"], payload["relations"])
+    safe = _evidence_projection(report, payload)
+    if not payload["relations"] and safe["status"] == "complete":
+        safe["status"] = "partial"
+        safe["omissions"].append({"target": "relations", "index": None,
+                                 "reason": "no_relations"})
+    result = {"ok": safe["status"] == "complete", "schema_version": "1",
+              "status": safe["status"], "source_sha256": digest,
+              **_EVIDENCE_SCOPE, "verification": safe}
+    if len(json.dumps(result, sort_keys=True, ensure_ascii=True,
+                      separators=(",", ":")).encode("utf-8")) + 1 > MAX_REPORT_BYTES:
+        return _evidence_refusal("report_limit", digest)
+    return result
+
+
 def _relative(path: Path, workspace: Path) -> str:
     """Return a stable workspace-relative path, or the honest absolute path."""
     path = Path(path).resolve()

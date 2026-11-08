@@ -1,0 +1,70 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-task-deadline-v1.json",
+    "pocketchat/task_deadline.py",
+    "tests/test_task_deadline.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "accept",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "falsey-clock-injection",
+      "reason": "The first implementation selected the injected clock by truthiness, so a callable with a false boolean value silently fell back to the system monotonic clock. A focused red regression reproduced it; explicit None selection now preserves every callable clock."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "restore-accepts-impossible-cross-field-step-state",
+      "reason": "The first candidate accepted checkpoint rows whose step limit exceeded the task limit or whose step elapsed exceeded task elapsed. Fresh-context review reproduced both impossible records; red regressions were added and the constructor/restore validator now rejects either contradiction."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "regression-tests-not-discriminating",
+      "reason": "The first fix's regression cases could remain green through unrelated active-step or elapsed-time validation. The final tests isolate each rule with otherwise valid records and exact rejection reasons; in-memory guard-removal checks proved removing either production guard makes its matching test fail."
+    },
+    {
+      "id": "F4",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "independent-fresh-context-review",
+      "reason": "Completed independent fresh-context reviews covered the full candidate and then the corrected new diff. The final review returned no blocker or major finding and accepted the discriminating regression tests."
+    }
+  ],
+  "commit_or_candidate_sha": "a2f4929661a68148d1713328c22af3649424765d",
+  "changed_paths": [
+    "docs/review-task-deadline-v1.json",
+    "pocketchat/task_deadline.py",
+    "tests/test_task_deadline.py"
+  ],
+  "reviewed_evidence": [
+    "C: product issue #15 is the repository-reachable ready approval record for PC-TASK-DEADLINE-1 and freezes the unique branch, three-path write scope, delivered PC-TBUDGET-4 dependency, pure-core contract and stop boundary.",
+    "C: corrected candidate a2f4929661a68148d1713328c22af3649424765d has exactly the three issue #15 paths relative to product base b68929df3818ed901b5353f727216885b874e2b1 and uses the published barry31-dev identity.",
+    "V: CPython 3.9.6 ran the two new cross-field regressions before the fix; both failed because TaskDeadlineError was not raised, exit 1.",
+    "V: after the cross-field guard fix and discriminating test updates, CPython 3.9.6 ran `python3 -B -m unittest tests.test_task_deadline -v`: 14 tests OK, exit 0.",
+    "V: Ruff 0.17.3 ran `ruff check --select E9,F pocketchat/task_deadline.py tests/test_task_deadline.py` with all checks passed, and `git diff --check` passed, both exit 0.",
+    "C: TaskDeadline construction and restore now enforce step limit <= task limit and step elapsed <= task elapsed before step-local arithmetic/state checks; equality remains valid.",
+    "C: tests/test_task_deadline.py isolates step-limit and step-elapsed contradictions with otherwise valid rows and exact messages, and isolates duplicate IDs with two settled rows so only duplicate-ID validation can reject the payload.",
+    "V: an independent fresh-context reviewer inspected the full candidate and found the cross-field validation major; a second fresh-context review found the first regressions non-discriminating; the final new-diff review returned no blocker or major finding and READY yes.",
+    "V: a read-only in-memory AST mutation removed each guard separately. Removing the step-limit guard or duplicate-ID guard made its matching test fail with AssertionError: TaskDeadlineError not raised, while the two checkpoint/resume tests remained green under both mutations.",
+    "V: one earlier final-review attempt on the default model route produced no verdict for about 12 minutes and was terminated with exit 143; no review pass or clean result was inferred from that attempt.",
+    "C: the corrected diff remains a pure core and adds no CLI, signals, subprocess termination, provider timeout, background timer, synchronization, cancellation state machine, checkpoint integration, shared queue edit, CHANGELOG, tag, Release or upload.",
+    "V: GitHub Actions run 42007682867 is attached to branch head aa1999c68aeddf1e0cf5646e63324dbc24842b20 and completed 7/7 jobs successfully: Python 3.9/3.13 suite plus clean-venv install and release-smoke across the repository matrix.",
+    "V: GitHub Actions run 42008817723 on branch head 00f1e00 had one Python 3.9 job fail and six other jobs succeed. The failed job 127182301211 ran 1317 tests and failed only test_skeleton.SkeletonTests.test_interrupted_turn_ends_the_run_as_cancelled with AssertionError: run.started != run.cancelled.",
+    "C: the failure is outside issue #15 write scope and is a timing race in the existing signal test/window: tests/test_skeleton.py sends SIGINT as soon as the trace path exists, while pocketchat/session.py writes run.started before entering the KeyboardInterrupt handler. The same SHA passed two other Python 3.9 jobs, three Python 3.13 jobs and release-smoke. No test_skeleton.py, session.py or workflow change was made in this slice."
+  ],
+  "unverified_scope": "The corrected code was verified locally on macOS with CPython 3.9.6 focused tests, Ruff E9/F and an in-memory mutation check. GitHub Actions run 42007682867 covers branch head aa1999c, which contains implementation candidate a2f4929 plus review metadata, and passed its Python 3.9/3.13 suite, clean-venv install and release-smoke jobs. GitHub Actions run 42008817723 on later metadata head 00f1e00 is not green: one duplicate-named Python 3.9 job hit the existing test_skeleton signal timing race while the other six jobs passed. The race and duplicate job names are outside this issue write scope and remain unverified/unfixed here. The local full product suite, package build/install outside CI, real task/checkpoint integration, signals, subprocess termination, provider timeout, tag, Release and publication were not run. The predecessor 7/7 CI result for 7f94f0b is not reused as evidence for the corrected candidate."
+}

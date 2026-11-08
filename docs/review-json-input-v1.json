@@ -1,0 +1,118 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/json-input.md",
+    "docs/json-input.zh-CN.md",
+    "docs/review-json-input-v1.json",
+    "pocketchat/json_input.py",
+    "tests/test_json_input.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "unbounded-depth-vs-stdlib-recursion",
+      "reason": "The first frozen wording accepted any positive max_depth, but a CPython 3.9.6 probe showed the standard-library decoder raises RecursionError at about 1000 nested arrays before a post-parse bound can run. Issue #17 was amended before the candidate to cap max_depth at 64; a focused regression first failed when 65 was accepted, then passed after the implementation enforced the cap, while a 64-level value remains accepted."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "approval-depth-semantics-divergence",
+      "reason": "The first issue draft described every root at depth 1, diverging from the reviewed planner contract. Issue #17 was corrected before implementation so scalar roots have depth 0 and root containers depth 1; focused boundary tests now bind the implementation to that definition."
+    },
+    {
+      "id": "F3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "independent-fresh-context-review",
+      "reason": "Fresh-context review against candidate 352a00d returned BLOCK with the recursive-admission finding F8 and no open blocker after the follow-up fix. The review was static and did not substitute for tests or CI."
+    },
+    {
+      "id": "F4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "post-materialization-structural-budgets",
+      "reason": "Depth and node limits used to run only after raw_decode materialized the entire value. Three guard-based negative cases were observed red before adding lexical admission; they now refuse before whole-value materialization and preserve key-free paths."
+    },
+    {
+      "id": "F5",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "input-bearing-decoder-exception-context",
+      "reason": "Independent reviewer reproduced raw input in JSONDecodeError.doc and UnicodeDecodeError.object via __context__, despite from None. Refusals are now raised outside those handlers. A canary regression was red on invalid UTF-8 and is green without a decoder exception cause/context; traceback frame-local erasure is explicitly not claimed."
+    },
+    {
+      "id": "F6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "ambient-integer-digit-limit",
+      "reason": "Independent reviewer reproduced rejection of a valid 4301-digit scalar on CPython 3.14.10 but not 3.9.6. Positive and negative integer regressions were observed red on 3.14.10. Exact chunked conversion now passes without reading or changing the process-wide digit setting."
+    },
+    {
+      "id": "F7",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "active-caller-exception-traceback-disclosure",
+      "reason": "The new-diff reviewer reproduced a caller exception being exposed by relocated raises. All nine refusal types (ten paths with named/overflowed nonfinite values separate) were observed red under an active caller handler. JSONInputError now suppresses context display at construction and relocated raises use from None; docs explicitly exclude exception-internals and frame-local erasure."
+    },
+    {
+      "id": "F8",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "recursive-admission-stack",
+      "reason": "Fresh-context review found that the lexical admission pass used Python recursion, so malformed or adversarial nesting could hit the interpreter recursion limit before the declared depth refusal. The pass now uses explicit parser frames; a 5000-level regression refuses at depth 64, and private key/value text is absent from refusal metadata."
+    }
+  ],
+  "commit_or_candidate_sha": "c919bc7337495e0a960ccc1c6ffee6d964e55adc",
+  "candidate_binding": "This record binds implementation candidate c919bc7337495e0a960ccc1c6ffee6d964e55adc. The metadata-only review-record follow-up is covered by its own exact-head CI and merge receipt; no older CI result is inherited for a changed implementation.",
+  "reviewed_evidence": [
+    "C: product issue #17, authored by barry31-dev, is the repository-reachable ready approval record for PC-JSON-CORE-1 and freezes the unique branch, five-path write scope, dependency-free pure-core contract and stop boundary.",
+    "C: issue #17 records that this scope is disjoint from active PC-TASK-DEADLINE-1 and the memory-doctor planner, and that the unmerged queue candidate is not a second live approval source.",
+    "V: CPython 3.9.6 first ran `python3 -m unittest tests.test_json_input -v` before implementation; collection failed with ModuleNotFoundError for pocketchat.json_input, exit 1.",
+    "V: after the first green implementation, the new max_depth=65 regression failed because no JSONInputError was raised; after the bound fix, the complete focused file ran 12 tests OK, exit 0.",
+    "V: CPython 3.9.6 directly probed the standard json decoder at nested array depths 100, 500, 900, 950, 990, 1000, 1100 and 2000; 1000 and above raised RecursionError on this environment. This supports the fixed public ceiling but is not a cross-version parser guarantee.",
+    "V: Ruff 0.17.3 ran `ruff check --select E9,F pocketchat/json_input.py tests/test_json_input.py`: all checks passed, exit 0.",
+    "C: the source review confirms byte limits precede UTF-8 decoding; duplicate members and named non-finite constants are rejected by the decoder hooks; overflowed floats, node counts and container depth are checked iteratively after parsing; only fixed error metadata is exposed.",
+    "C: focused tests cover exact bytes and limit types, byte/depth/node inclusive boundaries, the depth-64 ceiling, scalars, objects, arrays, CJK and emoji, nested duplicate keys, named and overflowed non-finite numbers, invalid UTF-8, malformed/trailing input, structural paths, input immutability and zero file/environment/socket/command/provider calls.",
+    "C: the English and Chinese contract pages describe the same API, limit arithmetic, error types/categories, structural path format and non-goals.",
+    "C: the full diff is limited to issue #17's five paths and adds no current reader or CLI integration, shared queue edit, serializer, schema migration, CHANGELOG entry, tag, Release or package upload.",
+    "V: GitHub Actions run 41969080254 is attached to branch head 74ed587d296efaa7a2c613bef92fdc757fc8f169 and completed 7/7 jobs successfully: Linux, macOS and Windows on CPython 3.9/3.13 plus release-smoke.",
+    "C: The preceding evidence entries describe historical candidate 74ed587 and its implementation; post-parse-only structural checking and missing independent review are superseded by this follow-up, not claimed as current behavior.",
+    "C: Continued the existing issue #17 candidate on its existing task branch; merged current main f30f7f34bf5816ed7721c3c059fd9bcaf1233a69 without conflicts. No active writer or lease was changed; final product diff remains exactly the approved five paths.",
+    "V: CPython 3.9.6 observed the structural-admission negative test fail in three subcases because raw_decode was called before refusal (exit 1); after lexical admission, 15 focused tests passed (exit 0).",
+    "V: CPython 3.9.6 observed the exception-context regression fail for invalid_utf8 (exit 1). CPython 3.14.10 observed both 4301-digit signed integer regressions fail as invalid_json (exit 1). Both defects were fixed before final focused checks.",
+    "V: macOS CPython 3.9.6: python3 -B -m unittest tests.test_json_input -v; 17 tests passed, no skips, exit 0.",
+    "V: macOS CPython 3.14.10: python3.14 -B -m unittest tests.test_json_input -v; 17 tests passed, no skips, exit 0. This additional version is a regression probe, not a supported-runtime declaration.",
+    "V: Ruff 0.17.3 check --select E9,F pocketchat/json_input.py tests/test_json_input.py passed, exit 0; git diff --check passed.",
+    "V: A deterministic 1144-case standard-library valid-value comparison exercised scalars, arrays, nested objects, CJK/emoji, punctuation/escapes, escaped surrogates, combining text, finite floats, and ASCII/non-ASCII encodings. All compared equal in value and root type on CPython 3.9.6, exit 0. This is bounded compatibility evidence, not a fuzzing completeness claim.",
+    "C: Fresh-context reviewer independently read immutable 3c02f42 numeric/Unicode/error behavior and reproduced F5/F6 on CPython 3.9.6 and 3.14.10; structural resource behavior was explicitly excluded from that reviewer phase.",
+    "C: New-diff-only independent review examined lexical admission, integer conversion, safe errors, tests and bilingual docs; no additional structural/integer finding within that scope. It reported F7 for active caller exception display, which is fixed with a separately observed red-to-green regression.",
+    "V: The active-caller-handler regression initially failed all ten subcases on CPython 3.9.6 (exit 1). After context-display suppression, both CPython 3.9.6 and 3.14.10 ran the final 18 focused tests with no skips, exit 0. Ruff 0.17.3 E9/F and diff check were re-run because executable/test lines changed; both passed.",
+    "C: Bilingual refusal names, Python AST parse, and five-path record identity were checked without rerunning the product suite. The decoder remains unconnected to all existing readers and CLI.",
+    "C: The new-diff reviewer statically closed F7 after checking constructor suppression, both relocated raises, the active-handler regression and bilingual clarification. No actionable residual was found in that narrow follow-up; it did not rerun tests, Ruff or historical review. Review cap is retained as three rounds/new-diff-only.",
+    "V: Fresh-context static review of 352a00d returned BLOCK only for recursive structural admission; no other blocker remained in the reviewed scope.",
+    "V: CPython 3.9.6 focused JSON tests after the iterative-admission fix: 20 tests OK, exit 0.",
+    "V: CPython 3.9.6 full product suite after the fix: 1323 tests OK in 47.032s, exit 0.",
+    "V: 500 deterministic randomized valid-value comparisons preserved Python values; Ruff E9/F and diff check passed.",
+    "C: A separate user-directed closeout review session read the frozen approval record, exact task diff, implementation, tests and contract without adopting the author conclusion; no blocker or major finding remained. The failed external Codex transport attempt is not counted as review evidence.",
+    "V: GitHub Actions run 42019342881 is bound to exact head c919bc7337495e0a960ccc1c6ffee6d964e55adc and completed 7/7 jobs successfully across Linux/macOS/Windows, CPython 3.9/3.13 and release-smoke."
+  ],
+  "unverified_scope": "Exact candidate c919bc73 has 7/7 successful GitHub Actions jobs. Build/install, real reader/CLI integration, provider traffic, tag, Release and publication remain unverified or unexecuted. The issue #17 record remains the product approval source.",
+  "landing_sign_off": {
+    "status": "approved",
+    "approver": "repository owner (barry31-dev)",
+    "date": "2026-11-05",
+    "scope": "The repository owner explicitly directed manual closeout of all pending work. This authorizes landing the reviewed draft candidates into product main only; it does not authorize a tag, Release, package upload, or any other publication action."
+  }
+}
