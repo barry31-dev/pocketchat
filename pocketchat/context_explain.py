@@ -39,6 +39,7 @@ _KIND_LAYER = {
     "pending_message": "recent",
     "task_state": "task",
 }
+_DROPPED_REASONS = {"duplicate_source", "over_budget"}
 
 
 def _canonical(value: Any) -> bytes:
@@ -176,6 +177,16 @@ def _manifest_error(manifest: dict[str, Any]) -> str:
     if not _MANIFEST_REQUIRED.issubset(keys) \
             or not keys.issubset(_MANIFEST_REQUIRED | _MANIFEST_OPTIONAL):
         return "invalid_projection_shape"
+    if "dropped" in manifest:
+        dropped = manifest["dropped"]
+        if not isinstance(dropped, list):
+            return "invalid_projection_shape"
+        for item in dropped:
+            if not isinstance(item, dict) or set(item) != {"source", "reason"} \
+                    or not isinstance(item["source"], str) \
+                    or not isinstance(item["reason"], str) \
+                    or item["reason"] not in _DROPPED_REASONS:
+                return "invalid_projection_shape"
     return ""
 
 

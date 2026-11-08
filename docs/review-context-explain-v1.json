@@ -13,7 +13,7 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 3,
+  "rounds": 5,
   "round_decision": "reconsider",
   "round_scope": "new-diff-only",
   "findings": [
@@ -48,12 +48,26 @@
     {
       "id": "F5",
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "fingerprint": "fresh-context-review-incomplete",
-      "reason": "Required independent fresh-context review did not produce a verdict. The default review route failed after five 403/503 retries; the bounded model-specific review and exec retry read the diff but were terminated after repeated telemetry/provider stalls without a conclusion. Landing remains held."
+      "reason": "The required independent fresh-context review completed and read the full exact diff. It did not return a zero-finding verdict: it found F6. F5 is closed as review coverage completed, while landing remains held for the separate public-action and exact-SHA CI gates."
+    },
+    {
+      "id": "F6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "dropped-reason-body-echo",
+      "reason": "A digest-bound manifest could place body text in dropped[].reason and the report echoed it verbatim as reason_code. The observed regression returned partial and exposed SECRET_BODY_AS_REASON. Fixed by requiring the closed dropped-sidecar shape and only duplicate_source or over_budget reason codes; the red regression now refuses invalid_projection_shape without echoing the canary."
+    },
+    {
+      "id": "F7",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "dropped-reason-container-typeerror",
+      "reason": "The F6 closed-reason membership check evaluated unhashable list/object values before validating their type. The observed digest-bound red regression failed in four list/object subtests with TypeError. One string-type guard now returns the existing invalid_projection_shape refusal; seven malformed-value subtests also assert no body echo and unchanged inputs. Independent new-diff review returned no actionable finding."
     }
   ],
-  "commit_or_candidate_sha": "37def6625ee147c3249ab71ac293ec931456b67b",
+  "commit_or_candidate_sha": "0480cd110c6eb33af791bb4533340011bf06622c",
   "changed_paths": [
     "pocketchat/context_explain.py",
     "tests/test_context_explain.py",
@@ -65,18 +79,25 @@
     "C: product origin/main baseline f30f7f34bf5816ed7721c3c059fd9bcaf1233a69 contains the main-reachable PC-CONTEXT-EXPLAIN-1 row and approval review record; the execution branch and five target paths were absent and unclaimed before work.",
     "V: CPython 3.9.6, the initial `python3 -m unittest tests.test_context_explain -v` failed before implementation with ModuleNotFoundError for pocketchat.context_explain (1 import error, exit 1), and a second red run after test corrections failed on the same missing module.",
     "V: A targeted red test for unmatched sidecar evidence returned complete instead of refused (1 failure, exit 1) before the fix; after the fix it refuses projection_shape_mismatch without echoing the supplied private body.",
-    "V: CPython 3.9.6, `python3 -m unittest tests.test_context_explain -v`, 12 tests OK, exit 0.",
-    "V: CPython 3.9.6, `python3 -m unittest discover -s tests -v`, 1315 tests OK in 77.714 seconds, exit 0.",
+    "V: CPython 3.9.6, the F6 regression first failed with `refused != partial`, exit 1; after the closed dropped-reason fix it passed, and `python3 -m unittest tests.test_context_explain -v` reported 13 tests OK, exit 0.",
+    "V: CPython 3.9.6, `python3 -m unittest discover -s tests -v`, 1316 tests OK in 77.261 seconds, exit 0.",
     "V: Ruff 0.17.3, `ruff check pocketchat/context_explain.py tests/test_context_explain.py`, all checks passed, exit 0.",
     "V: `ruff check pocketchat tests` was also run once and exited 1 with 2268 pre-existing findings across unrelated repository files; those files were not changed or repaired in this slice.",
     "V: `python3 -m compileall -q pocketchat tests` and `git diff --check` both exited 0 with no output.",
     "C: tests cover all five layers, exact source/projection digest binding, closed descriptors, duplicate/missing/unexpected descriptors, memory/tool classification, sensitive-source redaction, finding/omission/report limits, malformed and unknown schemas, missing sidecar metadata, unmatched sidecar evidence, empty valid input, deterministic ordering, input immutability and mocked zero open/socket/subprocess calls.",
     "C: source review confirms the module imports no filesystem, command, socket, provider or model surface and reports only source ids, locators, reason codes, byte counts and safe flags; no request, message, session, credential, memory or omitted body is emitted.",
     "C: the write scope exactly matches the approved row; docs/slice-queue.md, CHANGELOG.md, pyproject.toml, context_projection.py, schemas, CLI, provider/runtime code, workflows and release state were not edited.",
-    "V: Independent review was attempted three times but did not produce a verdict: default codex review ended after five 403/503 retries; model-specific review and codex exec read the scoped diff but were terminated after repeated telemetry/provider stalls. This is recorded as not run, not passed.",
-    "V: reviewed implementation candidate 37def6625ee147c3249ab71ac293ec931456b67b is the exact five-file test/docs/code tree evaluated by the local matrix; this metadata-only sign-off does not change that candidate tree."
+    "V: Independent fresh-context review read the full five-file diff and the main-reachable PC-CONTEXT-EXPLAIN-1 row. It found F6 rather than returning no findings; the new diff fix was then reviewed and no additional blocker or major finding was found.",
+    "V: reviewed implementation candidate 529838c94c5abe8ba352547f423aa537c2f51450 is the exact code/test tree evaluated by the local matrix after the F6 fix; the metadata-only sign-off commit does not change that implementation tree.",
+    "C: PC-CONTEXT-EXPLAIN-1 remains a main-reachable ready approval at product main d68a6db2df6f23f668ae6c0a49759765593931eb. This is an original-card continuation in a separate private task branch, not a new approval or delivery.",
+    "V: macOS CPython 3.9.6, python3 -B -m unittest tests.test_context_explain.ContextExplainTests.test_non_string_dropped_reasons_refuse_without_raising -v, observed red before implementation: 1 test, four list/object subtest assertion failures caused by uncaught TypeError; exit 1.",
+    "V: macOS CPython 3.9.6, python3 -B -m unittest tests.test_context_explain tests.test_context_projection -v, 25 tests OK in 0.009 seconds; exit 0 after the string-type guard.",
+    "V: Ruff 0.17.3, ruff check pocketchat/context_explain.py tests/test_context_explain.py, all checks passed; exit 0. CPython byte compilation via compile() and git diff --check also exited 0.",
+    "V: git merge-tree --write-tree origin/main HEAD at d68a6db2 and code candidate 0480cd11 produced tree 8fc67e7d1f7442ecddf7ffda3b13140f41fe56b8, exit 0; this is a static merge preview, not integration or runtime.",
+    "C: new implementation diff is one type guard before the existing reason allowlist. Code SHA-256 7de4158d444324ce3f0002a5b0859004bf5f1196edbb8b43c35dffdc6e93a2fe; regression file SHA-256 9bb8c2a8978334947488fa55680c7be99b2c98ca768c50427479951796559f57.",
+    "V: independent fresh-context reviewer read only 639b83ea..0480cd11, confirmed patch SHA-256 587aa153a2da32775dcb6632a4f4aa4e1463b9966c8d6eabea43d7a9535992f9, inspected the validator/refusal caller/test helper and returned PASS with no actionable finding. No reviewer test execution or full-package review was claimed."
   ],
-  "unverified_scope": "No independent fresh-context verdict, GitHub Actions/CI, cross-platform matrix, real file observation, CLI/reader integration, model/provider/network/credential call, wheel build, clean install, tag, Release, package upload or publication is claimed. Local runs cover macOS CPython 3.9.6 only. Full-repository Ruff has 2268 unrelated historical findings and is not green; only the two changed Python files are Ruff-clean. The open review gap prevents landing this candidate to product main.",
+  "unverified_scope": "This continuation ran only the 25 context explanation/projection tests on macOS CPython 3.9.6, changed-file Ruff and byte compilation/diff/merge-tree checks. Prior full-suite and full-Ruff observations above belong to their earlier exact candidates and were not rerun or inherited as current full-suite evidence. No cross-platform runtime, reader/CLI integration, real filesystem observation, provider/network/credential call, wheel build, clean install, exact-SHA CI, public task push/PR/main integration, tag, Release or upload was run. Public landing remains held by publish=deny and candidate-bound authorization/sign-off gates.",
   "review_context": {
     "why": [
       "PC-CONTEXT-EXPLAIN-1 was a main-reachable ready slice with no branch or active writer and is disjoint from concurrent package-manifest, session-writer, session-audit, context-drift, JSON-input, deadline, profile-explain and secret-audit work."
@@ -88,7 +109,8 @@
       "pocketchat/context_explain.py adds one pure digest-bound explanation function with closed input/report shapes, five-layer descriptor accounting, bounded typed findings/omissions and fail-closed limits.",
       "tests/test_context_explain.py starts from a missing-module red and covers success, schema/digest/descriptor refusals, redaction, budget boundaries, partial metadata, deterministic bytes and zero I/O.",
       "The English and Chinese docs freeze the same input, report, reason-code, privacy, limit and non-goal contracts.",
-      "This review record separates local verification, the unrelated full-Ruff baseline failure and the unfinished independent review."
+      "The independent review found and the new diff fixed a dropped-sidecar reason-code body echo; this record separates that observed red/green evidence from the unrelated full-Ruff baseline failure.",
+      "The F7 continuation adds one reason-type guard and one digest-bound malformed-value regression; it leaves the projector, input/report schema, reader/CLI, original source worktree and all unrelated scopes unchanged."
     ],
     "static_checks": [
       "No private path, token, credential, request body, message body, memory body or omitted body appears in the public diff.",
@@ -96,14 +118,68 @@
     ],
     "review_notes": [
       "Medium-risk Python behavior requires standard review and fresh-context review before landing.",
-      "The self-review found and fixed three major implementation defects; the remaining major finding is the missing independent review verdict."
+      "The required independent fresh-context review completed but found F6 instead of a zero-finding verdict; F6 is fixed with a red/green regression and no additional blocker or major issue was found in the new diff.",
+      "Round 5 is new-diff-only. The independent reviewer passed the 30-line implementation/test delta without reopening old findings or repeating a full-package review."
     ],
     "gaps": [
-      "Independent fresh-context review is incomplete because both configured review routes stalled or failed without a verdict."
+      "Exact-SHA CI and authorized public integration were not run and remain delivery gates."
     ]
   },
   "landing_sign_off": {
-    "status": "hold",
-    "scope": "The exact PC-CONTEXT-EXPLAIN-1 implementation candidate 37def6625ee147c3249ab71ac293ec931456b67b may be pushed only as a task-branch candidate. Landing to product main is held until a fresh-context reviewer returns a recorded verdict and the open F5 finding is closed. This record does not authorize a different SHA, tag, Release, package upload or publication."
+    "status": "approved",
+    "scope": "User directive of 2026-11-08: “授权给你”, approving public integration of the exact PC-CONTEXT-EXPLAIN-1 source tree and task/pocketchat-context-explain -> main after this final sign-off commit receives a green exact-SHA CI run. The four reviewed implementation/test/content-doc blobs match candidate 30677ca; this does not authorize a different source tree, tag, Release, package upload or real provider call."
+  },
+  "prior_review_metadata": {
+    "candidate_commit": "639b83ea3dad3cc67c75ea29ddac581cfbdd7c05",
+    "implementation_candidate": "529838c94c5abe8ba352547f423aa537c2f51450",
+    "rounds": 4,
+    "round_scope": "full",
+    "note": "Historical metadata is retained as earlier evidence. This continuation performed only a new-diff review and does not claim another full-package review."
+  },
+  "continuation": {
+    "base_sha": "639b83ea3dad3cc67c75ea29ddac581cfbdd7c05",
+    "implementation_candidate": "0480cd110c6eb33af791bb4533340011bf06622c",
+    "review_scope": "new-diff-only",
+    "changed_paths": [
+      "pocketchat/context_explain.py",
+      "tests/test_context_explain.py",
+      "docs/review-context-explain-v1.json"
+    ],
+    "original_branch": "task/pocketchat-context-explain",
+    "checkpoint_branch": "task/pocketchat-context-explain-reason-types",
+    "independent_review": {
+      "verdict": "pass",
+      "open_findings": 0,
+      "inspected": {
+        "pocketchat/context_explain.py": [
+          [
+            42,
+            53
+          ],
+          [
+            74,
+            99
+          ],
+          [
+            173,
+            192
+          ],
+          [
+            259,
+            325
+          ]
+        ],
+        "tests/test_context_explain.py": [
+          [
+            1,
+            108
+          ],
+          [
+            269,
+            303
+          ]
+        ]
+      }
+    }
   }
 }

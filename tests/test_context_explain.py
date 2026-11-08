@@ -246,6 +246,58 @@ class ContextExplainTests(unittest.TestCase):
             "private body", json.dumps(report, ensure_ascii=False)
         )
 
+    def test_dropped_reason_codes_cannot_echo_bodies(self):
+        projection = _projection_input()
+        manifest = projection["result"]["manifest"]
+        manifest["evidence"] = manifest["evidence"][:1]
+        manifest["dropped"] = [{
+            "source": projection["source"]["evidence"][1]["source"],
+            "reason": "SECRET_BODY_AS_REASON",
+        }]
+        manifest["projection_sha256"] = _digest({
+            "messages": projection["result"]["messages"],
+            "manifest": {
+                key: value for key, value in manifest.items()
+                if key != "projection_sha256"
+            },
+        })
+        report = explain_context_projection(projection)
+
+        self.assertEqual("refused", report["status"])
+        self.assertTrue(_finding(report, "invalid_projection_shape"))
+        self.assertNotIn(
+            "SECRET_BODY_AS_REASON", json.dumps(report, ensure_ascii=False)
+        )
+
+    def test_non_string_dropped_reasons_refuse_without_raising(self):
+        canary = "PRIVATE_REASON_BODY"
+        reasons = ([], {}, [canary], {"body": canary}, None, True, 17)
+        for reason in reasons:
+            with self.subTest(reason_type=type(reason).__name__, reason=reason):
+                projection = _projection_input()
+                manifest = projection["result"]["manifest"]
+                manifest["dropped"] = [{
+                    "source": projection["source"]["evidence"][1]["source"],
+                    "reason": reason,
+                }]
+                manifest["projection_sha256"] = _digest({
+                    "messages": projection["result"]["messages"],
+                    "manifest": {
+                        key: value for key, value in manifest.items()
+                        if key != "projection_sha256"
+                    },
+                })
+                original = copy.deepcopy(projection)
+                try:
+                    report = explain_context_projection(projection)
+                except TypeError as error:
+                    self.fail(f"malformed reason escaped refusal: {error}")
+
+                self.assertEqual("refused", report["status"])
+                self.assertTrue(_finding(report, "invalid_projection_shape"))
+                self.assertNotIn(canary, json.dumps(report, ensure_ascii=False))
+                self.assertEqual(original, projection)
+
     def test_empty_valid_projection_is_complete_with_all_layer_summaries(self):
         payload = {
             "instructions": [],
