@@ -111,8 +111,25 @@ pip 25.3 复核。默认隔离构建在真正构建 PocketChat 之前，因配�
 `--no-build-isolation` 回退后，wheel 构建、干净 venv 安装、两份 manifest 配对
 以及 11 条 task help 命令全部完成；产出 277450 字节 wheel，SHA-256 为
 `7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7`，wheel /
-安装树 manifest 各纳入 67 个成员。这只证明该次本地回退运行；精确 SHA CI、
-Linux/Windows、post-fix 隔离构建成功与 public main 集成仍未验证。
+安装树 manifest 各纳入 67 个成员。这只证明该次本地回退运行；该次运行没有观察
+精确 SHA CI、Linux/Windows 或 public main 集成。
+
+2026-11-08 的后续隔离构建使用精确证据候选
+`2032ead1b8e6d167472078fb270637cc1c6ac626`，环境为 macOS、CPython 3.13.9、
+pip 25.3 与 setuptools 80.9.0。先显式下载一次构建依赖，再由既有 release smoke
+在 `PIP_NO_INDEX=1` 与本地 wheelhouse 下执行 PEP 517 隔离构建，未使用
+`--no-build-isolation`。wheel 构建、干净 venv 安装、wheel / 安装树 manifest
+配对、`pip check`、版本回读及 11 条 task help 命令均退出 0。wheel 为 277450
+字节，SHA-256 为
+`0a7e130c37d1ffd06b4ed7abce8568baf8894cb872afaecf067810e87301e23f`；
+两份 manifest 各纳入 67 个成员，含全部五份随包 schema。
+
+2026-11-09 只回读已保存的 observation、smoke JSON 与 wheel 摘要，使本说明与
+既有结果一致，没有重复构建、安装或产品测试。证据只覆盖已保存产物与那次精确
+本地运行，不代表文档后继候选重新运行过、联网依赖获取可靠、干净公开安装、精确
+SHA CI、Linux/Windows、wheel 字节可复现或 public main 集成。其余门禁、人工
+合入签字与公开动作授权均不变；结构化记录见
+[`review-package-manifest-v1.json`](review-package-manifest-v1.json)。
 
 Apple Command Line Tools 的 CPython 3.9.6 使用 pip 21.2.4：隔离构建生成了
 `UNKNOWN-0.0.0`；显式非隔离回退又使用低于本仓 `setuptools>=61` 要求的

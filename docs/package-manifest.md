@@ -127,8 +127,29 @@ local dependencies and completed the wheel build, clean-venv install, manifest
 pair check and all 11 task help commands. It reported a 277450-byte wheel with
 SHA-256 `7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7` and
 67 admitted members in each manifest. This proves only that exact local fallback
-run; exact-SHA CI, Linux/Windows, a successful post-fix isolated build and public
-main integration remain unverified.
+run; exact-SHA CI, Linux/Windows and public main integration were not observed
+by that run.
+
+A later isolated-build observation on 2026-11-08 used the exact evidence
+candidate `2032ead1b8e6d167472078fb270637cc1c6ac626` on macOS with CPython
+3.13.9, pip 25.3 and setuptools 80.9.0. After one explicit dependency download,
+the existing release smoke used PEP 517 build isolation with `PIP_NO_INDEX=1`
+and a local wheelhouse; it did not use `--no-build-isolation`. The wheel build,
+clean-venv install, wheel/installed manifest comparison, `pip check`, version
+readback and all 11 task help commands completed with exit 0. The wheel was
+277450 bytes with SHA-256
+`0a7e130c37d1ffd06b4ed7abce8568baf8894cb872afaecf067810e87301e23f`;
+each manifest admitted 67 members including all five shipped schemas.
+
+On 2026-11-09, the saved observation, smoke JSON and wheel hashes were read
+back to align this documentation with that existing result. No build, install
+or product test was repeated. This verifies the saved artifacts and that exact
+historical local run only, not a new run on the documentation descendant,
+network dependency acquisition reliability, a clean public installation,
+exact-SHA CI, Linux/Windows, reproducible wheel bytes or public main integration.
+Those remaining gates, human landing sign-off and public-action authorization
+are unchanged. The structured isolated-build record is in
+[`review-package-manifest-v1.json`](review-package-manifest-v1.json).
 
 The Apple Command Line Tools CPython 3.9.6 environment uses pip 21.2.4. Its
 isolated build produced `UNKNOWN-0.0.0`, and its explicit non-isolated fallback

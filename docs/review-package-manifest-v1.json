@@ -89,7 +89,7 @@
     "V: `python3.13 -B scripts/release_smoke.py --repo \"$PWD\" --work-dir <private-work-dir> --no-build-isolation --json` completed at implementation candidate fefb970bd112bd0ed32f943a2b917da4646318ad, exit 0. It built and clean-installed pocketchat-1.1.0-py3-none-any.whl (277450 bytes, SHA-256 7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7), produced 67-member wheel and installed manifests, verified their comparable payload and all five schemas, and exercised all 11 task help commands. This is one macOS fallback run, not isolated-build, CI or cross-platform evidence.",
     "V: On 2026-11-07, macOS CPython 3.9.6 ran python3 -B -m unittest discover -s tests -v once at exact candidate d088fee36e7166c6e068fc72a2245d01399aecce after the PM-6 fix: 1288 tests OK in 80.085 seconds, exit 0. The scripts/release_smoke.py and tests/test_release_smoke.py bytes exactly match the previously reviewed implementation fefb970bd112bd0ed32f943a2b917da4646318ad. No previously green focused/Ruff/build/install smoke was repeated."
   ],
-  "unverified_scope": "Round-3 independent fresh-context review is recorded and PM-5/PM-6 are closed with no open blocker/major. A post-fix CPython 3.13.9 real wheel build, clean install and manifest-pair smoke succeeded through the documented no-build-isolation fallback. Exact-candidate GitHub CI, a successful post-fix isolated build, Linux/Windows runtime behavior, a valid modern-pip CPython 3.9 wheel/install smoke, arbitrary filesystem race resistance, cryptographic signature/provenance, reproducible wheel container bytes, tag, Release and package-index upload remain unverified. A subsequent evidence-only continuation ran the full product suite once on macOS CPython 3.9.6 at d088fee36e7166c6e068fc72a2245d01399aecce: 1288 tests OK in 80.085 seconds, exit 0. This is not CI, cross-platform or publication evidence. The successful local fallback smoke proves only that exact macOS run, not publication, isolated dependency acquisition or cross-platform behavior.",
+  "unverified_scope": "The three existing independent review rounds and closed PM findings are unchanged. The exact historical candidate 2032ead1b8e6d167472078fb270637cc1c6ac626 has one macOS CPython 3.13.9 isolated build, clean install and manifest-pair smoke success from 2026-11-08, following one dependency download; its local artifact identity was re-read on 2026-11-09 without replaying the build or tests. The earlier fallback smoke and proxy failure remain separate historical observations. The saved CPython 3.9.6 full-suite result covers d088fee36e7166c6e068fc72a2245d01399aecce and unchanged implementation/test blobs, not a fresh run on this documentation descendant. Exact-SHA CI, Linux/Windows, a valid modern-pip CPython 3.9 wheel/install smoke, arbitrary filesystem race resistance, signature/provenance, wheel byte reproducibility, human landing sign-off, public push/PR/main integration, tag, Release and upload remain unverified or not performed. No fourth full review, product test, build, provider request or public operation was run for this evidence-only update.",
   "review_context": {
     "why": [
       "The user requested a non-conflicting PocketChat task; session audit, task diff, JSON input, deadline, context drift, session writer, secret audit and path capability work were already active, while the package-manifest branch/PR/issue and five-file scope were absent.",
@@ -103,7 +103,8 @@
       "tests/test_release_smoke.py starts from the observed missing API, builds bounded wheel/installed fixtures, covers refusal and budget boundaries, and now reproduces nested lookalike dist-info payload retention, nested RECORD drift refusal and extra dist-info refusal.",
       "The bilingual docs define the schema, limits, exact generated-file exclusion scope, fail-closed cases, release-smoke wiring and exact verification scope.",
       "This review record separates local runs, baseline lint limitations, fixed findings, round-3 independent review and publication exclusions.",
-      "Evidence-only post-fix continuation records the previously missing full regression on macOS CPython 3.9.6. No implementation/test/doc-contract byte changed and no new full review round was opened."
+      "Evidence-only post-fix continuation records the previously missing full regression on macOS CPython 3.9.6. No implementation/test/doc-contract byte changed and no new full review round was opened.",
+      "The 2026-11-09 evidence-only descendant aligns the bilingual verification summaries and this record with the already saved 2026-11-08 isolated-build observation. It changes no implementation, test, package contract, review-round count or required public/human gate, and repeats no build or product test."
     ],
     "static_checks": [
       "The changed paths exactly match the main-reachable ready row.",
@@ -112,13 +113,13 @@
       "The final implementation keeps generated caches and only selected-root installation metadata outside the comparable payload; nested lookalike paths remain visible and comparable."
     ],
     "gaps": [
-      "Exact-candidate GitHub CI, a successful post-fix isolated build and public main integration remain pending. The post-fix no-build-isolation release smoke now has one exact-candidate macOS success; the isolated attempt stopped at proxy dependency acquisition before package build.",
+      "Exact-candidate GitHub CI, public main integration and human landing sign-off remain pending. Both the historical no-build-isolation fallback and the later isolated build have one macOS CPython 3.13.9 success; the earlier proxy failure is retained as a separate failed observation. The 2026-11-09 documentation descendant was not rebuilt or product-tested.",
       "Cross-platform runtime, race resistance, provenance/signature and publication claims remain outside this development checkpoint."
     ]
   },
   "landing_sign_off": {
     "status": "required",
-    "scope": "Round-3 independent review, post-fix macOS no-build-isolation wheel/install smoke and post-fix CPython 3.9.6 full regression are recorded with no open blocker/major. Exact-SHA CI readback, human landing sign-off and authorized public main action remain required; no tag, Release, package upload or provider call is authorized."
+    "scope": "The existing round-3 independent review, post-fix macOS fallback smoke, later isolated build and CPython 3.9.6 full regression retain their own candidate/environment scopes, with no open blocker/major. The documentation-only descendant does not inherit exact-SHA CI or a new runtime pass. Human landing sign-off, exact public branch/PR/main authorization and main readback remain required; no tag, Release, package upload or provider call is authorized."
   },
   "review_rounds": [
     {
@@ -158,6 +159,80 @@
       "Repeated focused tests, Ruff, wheel build or install smoke",
       "Successful isolated post-fix build",
       "Public push/PR/main integration, human sign-off, tag, Release or upload"
+    ]
+  },
+  "isolated_build_observation": {
+    "source_type": "local run (V)",
+    "verification": "verified",
+    "observed_at": "2026-11-08T15:12:22+0800",
+    "candidate_commit": "2032ead1b8e6d167472078fb270637cc1c6ac626",
+    "candidate_tree": "062c7238fa6e6fb74ff5aed4ebc4963ef11fa0ca",
+    "scope": "One historical macOS CPython 3.13.9 PEP 517 isolated build, clean local venv installation and installed CLI readback. Not CI or a fresh run on this documentation descendant.",
+    "environment": {
+      "os": "macOS",
+      "python": "3.13.9",
+      "pip": "25.3",
+      "setuptools": "80.9.0",
+      "wheel": "0.48.0"
+    },
+    "command": "PIP_FIND_LINKS=<wheelhouse> PIP_NO_INDEX=1 python3 -B scripts/release_smoke.py --repo <candidate-checkout> --work-dir <private-work-dir> --json",
+    "build_isolation": true,
+    "exit_code": 0,
+    "dependency_acquisition": {
+      "network_used": true,
+      "command": "python3 -m pip download --disable-pip-version-check --no-deps --only-binary=:all: --dest <wheelhouse> setuptools==80.9.0",
+      "exit_code": 0,
+      "artifact": "setuptools-80.9.0-py3-none-any.whl",
+      "artifact_sha256": "062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922",
+      "build_network_mode": "PIP_NO_INDEX=1 after the explicit download"
+    },
+    "wheel": {
+      "name": "pocketchat-1.1.0-py3-none-any.whl",
+      "bytes": 277450,
+      "sha256": "0a7e130c37d1ffd06b4ed7abce8568baf8894cb872afaecf067810e87301e23f"
+    },
+    "wheel_manifest_members": 67,
+    "installed_manifest_members": 67,
+    "schema_count": 5,
+    "task_help_command_count": 11,
+    "post_install_readback": {
+      "version_command": "pocketchat 1.1.0",
+      "import_version": "1.1.0",
+      "pip_check_exit": 0,
+      "task_help_exit": 0
+    },
+    "artifacts": {
+      "observation_json": {
+        "bytes": 3351,
+        "sha256": "ab259f3888ee53191b9229a9fc4a90a4660d11d737775c83c593234d3b29237c"
+      },
+      "release_smoke_json": {
+        "bytes": 26160,
+        "sha256": "503fde1b40b0e581fda93bc68373e301a3b7ecad2964c5a1f6a65c856958928a"
+      },
+      "checksums": {
+        "bytes": 644,
+        "sha256": "c64338994796b40fb05c45eab8d4742e3e2c17ba50f7f76c961966a8705cb973"
+      }
+    },
+    "readback": {
+      "observed_on": "2026-11-09",
+      "source_type": "local run (V)",
+      "verification": "verified",
+      "observation_smoke_checksums_wheel_digest_match": true,
+      "candidate_and_tree_match": true,
+      "scope": "Saved artifact identity and historical success only; no build/test replay or new runtime claim"
+    },
+    "failed_invocation_retained": {
+      "exit_code": 2,
+      "classification": "invocation_error_not_product_failure",
+      "reason": "The first command referenced the product script from a different repository root; the failed stdout/stderr remain retained privately."
+    },
+    "not_run_for_documentation_descendant": [
+      "Product tests or repeated build/install smoke",
+      "New provider/network/credential call",
+      "Exact-SHA CI or cross-platform runtime",
+      "Public push/PR/main integration, human landing sign-off, tag, Release or upload"
     ]
   }
 }
