@@ -1,0 +1,164 @@
+# Package manifest
+
+`PC-PACKAGE-MANIFEST-1` adds a deterministic, bounded description of the
+package bytes that the existing release smoke actually builds and installs.
+The manifest is package evidence, not a release, signature, provenance claim or
+publication authorization.
+
+## API
+
+```python
+build_package_manifest(
+    source,
+    *,
+    source_kind,
+    max_members=2048,
+    max_member_bytes=8_388_608,
+    max_total_bytes=67_108_864,
+    max_report_bytes=262_144,
+)
+```
+
+`source_kind` is closed to:
+
+- `wheel`: one caller-selected wheel archive;
+- `installed_tree`: one caller-selected `site-packages` root. Only its exact
+  `pocketchat/` package and matching `pocketchat-<version>.dist-info/` tree are
+  traversed. Unrelated installed packages are not scanned.
+
+The call reads package bytes but never changes the wheel or installed tree. It
+does not build, install, import, call a provider, inspect credentials, access the
+network or search an arbitrary workspace.
+
+## Report contract
+
+A successful result is a JSON-serializable object with this closed identity:
+
+```json
+{
+  "schema": "pocketchat-package-manifest.v1",
+  "schema_version": 1,
+  "source_kind": "wheel",
+  "package": "pocketchat",
+  "version": "1.1.0",
+  "entry_point": {
+    "name": "pocketchat",
+    "target": "pocketchat.cli:main"
+  },
+  "groups": {
+    "metadata": [],
+    "modules": [],
+    "package_data": [],
+    "schemas": []
+  },
+  "members": []
+}
+```
+
+Each sorted `members` row contains exactly `path`, `category`, `bytes` and
+`sha256`. Paths are normalized package-relative POSIX paths. The report never
+contains a source absolute path or file body. `groups` is a deterministic
+projection of those rows, not a second inventory.
+
+Generated `__pycache__`, `.pyc` and `.pyo` paths are outside the comparable
+payload. Installation metadata `INSTALLER`, `REQUESTED` and `direct_url.json`
+is outside only when directly under the selected `pocketchat-<version>.dist-info/`
+root; a similarly named path nested below `pocketchat/` remains package data.
+`RECORD` is reported, but only the selected dist-info root's `RECORD` is
+excluded from the wheel-versus-install hash comparison because installers may
+rewrite it. All other admitted module, schema, package-data and metadata bytes
+must agree.
+
+## Required surface and refusals
+
+Both source kinds must contain exactly one `pocketchat/` package and one matching
+`pocketchat-<version>.dist-info/` tree. The existing release-critical modules,
+five shipped schemas, `METADATA`, `WHEEL`, `RECORD` and
+`entry_points.txt` are required. Metadata name/version and the console entry
+point must agree with the package identity.
+
+The inspection fails closed for:
+
+- duplicate, absolute, parent, backslash, case-colliding or NFC-colliding paths;
+- encrypted wheel members, wheel links, installed symlinks or other non-regular
+  installed entries;
+- an unknown source kind, package/version/entry-point mismatch, a second package
+  identity, missing required resource or removed web/server surface;
+- a non-positive limit, too many members, an oversized member, total byte budget
+  overflow or canonical report overflow.
+
+Limits refuse the input. They never truncate an inventory and then label it
+complete.
+
+## Release-smoke integration
+
+`build_wheel()` attaches the wheel manifest to `WheelArtifact`.
+`inspect_installed()` locates the clean virtual environment's `site-packages`,
+builds the installed-tree manifest, and then preserves the existing installed
+`--version` plus complete `task ... --help` smoke. `run_release_smoke()` compares
+package identity and all comparable member hashes and adds both reports under
+`package_manifests`, without removing any existing JSON fields.
+
+Run from the product root:
+
+```bash
+python scripts/release_smoke.py --json
+```
+
+## Verification scope
+
+On 2026-11-05, macOS with CPython 3.13.9 and pip 25.3 built and installed the
+current wheel successfully. The final smoke reported 67 admitted members, wheel
+SHA-256 `edc233bf0f7cb554440bea4ea5094202311f7571a03a84bebe370012f569f980`, matching
+wheel/installed payloads, and all 11 task help commands. This proves that local
+run only. Two additional builds produced different wheel container hashes
+(`c563154f...` and `33da6dd4...`) but byte-identical canonical manifests with
+SHA-256 `a4abfa4972e2e3cf80462df0eb8aeb3bb4ba50ec8fface137dc37591265a2b87`. The
+manifest is deterministic for those runs; the ZIP container is not claimed to
+be reproducible.
+
+On 2026-11-07, the post-fix candidate `fefb970bd112bd0ed32f943a2b917da4646318ad`
+was checked again on macOS with CPython 3.13.9 and pip 25.3. The default isolated
+build stopped before building PocketChat because the configured proxy timed out
+while pip was fetching `setuptools>=61`; that is an environment failure, not a
+package result. The same interpreter already had setuptools 80.9.0 and wheel
+0.48.0, so the documented `--no-build-isolation` fallback used those compatible
+local dependencies and completed the wheel build, clean-venv install, manifest
+pair check and all 11 task help commands. It reported a 277450-byte wheel with
+SHA-256 `7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7` and
+67 admitted members in each manifest. This proves only that exact local fallback
+run; exact-SHA CI, Linux/Windows and public main integration were not observed
+by that run.
+
+A later isolated-build observation on 2026-11-08 used the exact evidence
+candidate `2032ead1b8e6d167472078fb270637cc1c6ac626` on macOS with CPython
+3.13.9, pip 25.3 and setuptools 80.9.0. After one explicit dependency download,
+the existing release smoke used PEP 517 build isolation with `PIP_NO_INDEX=1`
+and a local wheelhouse; it did not use `--no-build-isolation`. The wheel build,
+clean-venv install, wheel/installed manifest comparison, `pip check`, version
+readback and all 11 task help commands completed with exit 0. The wheel was
+277450 bytes with SHA-256
+`0a7e130c37d1ffd06b4ed7abce8568baf8894cb872afaecf067810e87301e23f`;
+each manifest admitted 67 members including all five shipped schemas.
+
+On 2026-11-09, the saved observation, smoke JSON and wheel hashes were read
+back to align this documentation with that existing result. No build, install
+or product test was repeated. This verifies the saved artifacts and that exact
+historical local run only, not a new run on the documentation descendant,
+network dependency acquisition reliability, a clean public installation,
+exact-SHA CI, Linux/Windows, reproducible wheel bytes or public main integration.
+Those remaining gates, human landing sign-off and public-action authorization
+are unchanged. The structured isolated-build record is in
+[`review-package-manifest-v1.json`](review-package-manifest-v1.json).
+
+The Apple Command Line Tools CPython 3.9.6 environment uses pip 21.2.4. Its
+isolated build produced `UNKNOWN-0.0.0`, and its explicit non-isolated fallback
+used setuptools 58.0.4, below this repository's `setuptools>=61` requirement.
+Those two failures did not reach a valid PocketChat package manifest and are not
+a conclusion about all CPython 3.9 environments. Linux, Windows, exact-candidate
+CI, tag, Release and package-index upload remain separately unverified unless the
+implementation review records later evidence.
+
+### Routine integration readback (2026-11-10)
+
+The original implementation and test bytes are retained. Historical build and review observations keep their original candidate and runtime scopes; they are not newly run results. The maintainer's 2026-11-09 standing authorization delegates routine technical sign-off, task-branch delivery, required exact-head CI and main integration to agents. Earlier human-sign-off waits do not block that routine scope. Exact-candidate CI and main readback remain separate evidence; no tag, Release or package upload is claimed here.
