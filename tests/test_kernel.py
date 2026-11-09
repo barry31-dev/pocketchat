@@ -776,6 +776,150 @@ class ProviderStreamTests(unittest.TestCase):
         self.assertEqual(result["reasoning"], "think ")
         self.assertEqual(result["finish_reason"], "stop")
 
+    def test_stream_normalizes_complete_fragmented_tool_calls(self):
+        from pocketchat.provider import _stream_response
+
+        class Response:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"Checking. "},'
+                       b'"finish_reason":""}]}\n')
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":0,"id":"call_1","type":"function",'
+                       b'"function":{"name":"read_file","arguments":"{\\"path\\":"}}]},'
+                       b'"finish_reason":""}]}\n')
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":0,"function":{"arguments":"\\"facts.txt\\"}"}}]},'
+                       b'"finish_reason":"tool_calls"}]}\n')
+                yield b'data: [DONE]\n'
+
+        result = _stream_response(Response(), "m", 200,
+                                  on_delta=lambda *_: None)
+
+        self.assertEqual(result["content"], "Checking. ")
+        self.assertEqual(result["finish_reason"], "tool_calls")
+        self.assertEqual(result["tool_calls"], [{
+            "id": "call_1",
+            "name": "read_file",
+            "arguments": {"path": "facts.txt"},
+        }])
+
+    def test_stream_tool_only_and_usage_only_are_valid_results(self):
+        from pocketchat.provider import _stream_response
+
+        class ToolOnly:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":0,"id":"call_1","type":"function",'
+                       b'"function":{"name":"read_file","arguments":"{\\"path\\":\\"facts.txt\\"}"}}]},'
+                       b'"finish_reason":"tool_calls"}]}\n')
+                yield b'data: [DONE]\n'
+
+        tool_only = _stream_response(ToolOnly(), "m", 200)
+        self.assertEqual(tool_only["content"], "")
+        self.assertEqual(tool_only["finish_reason"], "tool_calls")
+        self.assertEqual(tool_only["tool_calls"][0]["arguments"],
+                         {"path": "facts.txt"})
+
+        class UsageOnlyTerminal:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"answer"},'
+                       b'"finish_reason":""}]}\n')
+                yield (b'data: {"choices":[],"usage":{"prompt_tokens":8,'
+                       b'"completion_tokens":3}}\n')
+                yield b'data: [DONE]\n'
+
+        usage_only = _stream_response(UsageOnlyTerminal(), "m", 200)
+        self.assertEqual(usage_only["content"], "answer")
+        self.assertIs(usage_only["usage_reported"], True)
+        self.assertEqual(usage_only["usage"]["input_tokens"], 8)
+        self.assertEqual(usage_only["usage"]["output_tokens"], 3)
+
+    def test_stream_empty_usage_object_is_still_reported(self):
+        from pocketchat.provider import _stream_response
+
+        class EmptyUsage:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"answer"}}]}\n')
+                yield b'data: {"choices":[],"usage":{}}\n'
+                yield b'data: [DONE]\n'
+
+        result = _stream_response(EmptyUsage(), "m", 200)
+        self.assertIs(result["usage_reported"], True)
+        self.assertEqual(result["usage"]["input_tokens"], 0)
+        self.assertEqual(result["usage"]["output_tokens"], 0)
+
+    def test_stream_tool_only_defaults_finish_reason_to_tool_calls(self):
+        from pocketchat.provider import _stream_response
+
+        class ToolOnly:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":0,"id":"call_1","type":"function",'
+                       b'"function":{"name":"read_file","arguments":"{\\"path\\":\\"facts.txt\\"}"}}]}}]}\n')
+                yield b'data: [DONE]\n'
+
+        result = _stream_response(ToolOnly(), "m", 200)
+        self.assertEqual(result["finish_reason"], "tool_calls")
+
+    def test_stream_rejects_duplicate_tool_call_ids_across_indices(self):
+        from pocketchat.provider import ProviderError, _stream_response
+
+        class DuplicateIds:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":0,"id":"call_1","type":"function",'
+                       b'"function":{"name":"read_file","arguments":"{\\"path\\":\\"facts.txt\\"}"}}, '
+                       b'{"index":1,"id":"call_1","type":"function",'
+                       b'"function":{"name":"read_file","arguments":"{\\"path\\":\\"facts.txt\\"}"}}]},'
+                       b'"finish_reason":"tool_calls"}]}\n')
+                yield b'data: [DONE]\n'
+
+        with self.assertRaises(ProviderError) as caught:
+            _stream_response(DuplicateIds(), "m", 200)
+        self.assertEqual(caught.exception.error_type, "malformed_response")
+
+    def test_stream_incomplete_or_malformed_tool_fragments_fail_closed(self):
+        from pocketchat.provider import ProviderError, _stream_response
+
+        class Incomplete:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":0,"id":"call_1","type":"function",'
+                       b'"function":{"name":"read_file","arguments":"{\\"path\\":"}}]},'
+                       b'"finish_reason":"tool_calls"}]}\n')
+                yield b'data: [DONE]\n'
+
+        with self.assertRaises(ProviderError) as caught:
+            _stream_response(Incomplete(), "m", 200)
+        self.assertEqual(caught.exception.error_type, "malformed_response")
+
+        class NoArguments:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":0,"id":"call_1","type":"function",'
+                       b'"function":{"name":"read_file"}}]},'
+                       b'"finish_reason":"tool_calls"}]}\n')
+                yield b'data: [DONE]\n'
+
+        with self.assertRaises(ProviderError):
+            _stream_response(NoArguments(), "m", 200)
+
     def test_stream_separates_first_reasoning_and_content_deltas(self):
         from pocketchat.provider import _stream_response
 
