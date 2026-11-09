@@ -69,7 +69,15 @@
     "pocketchat/tasking.py",
     "tests/test_task_cancel.py"
   ],
-  "landing_sign_off": "hold",
+  "landing_sign_off": {
+    "status": "agent-approved",
+    "authority": "Maintainer standing routine-development authorization, 2026-11-09; docs/development-and-release.md section 7",
+    "scope": "Routine task branch, required exact-head CI and main integration only. Formal tags, Releases, package uploads, paid calls, third-party rights and destructive operations are excluded.",
+    "reviewed_at": "2026-11-10T07:09:19+0800",
+    "reviewer": "automated technical integrator under maintainer standing delegation",
+    "review_scope": "Integration-only delta: current public main changed none of the eight task paths, and all eight task blobs remain byte-identical to reviewed candidate 20a13748787bf354d97901658a0abe962d459601. No fourth full implementation review.",
+    "verdict": "APPROVE"
+  },
   "reviewed_evidence": [
     "V: CPython 3.9.6 owner regression ran red before implementation: 1 test FAIL, exit 1 because TaskCancellation was absent.",
     "V: CPython 3.9.6 focused cancellation suite: 15 tests OK, exit 0 after correcting test plans and the existing command archive top-level/nested checkpoint reader mismatch.",
@@ -96,7 +104,10 @@
     "V: After the new production admission guard, tests.test_task_cancel: 26 OK on CPython 3.9.6 and 3.14.10, both exit 0; tests.test_task_model_repair plus tests.test_task_exec: 36 OK on CPython 3.9.6, exit 0. The new guard justifies these reruns; no full-suite rerun.",
     "V: Ruff 0.17.3 E9,F on the two changed Python files and git diff --check passed, exit 0; three local links in the changed bilingual cancellation pages exist.",
     "C: Third-round new-diff closure independently confirmed early refusal instead of support; no archive success checks were weakened. Total rounds 3, reconsider/new-diff-only, no fourth complete review.",
-    "V: Remote main readback remains b42fa5b and remote task/pocketchat-task-cancel is absent; there is no external complete receipt. Previous history-gate evidence is retained rather than retried or labeled current."
+    "V: Remote main readback remains b42fa5b and remote task/pocketchat-task-cancel is absent; there is no external complete receipt. Previous history-gate evidence is retained rather than retried or labeled current.",
+    "C: On 2026-11-10 current product main cab0d5caa7e8026b5539f743c4527945f0f4398f changed none of the eight task paths since the candidate merge base; merging it produced no conflict and preserved all eight task blobs byte-identically to reviewed candidate 20a13748787bf354d97901658a0abe962d459601.",
+    "C: Maintainer standing routine-development authorization of 2026-11-09 permits ordinary non-force task-branch push, PR, required exact-head CI and reviewed main integration. This technical sign-off does not authorize a tag, Release, package upload, paid call, third-party right or destructive/shared-history action.",
+    "V: Integration-only checks parsed this JSON, confirmed exact eight-path diff against current main and ran git diff --check. Source tests were not repeated because the reviewed source/test blobs did not change."
   ],
   "original_approval_base_sha": "7fcb197351e10b7e8dab87e32ed52964fb1193ac",
   "previous_candidate_sha": "1be64a1a9a076b6d074f91511ce30bc697dc44b0",
@@ -111,9 +122,9 @@
     "docs/task-cancel.zh-CN.md": "ce51c6031a7962d775bfc3633808f81229183055"
   },
   "publication_hold": [
-    "Task permissions publish=deny remain unchanged.",
-    "Existing inherited historical-message policy blocker is unresolved; the earlier 16-hit diagnostic is not a final-candidate gate result.",
-    "No exact-candidate external-action authorization is claimed."
+    "The historical per-candidate public-action hold is superseded only for ordinary non-force task-branch push, PR, required exact-head CI and reviewed main integration by the maintainer standing routine-development authorization of 2026-11-09.",
+    "Task permissions publish=deny still exclude tags, Releases, package uploads and other formal publication actions.",
+    "Exact-head CI and product-main integration remain unverified until the actual remote checks and merge readback complete."
   ],
-  "unverified_scope": "Current cancellation suite: 26 tests passed on local macOS CPython 3.9.6 and 3.14.10; legacy model-repair/executor compatibility: 36 tests passed on CPython 3.9.6. Real bounded local command fixture keeps confirmed effect count one; provider remains a deterministic stub. Third-round review closes only the named previously unreviewed combinations and new early-refusal diff, not all combinations or overall acceptance. No-cancellation repair retry archive/recovery behavior remains unchanged and unverified. Earlier 20/47/106/65 results are historical, not current full-suite results. Full product suite, exact-SHA CI, public PR/main integration, Linux/Windows runtime, real provider, process/thread/signal termination, arbitrary-crash exactly-once, deadline wiring, packaging, tag/Release and upload were not run. Public landing stays hold."
+  "unverified_scope": "Current cancellation suite: 26 tests passed on local macOS CPython 3.9.6 and 3.14.10; legacy model-repair/executor compatibility: 36 tests passed on CPython 3.9.6. Real bounded local command fixture keeps confirmed effect count one; provider remains a deterministic stub. Third-round review closes only the named previously unreviewed combinations and new early-refusal diff, not all combinations or overall acceptance. No-cancellation repair retry archive/recovery behavior remains unchanged and unverified. Earlier 20/47/106/65 results are historical, not current full-suite results. No source/test blob changed during the 2026-11-10 current-main integration, so those suites were not repeated. Exact-head CI, public PR/main integration, Linux/Windows runtime, real provider, process/thread/signal termination, arbitrary-crash exactly-once, deadline wiring and packaging remain unverified until actually observed. tags, Releases and package uploads remain excluded and were not performed."
 }
