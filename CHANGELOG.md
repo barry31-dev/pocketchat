@@ -7,6 +7,7 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+- Enable terminal mouse-wheel events in the full-screen agent and map wheel up/down to one-line transcript scrolling. Page keys and non-wheel mouse clicks retain their existing behavior. See `pocketchat/curses_ui.py`.
 - Add a pure, deterministic evidence-link verifier for supplied artifact observations and explicit relations. It returns bounded `complete`, `partial` or `refused` reports, keeps digest scopes distinct, rejects identity/path/duplicate/orphan/budget defects, and deliberately performs no file, network or provider I/O. See `pocketchat/evidence_links.py` and `docs/evidence-links.md`.
 - Treat malformed UTF-8 in a session file as the existing typed `session_file` refusal. `show --json` now returns one stable error object with exit 2 and no traceback while leaving the input bytes untouched; malformed JSON files retain their previous not-a-session classification.
 - Prevent v2 memory reads and writes from following a replaced parent directory. Reads now use a no-follow parent descriptor with relative file open, and a corrected regression test exercises the parent replacement race without removing a non-empty directory.

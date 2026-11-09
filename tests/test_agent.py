@@ -12,6 +12,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -248,6 +249,131 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(tui.transcript[-1], ("agent", "agent reply"))
         self.assertTrue((self.base / "sessions" / "main.jsonl").is_file())
         self.assertEqual(4, tui.status_facts["tokens"])
+
+    def test_tui_controller_persists_three_turns_and_reuses_context(self):
+        from pocketchat.tui import AgentTUI
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+        tui.config = json.loads(self.config.read_text(encoding="utf-8"))
+        tui.workspace = self.base
+        previous = os.environ.get("LOCAL_KEY")
+        os.environ["LOCAL_KEY"] = "local-fake"
+        self.addCleanup(
+            lambda: os.environ.__setitem__("LOCAL_KEY", previous)
+            if previous is not None else os.environ.pop("LOCAL_KEY", None))
+
+        self.assertEqual(tui.send("first"), "agent reply")
+        self.assertEqual(tui.send("second"), "agent reply")
+        self.assertEqual(tui.send("third"), "agent reply")
+
+        self.assertEqual(len(STATE.requests), 3)
+        third_messages = STATE.requests[2]["body"]["messages"]
+        self.assertEqual(
+            [message["role"] for message in third_messages],
+            ["user", "assistant", "user", "assistant", "user"])
+        self.assertEqual(
+            [message["content"] for message in third_messages
+             if message["role"] == "user"],
+            ["first", "second", "third"])
+        session = (self.base / "sessions" / "main.jsonl").read_text(
+            encoding="utf-8").splitlines()
+        self.assertEqual(len(session), 7)  # header + three exchanges
+        records = [json.loads(line) for line in session]
+        self.assertEqual(
+            [record["content"] for record in records[1:]
+             if record["role"] == "user"],
+            ["first", "second", "third"])
+
+    def test_tui_controller_reacquires_session_writer_after_failed_turn(self):
+        from pocketchat.tui import AgentTUI
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+        tui.config = json.loads(self.config.read_text(encoding="utf-8"))
+        tui.workspace = self.base
+        previous = os.environ.get("LOCAL_KEY")
+        os.environ["LOCAL_KEY"] = "local-fake"
+        self.addCleanup(
+            lambda: os.environ.__setitem__("LOCAL_KEY", previous)
+            if previous is not None else os.environ.pop("LOCAL_KEY", None))
+
+        self.assertEqual(tui.send("first"), "agent reply")
+        self.assertEqual(tui.send("second"), "agent reply")
+
+        second_messages = STATE.requests[1]["body"]["messages"]
+        self.assertEqual(
+            [message["content"] for message in second_messages
+             if message["role"] == "user"],
+            ["first", "second"])
+        session = (self.base / "sessions" / "main.jsonl").read_text(
+            encoding="utf-8").splitlines()
+        self.assertEqual(len(session), 5)
+        self.assertFalse(
+            (self.base / "sessions" / "main.jsonl.writer").exists())
+
+    def test_tui_controller_keeps_session_token_budget_across_turns(self):
+        from pocketchat.provider import estimate_tokens
+        from pocketchat.tui import AgentTUI
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+        tui.config = json.loads(self.config.read_text(encoding="utf-8"))
+        tui.workspace = self.base
+        previous = os.environ.get("LOCAL_KEY")
+        os.environ["LOCAL_KEY"] = "local-fake"
+        self.addCleanup(
+            lambda: os.environ.__setitem__("LOCAL_KEY", previous)
+            if previous is not None else os.environ.pop("LOCAL_KEY", None))
+
+        self.assertEqual(tui.send("first"), "agent reply")
+        self.assertEqual(len(STATE.requests), 1)
+        context = [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "agent reply"},
+            {"role": "user", "content": "second"},
+        ]
+        tui.config["profiles"]["local"]["max_session_tokens"] = (
+            estimate_tokens(context) + 1)
+
+        reply = tui.send("second")
+
+        self.assertIn("token_budget_exceeded", reply)
+        self.assertEqual(len(STATE.requests), 1)
+
+    def test_tui_controller_reports_session_persistence_failure(self):
+        from pocketchat.sessions import SessionFile, SessionFileError
+        from pocketchat.tui import AgentTUI
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+        tui.config = json.loads(self.config.read_text(encoding="utf-8"))
+        tui.workspace = self.base
+        previous = os.environ.get("LOCAL_KEY")
+        os.environ["LOCAL_KEY"] = "local-fake"
+        self.addCleanup(
+            lambda: os.environ.__setitem__("LOCAL_KEY", previous)
+            if previous is not None else os.environ.pop("LOCAL_KEY", None))
+        with mock.patch.object(
+                SessionFile, "append",
+                side_effect=SessionFileError("cannot append session")):
+            reply = tui.send("first")
+
+        self.assertIn("agent reply", reply)
+        self.assertIn("session persistence failed", reply)
+        self.assertIn("session persistence failed", tui.last_error)
 
     def test_tui_controller_does_not_send_a_slash_command(self):
         from pocketchat.tui import AgentTUI
@@ -1158,6 +1284,110 @@ class AgentCommandTests(unittest.TestCase):
         self.assertIn("/session", text)
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX curses/pty")
+    def test_tui_loop_enables_mouse_wheel_reporting(self):
+        from pocketchat.curses_ui import run_loop_for_test
+        from pocketchat.tui import AgentTUI
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+
+        class Window:
+            def keypad(self, value):
+                pass
+
+            def nodelay(self, value):
+                pass
+
+            def getmaxyx(self):
+                return (20, 80)
+
+            def erase(self):
+                pass
+
+            def addnstr(self, *args):
+                pass
+
+            def move(self, *args):
+                pass
+
+            def refresh(self):
+                pass
+
+            def get_wch(self):
+                return "\x04"
+
+            def getch(self):
+                raise AssertionError("getch should not be needed")
+
+        with mock.patch("pocketchat.curses_ui.curses.mousemask",
+                        return_value=(0, 0)) as mousemask:
+            self.assertEqual(run_loop_for_test(Window(), tui,
+                                               max_iterations=1), 0)
+        self.assertTrue(mousemask.called)
+
+    @unittest.skipUnless(os.name == "posix", "requires curses")
+    def test_tui_read_key_turns_a_mouse_event_into_a_wheel_action(self):
+        import curses
+
+        from pocketchat.curses_ui import read_key
+
+        class Window:
+            def __init__(self):
+                self.codes = [curses.KEY_MOUSE]
+
+            def get_wch(self):
+                return self.codes.pop(0)
+
+        button4 = getattr(curses, "BUTTON4_PRESSED", 65536)
+        event = (0, 10, 5, 0, button4)
+        with mock.patch("pocketchat.curses_ui.curses.getmouse",
+                        return_value=event):
+            self.assertEqual(read_key(Window()), ("mouse", button4))
+
+    @unittest.skipUnless(os.name == "posix", "requires curses")
+    def test_tui_mouse_wheel_scrolls_the_transcript(self):
+        import curses
+        from pocketchat.curses_ui import InputState, apply_key
+        from pocketchat.tui import AgentTUI
+
+        button4 = getattr(curses, "BUTTON4_PRESSED", 65536)
+        button5 = getattr(curses, "BUTTON5_PRESSED", button4 << 5)
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+        for i in range(30):
+            tui.transcript.append(("agent", "message %02d" % i))
+        state = InputState()
+        state.screen_size = (14, 72)
+        apply_key(tui, state, ("mouse", button4))
+        self.assertGreater(tui.transcript_offset, 0)
+        apply_key(tui, state, ("mouse", button5))
+        self.assertEqual(tui.transcript_offset, 0)
+
+    @unittest.skipUnless(os.name == "posix", "requires curses")
+    def test_tui_mouse_event_without_wheel_click_is_ignored(self):
+        from pocketchat.curses_ui import InputState, apply_key
+        from pocketchat.tui import AgentTUI
+
+        tui = AgentTUI(
+            AgentState(profile="local", model="local-model", session="main"),
+            {"local": {"model": "local-model"}},
+            {"local": "local-model"},
+        )
+        for i in range(30):
+            tui.transcript.append(("agent", "message %02d" % i))
+        state = InputState()
+        tui.transcript_offset = 3
+        apply_key(tui, state, ("mouse", 0))
+        self.assertEqual(tui.transcript_offset, 3)
+
+    @unittest.skipUnless(os.name == "posix", "requires curses")
     def test_tui_transcript_can_scroll_with_page_keys(self):
         from pocketchat.curses_ui import InputState, apply_key
         from pocketchat.tui import AgentTUI, compose_screen

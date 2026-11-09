@@ -21,6 +21,7 @@ from .agent import AgentCommandError, AgentState, apply_command
 from .config import ConfigError, profile_config
 from .cost import estimate_cost
 from .session import Session, new_run_id
+from .session_writer import SessionWriterBusy, acquire_session_writer
 from .sessions import resolve_session_path
 
 
@@ -293,16 +294,49 @@ class AgentTUI:
             self._session_name = self.state.session
         else:
             self._session.config = selected
+        try:
+            self._ensure_session_writer(self._session)
+        except SessionWriterBusy as exc:
+            self.last_error = "session writer unavailable: %s" % exc
+            return "agent: %s" % self.last_error
         status = self._session.run([stripped])
+        session = self._session
         self.status_facts = trace_status_facts(
-            self._session.trace_path, self._session.config)
+            session.trace_path, session.config)
+        reply = session.last_reply()
+        persistence_failed = session.session_file is None
+        # Session.run releases its writer claim but the object still owns the
+        # cumulative message and token state for this TUI conversation. Keep
+        # that state; the next run lazily acquires a fresh claim without
+        # resetting max_session_tokens.
         if status != "completed":
-            return "agent: run %s" % status
-        reply = self._session.last_reply()
+            error = session.last_error if isinstance(session.last_error, dict) else {}
+            detail = error.get("type") or status
+            self.last_error = detail
+            return "agent: run %s: %s" % (status, detail)
+        if persistence_failed:
+            self.last_error = "session persistence failed; this turn is trace-only"
+            if reply:
+                return "%s\n\n[%s]" % (reply, self.last_error)
+            return "agent: %s" % self.last_error
+        self.last_error = ""
         if record:
             self.transcript.append(("you", stripped))
             self.transcript.append(("agent", reply))
         return reply
+
+    def _ensure_session_writer(self, session: Session) -> None:
+        """Acquire one fresh writer claim immediately before a run."""
+        if session._session_writer is not None or session.session_file is None:
+            return
+        writer = acquire_session_writer(
+            session.session_file.path, owner=session.run_id)
+        try:
+            writer.bind_session_file(session.session_file.path)
+        except SessionWriterBusy:
+            writer.release()
+            raise
+        session._session_writer = writer
 
     def start_send(self, text: str) -> None:
         """Start one turn without blocking the renderer."""

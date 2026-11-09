@@ -1,0 +1,30 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-chat-lifecycle-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-chat-lifecycle-approval-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product origin/main a27d2ad2c4441c78a22ae6369885efd3664c526f was fetched before this planning branch; no equivalent chat-lifecycle queue row, open issue, open PR, or remote task/pocketchat-chat-lifecycle* branch was found.",
+    "C: the fixed-SHA roadmap probe records that three AgentTUI sends returned three replies while the session remained one header plus one exchange, and that tool-only, text-plus-tool-fragment, and usage-only SSE cases do not match the non-streaming response contract.",
+    "C: the approved execution scope is limited to the TUI lifecycle, provider stream normalization, their focused tests, and provider-adapter documentation; it does not include session format changes, CLI wiring, file work, schemas, workflows, CHANGELOG.md, release files, provider fallback, or publication.",
+    "C: the row freezes both the persistence result and stream-normalization result in one user-visible P0 correctness outcome while preserving current identities, formats, exit-code classes, and existing non-streaming behavior.",
+    "C: the row does not treat queued state, a branch name, a machine check, or this review record as a running lease or implementation completion; execution remains gated on main reachability, a fresh write-scope check, and a valid claim.",
+    "Docs-only diff review checked the queue row contract, unique branch and write scope, dependency closure, acceptance boundaries, review fields, and explicit publication exclusions."
+  ],
+  "unverified_scope": "Planning only: no product implementation, TUI interaction, SSE parser, provider call, focused or full product tests, build, wheel, CI, public branch push, PR, merge, product main integration, tag, Release or package upload. The fixed-SHA probe is diagnostic evidence, not a passing regression test. The execution branch is not created; it remains gated on this approval row becoming reachable from product main and a fresh write-scope conflict check."
+}

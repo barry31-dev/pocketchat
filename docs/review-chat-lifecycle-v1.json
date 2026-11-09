@@ -1,0 +1,132 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/tui.py",
+    "pocketchat/provider.py",
+    "tests/test_agent.py",
+    "tests/test_kernel.py",
+    "tests/test_tool_calls.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/review-chat-lifecycle-v1.json"
+  ],
+  "categories": [
+    "source",
+    "tests",
+    "docs"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 5,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "tui-reused-released-session-writer",
+      "reason": "AgentTUI kept one Session after Session.run released its writer claim, so later sends silently failed session appends. The final controller retains the same Session state for context and cumulative token budgets, but lazily acquires a fresh writer claim immediately before each run and lets Session.run release it; it never reuses a released token."
+    },
+    {
+      "id": "F2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "stream-tool-and-usage-events-dropped",
+      "reason": "The SSE parser only marked text deltas as response events and parsed only non-streaming tool_calls. It now accumulates fragmented tool calls by index and returns them only after complete JSON-object arguments decode; tool-only responses and usage terminal events no longer become malformed empty responses."
+    },
+    {
+      "id": "F3",
+      "severity": "medium",
+      "status": "fixed",
+      "fingerprint": "usage-only-empty-turn",
+      "reason": "An early draft treated a usage-only choices=[] stream as a valid empty reply because usage set the event flag. The parser now requires observed text or a tool call; usage is merged into that result, while a stream with only usage is refused rather than persisted as an empty assistant turn."
+    },
+    {
+      "id": "F4",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "silent-tui-persistence-loss",
+      "reason": "A session append failure was swallowed by Session._record_turn and the TUI returned a plain successful reply. The TUI now detects the existing session_file=None failure signal, preserves the provider reply, appends an explicit trace-only persistence warning and records last_error."
+    },
+    {
+      "id": "F5",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "ruff-unused-test-variable",
+      "reason": "Ruff 0.17.3 E9/F found an unused fixture local in the multi-tool stream test; removed it and reran lint successfully."
+    },
+    {
+      "id": "F6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "tui-session-token-budget-reset",
+      "reason": "Fresh-context review found that discarding the released Session after every run also reset total_input_tokens/total_output_tokens, defeating max_session_tokens across TUI turns. The controller now keeps one Session state, lazily reacquires a fresh writer before each run, and releases it at run end; a regression proves the second request is refused before the provider when the cumulative budget is exceeded."
+    },
+    {
+      "id": "F7",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "duplicate-stream-tool-call-id",
+      "reason": "Fresh-context review found that two streamed tool calls with different indices could reuse the same id and both execute. Stream finalization now rejects duplicate ids as malformed_response, with a discriminating regression."
+    },
+    {
+      "id": "F8",
+      "severity": "medium",
+      "status": "fixed",
+      "fingerprint": "stream-empty-usage-reports-false",
+      "reason": "Exact-SHA review found that streamed usage:{} was reported as missing because usage_reported used truthiness, unlike the non-streaming contract. Streaming now tracks whether a usage object was observed and reports true for an empty object with zero counters; a discriminating regression covers it."
+    },
+    {
+      "id": "F9",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "stream-tool-finish-reason-default",
+      "reason": "Exact-SHA review found that a complete tool-only stream without a finish_reason was labeled stop. The normalized result now defaults to tool_calls whenever complete tool calls exist and no finish reason arrived; a focused regression covers it."
+    },
+    {
+      "id": "F10",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "stream-integration-test-not-streaming",
+      "reason": "Delta review found that the supposed Session-level streamed multi-tool test returned a pre-normalized dict and never exercised SSE parsing. It now feeds synthetic fragmented SSE through _stream_response, then runs the real Session tool loop and asserts the second provider request carries both results in index order."
+    },
+    {
+      "id": "F11",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "review-record-stale-counts",
+      "reason": "Delta review found that the review record still reported the previous 1471-test run and older 48/93 focused counts after the new regressions. The current record now reports kernel 50, agent 94 and full suite 1473 for this final tree."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "pocketchat/tui.py",
+    "pocketchat/provider.py",
+    "tests/test_agent.py",
+    "tests/test_kernel.py",
+    "tests/test_tool_calls.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/review-chat-lifecycle-v1.json"
+  ],
+  "reviewed_evidence": [
+    "C: product main d68a6db2 contains the PC-CHAT-LIFECYCLE-1 ready row and its approval record; the exact eight execution paths match this diff and the two dependencies are delivered.",
+    "V: CPython 3.13.9 observed the expected red for the TUI three-turn test (3 session lines instead of 7), then passed with retained Session state plus per-run lazy writer acquisition.",
+    "V: CPython 3.13.9 observed the expected red for fragmented/tool-only SSE (missing tool_calls and no-text-deltas refusal), then passed after index-based accumulation and complete-argument validation.",
+    "V: focused tests: tests.test_agent = 93 OK; tests.test_kernel = 47 OK; tests.test_tool_calls = 17 OK.",
+    "V: ruff 0.17.3 E9/F, compileall and git diff --check passed on the changed Python and tests.",
+    "C: TUI completion now preserves the provider reply, records a visible trace-only warning on session append failure, and releases/reopens the session writer per run rather than reusing a released token.",
+    "C: stream normalization preserves text/reasoning timing fields, returns complete tool calls in index order, rejects malformed/partial fragments, and does not treat usage-only as a standalone reply.",
+    "V: CPython 3.13.9 observed the fresh-review P1 red for cumulative max_session_tokens (second provider request succeeded), then passed after lazy writer reacquisition with retained Session state; focused test_agent = 94 OK.",
+    "V: CPython 3.13.9 observed the fresh-review duplicate-id red, then passed after stream finalization rejects duplicate tool-call ids; test_kernel = 48 OK and test_tool_calls = 17 OK.",
+    "V: CPython 3.13.9 full product suite after F6/F7: 1471 tests OK in 57.538s, exit 0.",
+    "F: The first automated review attempt emitted a large diagnostic transcript and was terminated after producing findings; Claude Code print mode was not logged in and an isolated reviewer probe timed out. Those transport facts are retained as tool limitations, while the actionable findings above were read from the generated transcript and independently reproduced by the added red tests.",
+    "V: CPython 3.13.9 observed red regressions for streamed empty-usage reporting and missing tool-only finish_reason, then passed after the provider normalization fixes.",
+    "V: The streamed multi-tool test now runs through Session.run with a streaming adapter and asserts the second provider request carries both tool results in index order.",
+    "V: Delta review found the Session-level multi-tool test used a pre-normalized dict rather than SSE; the repaired test executes fragmented SSE through _stream_response and then Session.run, with 17 tool-call tests OK.",
+    "V: CPython 3.13.9 final full product suite after F10/F11: 1473 tests OK in 56.983s, exit 0; agent 94, kernel 50, tool-call 17, Ruff E9/F, compileall and git diff --check passed.",
+    "C: 2026-11-10 publication preparation preserves the original implementation/test blobs and anonymizes reviewer tooling without changing the recorded transport failures. The existing full-diff review is reused; the new-diff review covers disclosure cleanup and integration only. Routine technical sign-off is delegated to agents by the maintainer decision of 2026-11-09."
+  ],
+  "unverified_scope": "The final local tree passed CPython 3.13.9: agent 94, kernel 50 and tool-call 17 focused tests; full product suite 1473 tests in 56.983s; Ruff E9/F, compileall and git diff --check. Exact-SHA Linux/macOS/Windows CI, real paid provider calls and a human terminal gesture remain unverified. Tag, Release, package upload and publication remain unverified and unauthorized."
+}

@@ -41,12 +41,31 @@ The existing `usage` keys and their zero semantics are unchanged.
 `content` may be an empty string. `status_code` is the HTTP status when one
 exists.
 
+Streamed responses use the same normalized shape. Text and reasoning deltas are
+joined in arrival order. Tool-call deltas are accumulated by their `index`;
+their `id`, `name` and argument string may arrive in separate events. A
+tool call is returned only after its complete argument string decodes to a
+JSON object. A malformed, re-identified or incomplete fragment fails the
+request as `malformed_response`; it is never executed as a partial call.
+A tool-only response is valid with empty `content` and `finish_reason` set to
+`tool_calls`. A usage event may have `choices: []` and is merged into the same
+result at any point after response content or a tool call has been observed;
+a stream containing only usage and no response content or tool call is refused
+rather than turned into an empty assistant reply.
+
 ## Session integration
 
 A session reads `config["provider_adapter"]` when present; otherwise it uses
 the default adapter. The adapter name is recorded in
 `run.started.payload.config_summary.provider_adapter`, so a trace says which
 protocol implementation handled the request.
+
+The agent TUI treats each user turn as one session run. The session writer claim
+is released at the end of that run; the next turn lazily acquires a fresh claim
+while retaining the same in-memory conversation and cumulative token counters.
+A restart still resumes from the session file. A persistence failure is shown
+with the reply as a trace-only warning; it is not reported as a successful
+session write.
 
 The same adapter instance builds the request snapshot and performs the call.
 This is the invariant that keeps a snapshot from describing a request that was

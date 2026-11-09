@@ -202,7 +202,7 @@ pocketchat
 
 直接输入 `pocketchat` 会进入交互式 agent。标准库提供 curses 的终端会打开全屏界面：首屏显示紧凑品牌与配置摘要，对话采用紧凑 gutter 与
 轮次分隔，底部是带上下规则的输入框和单行状态规则，支持历史记录与斜杠命令选择菜单。`Enter` 发送，`Ctrl+J` 换行，`↑/↓` 取历史，`Ctrl+T` 展开/收起思考，
-`PgUp/PgDn` 翻阅对话历史，`Ctrl+C` 中断正在生成的回复，`Ctrl+D` 退出。输入 `/` 后用 Up/Down 选择命令、Tab 应用；Enter 对半截命令先补全，完整命令才执行。
+鼠标滚轮与 `PgUp/PgDn` 翻阅对话历史，`Ctrl+C` 中断正在生成的回复，`Ctrl+D` 退出。输入 `/` 后用 Up/Down 选择命令、Tab 应用；Enter 对半截命令先补全，完整命令才执行。
 标准 Windows Python 等不提供 curses 的平台会回落到同一条行式交互入口，不引入第三方运行时依赖。
 输入不带参数的 `/model` 会打开 profile 选择器。请求运行时会持续显示
 `thinking...`、已等待秒数，并实时显示思考内容与正文增量；收到完整回复后写入 session 与

@@ -32,12 +32,12 @@ For a new `queued`, `ready` or `in_progress` row, `branch`, `write_scope` and
 `approved_by` are mandatory before a development branch is created. Historical
 `delivered` rows below predate this contract and are retained as evidence.
 
-The approved row lands on `main` first. A development branch points to that row
-but does not edit this file merely to claim or complete work. Planner commits
-may add approved future rows while development branches are active; after a
-product branch lands, an integrator records `delivered` in a separate serialized
-queue-maintenance commit. This keeps planning and development concurrent without
-making every task branch contend on one Markdown file.
+The readable contract exists before implementation, but inside the approved
+roadmap it may land with implementation instead of requiring a separate planning
+PR. A development branch does not edit this file merely to claim or complete
+work. Planner/integrator updates remain serialized; a task-specific issue or
+review record avoids contention on this shared file. Historical rows saying
+"main first" describe their old approval procedure, not a new daily stop gate.
 
 This approval queue does not mirror live claim or lease state. A row may remain
 `ready` while an external coordinator holds its operational lease; duplicating
@@ -281,9 +281,56 @@ and sidecar/preview binding as a separate slice.
   candidate remain separate; this planning change does not create or claim them.
 
 
-#### `PC-SFILE-AUDIT-1`
+#### `PC-CHAT-LIFECYCLE-1`
 
 - **State**: `ready`
+- **Branch**: `task/pocketchat-chat-lifecycle`
+- **Write scope**: `pocketchat/tui.py`, `pocketchat/provider.py`,
+  `tests/test_agent.py`, `tests/test_kernel.py`, `tests/test_tool_calls.py`,
+  `docs/provider-adapters.md`, `docs/provider-adapters.zh-CN.md`,
+  `docs/review-chat-lifecycle-v1.json`
+- **Depends on**: `PC-SFILE-FENCE-1` (delivered at `4877e5e`) and
+  `PC-RUNTIME-HARDEN-1` (delivered); no CLI, file-work, schema, workflow or
+  release dependency. Session storage and provider normalization remain the
+  owners of their existing formats and contracts.
+- **Done when**: A same-profile, same-session `AgentTUI` performs three
+  successful sends, and the resulting session file contains its header plus
+  all three user/assistant exchanges. The second and third provider requests
+  carry the preceding conversation context; a persistence failure is visible
+  rather than silently dropping later appends. The TUI either reacquires
+  writer ownership for each run or uses one explicit open/close lifecycle; it
+  never reuses a released token. Streamed provider responses normalize text,
+  tool calls and usage to the same closed response contract as non-streaming
+  responses: text-only, tool-only, text plus fragmented tool arguments, and
+  usage-only events with `choices=[]` are covered. Tool calls are returned only
+  after their complete arguments decode, malformed or incomplete fragments
+  fail closed, and reported usage is retained rather than replaced by zero.
+  Focused tests must be observed red for the fixed-SHA defects before the
+  smallest implementation. Existing CLI/file/TUI behavior outside these paths,
+  prompt bytes, request snapshots, stable schemas and exit-code classes remain
+  compatible. This slice does not add shell/network tools, provider fallback,
+  a second session format, a second executor, UI features or public release.
+- **Evidence**: `tests/test_agent.py`, `tests/test_kernel.py`,
+  `tests/test_tool_calls.py`, `pocketchat/tui.py`, `pocketchat/provider.py`,
+  both provider-adapter docs and `docs/review-chat-lifecycle-v1.json`; the
+  implementation review records the observed red, focused tests, exact
+  candidate SHA and appropriate lint/diff evidence. Delivery is recorded only
+  after that reviewed candidate is integrated and read back from `main`.
+- **Approved by**: agent under the user 2026-11-07 planning/timer optimization
+  authorization and the existing 2026-11-04 PocketChat routine delegation.
+  This approval covers one bounded P0 chat lifecycle slice only; it does not
+  authorize a paid provider call, a provider switch, tag, Release, package
+  upload or publication.
+- **Approval evidence**: This row and
+  `docs/review-chat-lifecycle-approval-v1.json` are the approval record. The
+  execution branch is not created by this planning change; it may start only
+  after this row is integrated and read back from product `main`, and only if
+  its exact write scope remains free of an active writer.
+
+
+#### `PC-SFILE-AUDIT-1`
+
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-session-audit-core`
 - **Write scope**: `pocketchat/session_integrity.py`,
   `tests/test_session_integrity.py`, `docs/session-integrity.md`,
@@ -317,10 +364,12 @@ and sidecar/preview binding as a separate slice.
 - **Evidence**: `pocketchat/session_integrity.py`,
   `tests/test_session_integrity.py`, `docs/session-integrity.md`,
   `docs/session-integrity.zh-CN.md` and
-  `docs/review-session-integrity-v1.json`; focused unittest output, exact
-  reviewed candidate SHA and `git diff --check` are recorded in the
-  implementation review. The delivery commit is recorded only after the
-  candidate is examined against this row and merged.
+  `docs/review-session-integrity-v1.json`; reviewed implementation
+  `24bea6cc86a8e1de3ad60a722b1c27aacb490800` and evidence-bearing tip
+  `6e8a0a2724bc68fc218541207eedab0aaa2c9f44` merged by PR #28 as
+  `b5fbaa613bef79cc0ef6b537bfea9125931bd659`. Exact-SHA runs
+  `42002841536` and `42003912267` each report seven successful jobs; the
+  review record also binds the final closeout review and landing sign-off.
 - **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
   delegation; this row and `docs/review-session-audit-approval-v1.json`
   freeze the pure-core contract. This approval does not authorize a CLI, real
@@ -334,7 +383,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-CONTEXT-EXPLAIN-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-context-explain`
 - **Write scope**: `pocketchat/context_explain.py`,
   `tests/test_context_explain.py`, `docs/context-explain.md`,
@@ -371,10 +420,12 @@ and sidecar/preview binding as a separate slice.
 - **Evidence**: `pocketchat/context_explain.py`,
   `tests/test_context_explain.py`, `docs/context-explain.md`,
   `docs/context-explain.zh-CN.md` and
-  `docs/review-context-explain-v1.json`; the implementation review records the
-  observed red, focused tests, lint/compile/diff evidence and exact candidate
-  SHA. Delivery is recorded only after that candidate is reviewed against this
-  row and integrated.
+  `docs/review-context-explain-v1.json`; reviewed implementation
+  `0480cd110c6eb33af791bb4533340011bf06622c`, source candidate
+  `a08ddd51161a65df5f3b9ae3e5cb12b9abb5d4f7` and merge
+  `2f3c7f3d74764fca6354b6cabcf282b0ac9f5c47` are recorded in the review record
+  and the fleet delivery receipt. The receipt binds the candidate to main and
+  records a green seven-check exact-SHA gate.
 - **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
   delegation and the user 2026-11-05 request for a non-conflicting PocketChat
   task. This approval covers the bounded read-only explanation core only; it
@@ -446,33 +497,59 @@ see why a slice stopped.
 
 ### First chat-and-file-work sequence (2026-11-05)
 
-The selected outcome is [the first user-facing file-work loop](file-work.md),
-not completion of every foundation or diagnostic candidate. These are **queued
-approval candidates** in this planning change; they become usable approval
-records only after the reviewed change is integrated and read back from main.
-A queued row is not a running lease, implementation, release or external-action
-authorization. Scheduling and dependency settlement remain independent checks.
+The user selected outcome-sized delivery packages on 2026-11-05: fewer handoffs,
+not fewer safety checks. The remaining six execution rows become **two
+implementation packages and one release package**. Keep the existing CHANGE,
+CHAT and RELEASE IDs; do not create a second queue or restart the landed plan.
+[The file-work contract](file-work.md) still owns permissions, compensation,
+limits and acceptance; [the development roadmap](agent-development-master-plan.zh-CN.md)
+owns the later capability stages, not runnable approvals.
 
-Continue existing issue #31 cancellation, issue #18/PR #20 task-diff, issue
-#29/PR #30 matrix identity and issue #17/PR #19/PR #32 JSON work rather than
-creating competing slices. Re-read each current head/issue before selecting;
-these references are not a claim that the candidates landed. Task snapshot
-diff is not a file-approval source or undo implementation. Do not fabricate an
-executed snapshot to render a proposed change. Not every open PR is a mandatory
-prerequisite: pull in only an actual safety or acceptance dependency.
+| Retained owner | Work included | Treatment of former separate rows |
+|---|---|---|
+| `PC-FILE-CHANGE-1` | proposal, safe apply, receipts, restart and persistent undo | `PC-FILE-UNDO-1` is absorbed |
+| `PC-FILE-CHAT-1` | Session tools, both terminal paths, golden-path fixture and development-wheel validation | `PC-FILE-TOOL-1` and `PC-FILE-E2E-1` are absorbed |
+| `PC-FILE-RELEASE-1` | final artifact freeze, artifact-specific acceptance, authorization and publication | remains separate because its authority differs |
 
-Common constraints: one bounded slice at a time per write scope, proportionate
-red/green verification for code, no product suite for this planning change,
-required fresh-context review before integration, and no bypass of any
-publication gate. If a slice cannot fit its budget, checkpoint or narrow it
-before widening scope. Never expose a default mutation path before persistent
-undo is proven. Queue delivery updates are separate integrator commits; workers
-do not edit this queue to claim/complete a code slice. CHANGELOG consolidation
-belongs to integration/release, not every overlapping worker.
+**Activation and existing work.** The maintainer's 2026-11-09 standing routine
+delegation covers this bounded regrouping. Its readable contract may accompany
+implementation; it does not require a separate planning PR to land first.
+Before writing, atomically register the exact scope and check conflicts through
+the existing ownership mechanism. This document does not rewrite an operational
+card or widen a live lease. Before landing or claiming, re-read main, existing
+branches/issues/PRs and operational leases. If
+an absorbed row has acquired an owner or delivered work, preserve that work and
+settle its ownership before switching; do not cancel a live lease, replay a
+finished change or open a competing package. The cancelled rows below retire
+scheduling units, not features. A queued row is not a running lease, delivery
+or external-action authorization.
+
+Existing cancellation (issue #31), task diff (#18), matrix identity (#29) and
+JSON input work retain their original owners. An open issue alone does not mean
+its code is absent: inspect the current main and exact candidate. Pull in only a
+real safety or acceptance dependency. Task snapshot diff is not file approval
+or undo; never fabricate an executed snapshot to render a proposal.
+
+**Execution granularity.** One package owns one user-visible outcome and its
+cohesive write scope. Schema, parser, CLI wiring, relevant tests, documents and
+review are internal steps, not separate cards. Keep observable checkpoints and
+multiple reviewed commits on the same package when needed; a session time limit
+ends that attempt, not the task identity. An actual lease expiry still stops
+writes and requires the existing ownership/reacquisition procedure. Do not
+split merely because 50 minutes elapsed. Split only for genuinely independent
+outcomes, disjoint parallel ownership or a separate authorization boundary.
+
+Tests follow meaningful behavior changes; a green check is not repeated without
+changed inputs, a failure or an unresolved concern. Each package retains the
+required fresh-context review (deep for file safety/rollback) and the existing
+review-round cap. No default mutation path is exposed before persistent undo is
+proved. Integrators alone maintain queue delivery; workers do not edit this file
+to claim or complete work. CHANGELOG consolidation belongs to integration/release.
+No full product suite is required for this documentation-only regrouping.
 
 #### `PC-FILE-PLAN-1`
 
-- **State**: `queued` (not an implementation or a lease).
+- **State**: `delivered`.
 - **Branch**: `task/pocketchat-file-work-plan`.
 - **Depends on**: the selected user goal and a lawful product approval-record path.
 - **Write scope**:
@@ -481,13 +558,13 @@ belongs to integration/release, not every overlapping worker.
   - `docs/review-file-plan-v1.json`
   - `docs/slice-queue.md`
 - **Done when**: Freeze the independent file-work contract and these bounded approval records. No product implementation, version change, provider call or publication. Completion requires the exact reviewed planning candidate to be integrated and read back from main.
-- **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
+- **Evidence**: reviewed four-path planning candidate merged by PR #34 as `a79c037f4d13e79795221cf2706c3973d4912c49`; `docs/review-file-plan-v1.json` records the two fixed design findings and the bounded independent second review.
 - **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
 - **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
 
-#### `PC-FILE-CHANGE-1`
+#### `PC-FILE-CHANGE-1` — safe changes and persistent undo
 
-- **State**: `queued` (not an implementation or a lease).
+- **State**: `queued` (approved bounded package; not readiness, implementation or a lease).
 - **Branch**: `task/pocketchat-file-change`.
 - **Depends on**: `PC-FILE-PLAN-1`.
 - **Write scope**:
@@ -501,34 +578,22 @@ belongs to integration/release, not every overlapping worker.
   - `docs/file-work.zh-CN.md`
   - `docs/security.md`
   - `docs/security.zh-CN.md`
-  - `docs/review-file-change-v1.json`
-- **Done when**: A real non-Git or dirty-Git fixture can produce a complete bounded diff, bind trusted confirmation, persist original bytes before applying, and independently verify the applied bytes. Stale proposals, revoked grants, path replacement, unavailable secure I/O, quota and prepare/receipt failures have truthful zero-effect or recovery-required outcomes. Existing tools keep their contracts. No model or UI wiring; deep file-safety review is required.
-- **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
-- **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
-- **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
-
-#### `PC-FILE-UNDO-1`
-
-- **State**: `queued` (not an implementation or a lease).
-- **Branch**: `task/pocketchat-file-undo`.
-- **Depends on**: `PC-FILE-CHANGE-1`.
-- **Write scope**:
-  - `pocketchat/file_changes.py`
-  - `pocketchat/file_change_store.py`
   - `tests/test_file_undo.py`
-  - `docs/file-work.md`
-  - `docs/file-work.zh-CN.md`
-  - `docs/review-file-undo-v1.json`
-- **Done when**: Persisted undo restores the actual before image, including across process restart. Undo of a created file is restricted to the owned unchanged file. A-to-B-to-C reverses in order through confirmed undo receipts binding restores_change_id/restored_file_identity; atomic-restore inode changes survive restart, while arbitrary same-hash replacements remain conflicts; conflicts preserve later edits; duplicate undo has no repeated effect; session-wide compensation stops at the first conflict and reports remaining items. It does not use session rewind, Git HEAD or arbitrary deletion. Deep rollback review is required.
-- **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
-- **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
-- **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
+  - `docs/review-file-change-v1.json`
+- **Done when**: One deterministic file-change service previews, confirms, safely creates/replaces and durably undoes text in non-Git and dirty-Git fixtures. Trusted confirmation binds the full proposal; before bytes and prepared evidence are durable before mutation; independent readback verifies actual effects. Stale proposals, revoked grants, path/identity replacement, unavailable secure I/O, quota and prepare/receipt failures produce truthful zero-effect, conflict or recovery-required outcomes. A-to-B-to-C undo works across restart through confirmed restores_change_id/restored_file_identity lineage; arbitrary same-hash replacement remains a conflict. Created-file undo only removes its owned unchanged file, duplicate undo has no repeated effect, and session compensation stops at the first conflict. Existing tool contracts and task-edit Git constraints remain unchanged. No model/UI wiring or general deletion; deep safety/rollback review is required.
+- **Evidence**: exact candidate, scoped review record and relevant real-filesystem tests/artifacts; development results do not certify the release wheel.
+- **Budget / stop / rollback**: retain the same package through bounded sessions and commit checkpoints; obey current ownership and runtime budgets. Stop the affected action on conflict, missing authority or unresolved side effects. Keep the last integrated product intact; runtime compensation follows file-work.md, not a Git history rewrite.
+- **Approved by**: the user request of 2026-11-05 to reduce task fragmentation and the maintainer's 2026-11-09 standing routine-development delegation. This regroups the selected file-work scope; ordinary technical review, non-force branch push, PR and reviewed main integration follow [the development process](development-and-release.md#7-publication) without per-candidate human approval. Exact scope and exclusive writers still apply. New product directions, paid provider access/new credentials, third-party rights, tags, Releases, package uploads and destructive/shared-history actions remain outside this routine authority.
+- **Internal checkpoints** (not separately claimable tasks):
+  1. Reuse the existing proposal/persistence/apply candidate rather than rebuilding it. Map the original requirements to exact reviewed changes and missing safety evidence before selecting the next implementation change; preserve prior findings and review-round history.
+  2. Complete undo/restart/compensation lineage and conflict cases before offering any default mutation entry.
+  3. Review the complete service and rollback boundary together; retain one package evidence record.
 
-#### `PC-FILE-TOOL-1`
+#### `PC-FILE-CHAT-1` — usable chat loop and development acceptance
 
-- **State**: `queued` (not an implementation or a lease).
-- **Branch**: `task/pocketchat-file-tool`.
-- **Depends on**: `PC-FILE-CHANGE-1`, `PC-FILE-UNDO-1`.
+- **State**: `queued` (approved bounded package; not readiness, implementation or a lease).
+- **Branch**: `task/pocketchat-file-chat`.
+- **Depends on**: `PC-FILE-CHANGE-1`.
 - **Write scope**:
   - `pocketchat/file_work.py`
   - `pocketchat/session.py`
@@ -542,19 +607,6 @@ belongs to integration/release, not every overlapping worker.
   - `docs/file-work.zh-CN.md`
   - `docs/formats.md`
   - `docs/formats.zh-CN.md`
-  - `docs/review-file-tool-v1.json`
-- **Done when**: The explicit file-work mode exposes authorized read_file and propose_file_change through the existing Session kernel, never immediate write/apply/undo. Grant/profile/session changes invalidate approvals, tool results stay paired, one pending proposal and existing budgets are enforced, and completed model runs do not claim applied file changes. Legacy modes remain unchanged. No UI or real-provider call; review the complete permission-to-dispatch boundary.
-- **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
-- **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
-- **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
-
-#### `PC-FILE-CHAT-1`
-
-- **State**: `queued` (not an implementation or a lease).
-- **Branch**: `task/pocketchat-file-chat`.
-- **Depends on**: `PC-FILE-TOOL-1`.
-- **Write scope**:
-  - `pocketchat/file_work.py`
   - `pocketchat/agent.py`
   - `pocketchat/cli.py`
   - `pocketchat/tui.py`
@@ -568,36 +620,26 @@ belongs to integration/release, not every overlapping worker.
   - `docs/cli.zh-CN.md`
   - `docs/compatibility.md`
   - `docs/compatibility.zh-CN.md`
-  - `docs/file-work.md`
-  - `docs/file-work.zh-CN.md`
-  - `docs/review-file-chat-v1.json`
-- **Done when**: One existing agent session provides explicit grants, disclosure, read/propose/diff/confirm/readback/receipt/undo. Full-screen and line interfaces use the same file-work service; untrusted piped input cannot approve. Existing scripts and JSON contracts remain compatible. Independent mock imports, permission changes, denial next-actions and real filesystem fixtures are covered. No external publication.
-- **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
-- **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
-- **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
-
-#### `PC-FILE-E2E-1`
-
-- **State**: `queued` (not an implementation or a lease).
-- **Branch**: `task/pocketchat-file-e2e`.
-- **Depends on**: `PC-FILE-CHAT-1`.
-- **Write scope**:
   - `tests/test_file_work_e2e.py`
   - `examples/file-work-demo.py`
   - `docs/file-work-validation.md`
   - `docs/file-work-validation.zh-CN.md`
   - `docs/pocketchat-evidence-matrix.md`
-  - `docs/review-file-e2e-v1.json`
-- **Done when**: After the existing cancellation work needed by this path is safely integrated, deliver a reusable golden-path fixture and layered development-wheel evidence outside the source checkout. Bind exact version/SHA/wheel/platform/session/run/change evidence and negative assertions. Record missing provider authority or manual evidence explicitly; development results do not certify the release artifact. The release slice must execute the final real-provider/manual gate after its own version/SHA/wheel freeze. Product defects return to their owning slice; no silent scope expansion.
-- **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
-- **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
-- **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
+  - `docs/review-file-chat-v1.json`
+- **Done when**: One existing agent session supports ordinary chat, explicit grants and provider disclosure, authorized read/propose, complete diff, trusted apply, readback/receipt and undo. The model cannot immediately write, self-approve, undo or expand grants; grant/profile/session changes invalidate approval, tool results remain paired, one pending proposal and existing budgets remain enforced. Full-screen and line paths use the same service; untrusted piped input cannot approve and completed model runs cannot imply applied files. Existing scripts/JSON contracts stay compatible; independent mock imports and permission/refusal cases are covered. The package includes the golden-path fixture and development-wheel validation outside the checkout, bound to version/SHA/wheel/platform/session/run/change evidence; real-provider and manual gaps remain explicit. The cancellation behavior actually required by this path must be integrated and exercised before package acceptance. No external publication; final artifact evidence belongs to RELEASE.
+- **Evidence**: exact candidate, scoped review record and relevant real-filesystem tests/artifacts; development results do not certify the release wheel.
+- **Budget / stop / rollback**: retain the same package through bounded sessions and commit checkpoints; obey current ownership and runtime budgets. Stop the affected action on conflict, missing authority or unresolved side effects. Keep the last integrated product intact; runtime compensation follows file-work.md, not a Git history rewrite.
+- **Approved by**: the user request of 2026-11-05 to reduce task fragmentation and the maintainer's 2026-11-09 standing routine-development delegation. This regroups the selected file-work scope; ordinary technical review, non-force branch push, PR and reviewed main integration follow [the development process](development-and-release.md#7-publication) without per-candidate human approval. Exact scope and exclusive writers still apply. New product directions, paid provider access/new credentials, third-party rights, tags, Releases, package uploads and destructive/shared-history actions remain outside this routine authority.
+- **Internal checkpoints** (not separately claimable tasks):
+  1. Connect read/propose and bounded receipts to Session without changing legacy create-only tools or exposing model approval.
+  2. Connect both terminal paths to the same file-work service and verify grant, confirmation, cancellation and error behavior.
+  3. Run the reusable golden-path fixture against real files and a development wheel; record manual/provider authority gaps without fabricating a pass.
 
-#### `PC-FILE-RELEASE-1`
+#### `PC-FILE-RELEASE-1` — frozen artifact and publication
 
-- **State**: `queued` (not an implementation or a lease).
-- **Branch**: `release/1.2.0` (suggested candidate line; version is not changed).
-- **Depends on**: `PC-FILE-E2E-1`.
+- **State**: `queued` (approved bounded package; not readiness, implementation or a lease).
+- **Branch**: `release/1.2.0`.
+- **Depends on**: `PC-FILE-CHAT-1`.
 - **Write scope**:
   - `pocketchat/__init__.py`
   - `pyproject.toml`
@@ -614,9 +656,34 @@ belongs to integration/release, not every overlapping worker.
   - `docs/release-1.2.zh-CN.md`
   - `docs/review-file-release-v1.json`
 - **Done when**: Finish version/packaging/shipped-doc changes, freeze the final SHA/wheel, then execute the existing golden-path fixture for that artifact's real-provider/manual acceptance and required checks/CI/install. Retain evidence outside the frozen tree, obtain exact external-action authorization, publish that same artifact, and read back tag identity, Release state, wheel hash and a fresh public-wheel installation loop. Register final validation/evidence/ledger readbacks in a separate post-publication documentation commit without moving the tag; any frozen product input change requires a new freeze and proportionate verification. Use the existing build version source rather than duplicating it. A local wheel, tag-only action or main source is not publication. Package-index upload is separate, not a hidden prerequisite.
-- **Evidence**: the scoped review record, exact implementation candidate, relevant tests and artifacts; design/test requirements are not observed passes.
-- **Budget / stop / rollback**: one reviewable slice; stop on ownership, permission or evidence conflicts. Leave the last integrated product intact, retain the candidate and do not replay side effects. Runtime compensation follows file-work.md, not a Git history rewrite.
-- **Approved by**: agent under the user 2026-11-04 routine technical delegation and the user 2026-11-05 first chat/file-loop request. This covers the bounded design, not public push/merge, paid provider access, tag, Release or package upload. The narrower existing permissions still apply.
+- **Evidence**: exact candidate, scoped review record and relevant real-filesystem tests/artifacts; development results do not certify the release wheel.
+- **Budget / stop / rollback**: retain the same package through bounded sessions and commit checkpoints; obey current ownership and runtime budgets. Stop the affected action on conflict, missing authority or unresolved side effects. Keep the last integrated product intact; runtime compensation follows file-work.md, not a Git history rewrite.
+- **Approved by**: the user request of 2026-11-05 to reduce task fragmentation and the maintainer's 2026-11-09 standing routine-development delegation. This regroups the selected file-work scope; ordinary technical review, non-force branch push, PR and reviewed main integration follow [the development process](development-and-release.md#7-publication) without per-candidate human approval. Exact scope and exclusive writers still apply. New product directions, paid provider access/new credentials, third-party rights, tags, Releases, package uploads and destructive/shared-history actions remain outside this routine authority.
+- **Internal checkpoints** (not separately claimable tasks):
+  1. Finish version, packaging and shipped-document changes, then freeze the final SHA and wheel.
+  2. Reuse the existing fixture for this artifact's required real-provider/manual acceptance and exact-candidate checks; obtain the separate external-action authorization.
+  3. Publish that artifact through the approved path, read it back and register evidence without moving the tag.
+
+#### `PC-FILE-UNDO-1` — absorbed scheduling row
+
+- **State**: `cancelled` (superseded scheduling unit, not cancelled functionality; effective only after the activation check above).
+- **Branch**: `task/pocketchat-file-undo` (retired reservation; do not open it for duplicate work).
+- **Superseded by**: `PC-FILE-CHANGE-1`, including the former tests, acceptance and failure boundaries.
+- **Reason / evidence**: user requested fewer tasks on 2026-11-05; this queue revision and its scoped review record bind the regrouping. Historical commits/reviews remain valid only for their original scope. No operational lease is changed by this row.
+
+#### `PC-FILE-TOOL-1` — absorbed scheduling row
+
+- **State**: `cancelled` (superseded scheduling unit, not cancelled functionality; effective only after the activation check above).
+- **Branch**: `task/pocketchat-file-tool` (retired reservation; do not open it for duplicate work).
+- **Superseded by**: `PC-FILE-CHAT-1`, including the former tests, acceptance and failure boundaries.
+- **Reason / evidence**: user requested fewer tasks on 2026-11-05; this queue revision and its scoped review record bind the regrouping. Historical commits/reviews remain valid only for their original scope. No operational lease is changed by this row.
+
+#### `PC-FILE-E2E-1` — absorbed scheduling row
+
+- **State**: `cancelled` (superseded scheduling unit, not cancelled functionality; effective only after the activation check above).
+- **Branch**: `task/pocketchat-file-e2e` (retired reservation; do not open it for duplicate work).
+- **Superseded by**: `PC-FILE-CHAT-1`, including the former tests, acceptance and failure boundaries.
+- **Reason / evidence**: user requested fewer tasks on 2026-11-05; this queue revision and its scoped review record bind the regrouping. Historical commits/reviews remain valid only for their original scope. No operational lease is changed by this row.
 
 ## 3. Not a queue entry
 
