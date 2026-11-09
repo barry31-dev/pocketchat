@@ -51,10 +51,11 @@ Budget / stop:
 Rollback / next:
 ```
 
-An approved slice record must already be reachable from `main` before a
-development branch is created: either the referenced issue in this repository,
-or `docs/slice-queue.md` when the work is not tracked as an issue. A machine
-confirmation that the file or issue changed is a precondition, not approval.
+A readable slice contract is required before implementation. Within the approved
+roadmap the maintainer delegates this decision to the agent; it does not require a separate planning PR
+or prior `main` reachability. Use a repository issue, `docs/slice-queue.md`, or the
+task review record and deliver the contract with the implementation. A machine confirmation that the file or issue changed
+is a precondition, not approval. New product direction stays a maintainer decision.
 
 A development branch does not edit the shared queue merely to claim or complete
 work. Planner/integrator queue updates are small serialized commits on `main`:
@@ -295,11 +296,13 @@ Review converges instead of looping:
 Every change receives an automated review. The author proves behavior with
 tests or readback and writes the evidence. A fresh-context reviewer looks at
 the goal, diff, contracts and tests without adopting the author's conclusion.
-Human approval scales with risk: `low` needs the recorded machine review,
-`medium` needs a human sign-off before landing, and `high` needs a named human
-approver plus the separately bound publication authorization when an external
-action is involved. A bot finding or approval never replaces a required human
-approval.
+Routine technical approval is delegated to agents by the maintainer's
+2026-11-09 standing decision, including explicit security/rollback review when
+needed. Record the candidate, reviewer and actual evidence; no per-SHA human
+sign-off is required for ordinary development. Formal releases, new paid access,
+third-party rights and destructive/shared-history exceptions still need the
+maintainer. A bot finding or approval never replaces a required human approval.
+
 
 Before landing, check what could go wrong and which layer should catch it. For
 an early design disagreement, discuss a different direction in the task thread
@@ -358,6 +361,13 @@ Keep a per-version checklist in this package's `docs/`. The v1.1 record is
 record, not the general process.
 
 ## 7. Publication
+
+Ordinary task-branch non-force push, PR, required CI and reviewed main integration
+are covered by the 2026-11-09 standing routine-development authorization. It lasts
+until revoked; automatically renewed short-lived execution receipts are not new
+human approvals. The version-bound publication rules below apply to tags,
+Releases and package uploads, not every ordinary development commit.
+
 
 Publication has two separate parts: machine checks and the user's external
 authorization.

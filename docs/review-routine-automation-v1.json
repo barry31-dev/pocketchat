@@ -1,0 +1,26 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "AGENTS.md",
+    "docs/development-and-release.md",
+    "docs/development-and-release.zh-CN.md",
+    "docs/slice-queue.md",
+    "tests/test_release_process_docs.py",
+    "docs/review-routine-automation-v1.json"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "reviewed_evidence": [
+    "Maintainer 2026-11-09 standing routine-development delegation: no per-candidate human approval for ordinary development; tags/releases/payments/destructive operations excluded.",
+    "CPython 3.14.10: 16 process-document guards passed after observed old-main-first assertion failure; runtime code unchanged.",
+    "Diff reviewed for bilingual consistency, ownership separation, short contract before implementation and actual evidence rather than fabricated approval."
+  ],
+  "unverified_scope": "Product runtime, provider, release, CI and main integration not yet run."
+}

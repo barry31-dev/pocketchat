@@ -97,11 +97,13 @@ choose a slice -> write the completion check -> red test
 
 ### 3.1 Where the current slice lives
 
-Before a product-code branch is created, its approved slice record must already
-be reachable from `main`: the referenced issue in this repository, or
-[`docs/slice-queue.md`](docs/slice-queue.md) when the work is not tracked as an
-issue. A machine check that the file or issue changed is a precondition,
-**never** an approval.
+A readable slice contract is required before implementation: goal, exclusions,
+completion check and exclusive write scope. Within the approved roadmap the
+maintainer delegates this routine decision to agents; it does not require a
+separate planning PR or a queue row already on `main`. Use a repository issue,
+`docs/slice-queue.md`, or the task's review record, and land the contract with
+its implementation. A changed file alone is not approval. New product direction
+and exceptional external actions remain separate maintainer decisions.
 
 Task branches do not edit the shared queue merely to claim or complete work.
 Planner/integrator queue updates land as serialized process commits; branches
@@ -150,6 +152,16 @@ previous green result. `workflow` files existing is not a green run.
 - If the budget runs out, write **not done**. Do not paper over it.
 
 ## 6. Publication
+
+**Standing routine-development authorization (2026-11-09):** the maintainer
+authorizes agents to perform ordinary commits, non-force task-branch pushes,
+PRs, required CI and reviewed `main` integration in `barry31-dev/pocketchat`.
+Record the exact candidate and actual checks automatically; do not request a
+new human signature for each SHA. This includes delegated technical review,
+not fabricated evidence. Preserve exclusive writers, published identity and
+secret protection. Tags, Releases, package uploads, paid services, credentials,
+third-party rights and destructive/shared-history operations are excluded.
+
 
 Publication is a user authorization, not an agent decision. Before any push of
 a tag or Release:
