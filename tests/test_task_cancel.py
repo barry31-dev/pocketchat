@@ -481,6 +481,8 @@ class CancellationExecutionTests(unittest.TestCase):
     def test_over_limit_final_usage_with_cancel_keeps_failure_and_consumption(self):
         self._assert_budget_failure_is_not_safe_cancellation(reported=True)
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "requires secure descriptor-relative reads")
     def test_cancelled_command_resume_does_not_refund_an_exhausted_ledger(self):
         from pocketchat.task_budget import TaskBudget
         self.select_steps(start=1)

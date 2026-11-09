@@ -60,7 +60,7 @@
       "severity": "major",
       "status": "fixed",
       "fingerprint": "windows-post-effect-cancellation-needs-secure-evidence-reader",
-      "reason": "PR #44 exact-head CI passed release smoke plus both Ubuntu and both macOS jobs, but both Windows jobs produced the same five task-cancellation errors. Root-cause tracing showed bind_step_evidence intentionally uses the no-fallback descriptor-relative reader; current Windows Python exposes no dir_fd/O_NOFOLLOW support, so post-effect command evidence remains unbound and cancellation correctly fails closed. The test helper now marks every post-effect confirmed-boundary case as requiring that primitive, while pre-effect cancellation/default/failure tests still run on Windows. The bilingual contract states this platform boundary; production code is unchanged."
+      "reason": "PR #44 exact-head CI first passed release smoke plus both Ubuntu and both macOS jobs, but both Windows jobs produced the same five task-cancellation errors. Root-cause tracing showed bind_step_evidence intentionally uses the no-fallback descriptor-relative reader; current Windows Python exposes no dir_fd/O_NOFOLLOW support, so post-effect command evidence remains unbound and cancellation correctly fails closed. The first correction guarded the shared post-effect helper and reduced both Windows jobs to one error; the remaining exhausted-ledger regression constructed the same boundary directly. It now carries the same capability guard. Pre-effect cancellation/default/failure tests still run on Windows, the bilingual contract states the boundary, and production code is unchanged."
     }
   ],
   "slice_id": "PC-TASK-CANCEL-1",
@@ -80,9 +80,9 @@
     "status": "agent-approved",
     "authority": "Maintainer standing routine-development authorization, 2026-11-09; docs/development-and-release.md section 7",
     "scope": "Routine task branch, required exact-head CI and main integration only. Formal tags, Releases, package uploads, paid calls, third-party rights and destructive operations are excluded.",
-    "reviewed_at": "2026-11-10T07:24:15+0800",
+    "reviewed_at": "2026-11-10T07:36:23+0800",
     "reviewer": "automated technical integrator under maintainer standing delegation",
-    "review_scope": "New-diff-only Windows portability correction: one shared test-helper skip condition, matching bilingual contract text and this review evidence. Production Python and the previously reviewed cancellation semantics are unchanged; no fourth full implementation review.",
+    "review_scope": "New-diff-only Windows portability correction: the shared post-effect helper plus one direct exhausted-ledger boundary test carry the secure-reader precondition, with matching bilingual contract/review evidence. Production Python and the previously reviewed cancellation semantics are unchanged; no fourth full implementation review.",
     "verdict": "APPROVE"
   },
   "reviewed_evidence": [
@@ -119,7 +119,10 @@
     "C: Root-cause trace: task_recovery.bind_step_evidence reads trace/archive bytes through acceptance._read_file; that reader intentionally refuses platforms without dir_fd plus O_NOFOLLOW. The current Windows runners report this capability absent, so the command-boundary helper cannot safely create a cancellation report. No unsafe path-based fallback was added.",
     "C: The shared cancel_after_command test helper is now skipped only when secure descriptor-relative reads are unavailable. Tests that cancel before provider/command, preserve ordinary failure and exercise default execution remain platform-independent and still run.",
     "C: The bilingual contract now records the fail-closed platform boundary. Exact-head CI must rerun after this test/document-only correction; no production source behavior changed.",
-    "V: After the portability correction, macOS CPython 3.9.6 ran tests.test_task_cancel: 26 tests in 1.900s, OK, exit 0. Ruff 0.17.3 E9/F on tests/test_task_cancel.py, JSON parse, bilingual local-link check and git diff --check all passed, exit 0."
+    "V: After the portability correction, macOS CPython 3.9.6 ran tests.test_task_cancel: 26 tests in 1.900s, OK, exit 0. Ruff 0.17.3 E9/F on tests/test_task_cancel.py, JSON parse, bilingual local-link check and git diff --check all passed, exit 0.",
+    "V: Replacement PR #44 run 42720499810 kept release smoke, Ubuntu 3.9/3.13 and macOS 3.9/3.13 green. The shared-helper guard changed four prior Windows errors to skips; both Windows jobs retained one identical exhausted-ledger error at the direct self.cancelled call.",
+    "C: The remaining ledger test bypassed cancel_after_command but requires the same bound trace/archive evidence before it can create or resume a post-effect cancellation report. It now declares the same secure descriptor-relative reader prerequisite; production behavior remains fail-closed.",
+    "V: After guarding the one direct exhausted-ledger test, macOS CPython 3.9.6 again ran tests.test_task_cancel: 26 tests in 1.807s, OK, exit 0. Ruff 0.17.3 E9/F, JSON parse and git diff --check passed, exit 0."
   ],
   "original_approval_base_sha": "7fcb197351e10b7e8dab87e32ed52964fb1193ac",
   "previous_candidate_sha": "1be64a1a9a076b6d074f91511ce30bc697dc44b0",
@@ -129,7 +132,7 @@
   "reconsidered_approach": "Do not expand this additive cancellation slice into a repair archive/overwrite recovery rewrite. Refuse the unsupported combination before effects; a future approved retry/repair evidence-chain contract is required to support it.",
   "reviewed_followup_blobs": {
     "pocketchat/task_exec.py": "2a2b654c6152184171bcb6a8510d68b9f3eddb6a",
-    "tests/test_task_cancel.py": "02826e8722914a9ab34568629d01d622a94788ec",
+    "tests/test_task_cancel.py": "6672d09f735812786f2bac2d3da7796941cce062",
     "docs/task-cancel.md": "e6e3ad088cc68fec8b94428faa7ad3fce0dd6f6e",
     "docs/task-cancel.zh-CN.md": "16ff6d577736a7046a03f7cb15617c903878203c"
   },
@@ -138,5 +141,5 @@
     "Task permissions publish=deny still exclude tags, Releases, package uploads and other formal publication actions.",
     "Exact-head CI and product-main integration remain unverified until the actual remote checks and merge readback complete."
   ],
-  "unverified_scope": "Current cancellation suite before the portability correction: 26 tests passed on local macOS CPython 3.9.6 and 3.14.10; legacy model-repair/executor compatibility: 36 tests passed on CPython 3.9.6. PR #44 run 42718437447 showed release smoke plus Ubuntu/macOS 3.9/3.13 green and both Windows jobs red only on five post-effect tests that require secure descriptor-relative reads. The correction changes tests/docs/review evidence only; production Python is unchanged. On platforms without dir_fd plus O_NOFOLLOW, post-effect confirmed cancellation intentionally fails closed; cancellation before effects and default execution remain covered. Exact-head CI after this correction, real provider, process/thread/signal termination, arbitrary-crash exactly-once, deadline wiring and packaging remain unverified until actually observed. Tags, Releases and package uploads remain excluded and were not performed."
+  "unverified_scope": "Current cancellation suite before the portability correction: 26 tests passed on local macOS CPython 3.9.6 and 3.14.10; legacy model-repair/executor compatibility: 36 tests passed on CPython 3.9.6. PR #44 run 42718437447 showed five post-effect errors per Windows job; replacement run 42720499810 reduced that to the one direct exhausted-ledger case while all other jobs stayed green. The correction changes tests/docs/review evidence only; production Python is unchanged. On platforms without dir_fd plus O_NOFOLLOW, post-effect confirmed cancellation intentionally fails closed; cancellation before effects and default execution remain covered. Exact-head CI after the final direct-test guard, real provider, process/thread/signal termination, arbitrary-crash exactly-once, deadline wiring and packaging remain unverified until actually observed. Tags, Releases and package uploads remain excluded and were not performed."
 }
