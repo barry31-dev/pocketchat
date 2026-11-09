@@ -174,6 +174,8 @@ class CancellationExecutionTests(unittest.TestCase):
         self.assertEqual(owner.owner_sha256, payload["cancellation"]["owner_sha256"])
         return path, payload, error.results
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "requires secure descriptor-relative reads")
     def cancel_after_command(self):
         owner = self.owner()
         def runner(template_id, trace, run_id):

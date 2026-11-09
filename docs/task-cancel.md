@@ -71,8 +71,12 @@ Malformed fields, duplicate step identities, mismatched digests, uncertain
 artifact paths, an error/evidence issue, a failed prefix or a nonempty started
 suffix refuse the cancellation boundary. A custom runner without complete
 artifact evidence yields a normal execution error/report instead of claiming
-a safely recoverable cancellation. A runner exception or failed step remains
-failed/unknown even if cancellation was requested during that call.
+a safely recoverable cancellation. Post-effect boundaries also require the
+platform's secure descriptor-relative, no-follow evidence reader. Where Python
+does not expose that primitive (including the current Windows CI runners), the
+executor fails closed with the same normal error/report; cancellation before
+any effect and default execution remain available. A runner exception or failed
+step remains failed/unknown even if cancellation was requested during that call.
 
 The checkpoint's schema is unchanged. Its exact `report_sha256` binds the
 optional cancellation metadata. Checkpoint creation accepts both the current

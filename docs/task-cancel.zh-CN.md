@@ -27,8 +27,10 @@ command archive 和文件变更保持不变，未开始后缀记为 `not_execute
 重复 ID、字段/摘要矛盾、错误或证据问题、失败前缀、已开始后缀均拒绝。
 
 如果 runner 抛异常、步骤失败或证据不足，仍保留 failed/unknown，不将取消请求包装成可恢复。
-自定义 runner 没有完整 artifact 绑定时，产生普通执行错误与报告，不宣称安全边界。
-checkpoint schema 不变，精确 report hash 绑定取消对象。创建 checkpoint 兼容当前顶层和旧嵌套
+自定义 runner 没有完整 artifact 绑定时，产生普通执行错误与报告，不宣称安全边界。发生副作用后的
+确认边界还依赖平台提供 descriptor-relative + no-follow 的安全证据读取；Python 未提供该原语时
+（包括当前 Windows CI runner），执行器按同一普通错误/报告 fail closed，不冒充已确认边界。
+副作用前取消与默认执行不受此限制。checkpoint schema 不变，精确 report hash 绑定取消对象。创建 checkpoint 兼容当前顶层和旧嵌套
 command archive hash；两处声明不同则拒绝。
 
 不支持同时传 cancellation owner 与 `model_repair="model"`：不论 owner 是否已请求取消，
