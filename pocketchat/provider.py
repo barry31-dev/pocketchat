@@ -382,18 +382,22 @@ def _stream_response(response, model: str, status_code: int,
 
     A streamed response is still one request and one normalized result. The
     callback is only a display hook; it does not alter what the trace records.
-    Malformed events fail closed rather than being treated as empty content.
+    Tool calls arrive in fragments and are returned only after every fragment
+    forms complete JSON arguments. Malformed events fail closed rather than
+    being treated as empty content.
     """
     content: List[str] = []
     reasoning: List[str] = []
     finish_reason = ""
     usage_payload = {}
+    usage_seen = False
     saw_event = False
     started = time.monotonic()
     first_token_ms = None
     first_delta_kind = None
     first_reasoning_ms = None
     first_content_ms = None
+    tool_fragments: Dict[int, Dict[str, Any]] = {}
     for raw_line in response:
         line = raw_line.decode("utf-8", "replace").strip()
         if not line or line.startswith(":") or not line.startswith("data:"):
@@ -418,6 +422,9 @@ def _stream_response(response, model: str, status_code: int,
             if isinstance(detail, dict):
                 detail = detail.get("message") or json.dumps(detail, sort_keys=True)
             raise ProviderError("provider_error", str(detail))
+        if isinstance(payload.get("usage"), dict):
+            usage_payload = payload["usage"]
+            usage_seen = True
         choices = payload.get("choices")
         if not isinstance(choices, list) or not choices:
             continue
@@ -448,23 +455,27 @@ def _stream_response(response, model: str, status_code: int,
                     first_content_ms = int((time.monotonic() - started) * 1000)
                 if on_delta is not None:
                     on_delta("content", text)
+            _merge_tool_call_delta(tool_fragments, delta.get("tool_calls"),
+                                   status_code)
+            if isinstance(delta.get("tool_calls"), list) and delta["tool_calls"]:
+                saw_event = True
         if isinstance(choice.get("finish_reason"), str) and choice["finish_reason"]:
             finish_reason = choice["finish_reason"]
-        if isinstance(payload.get("usage"), dict):
-            usage_payload = payload["usage"]
     if not saw_event:
         raise ProviderError(
             "malformed_response",
-            "HTTP %d stream contained no text deltas" % status_code,
+            "HTTP %d stream contained no text, tool-call or usage event"
+            % status_code,
         )
     result = {
         "content": "".join(content),
         "reasoning": "".join(reasoning),
-        "finish_reason": finish_reason or "stop",
+        "finish_reason": finish_reason or (
+            "tool_calls" if tool_fragments else "stop"),
         "model": model,
         "status_code": status_code,
         "time_to_first_token_ms": first_token_ms,
-        "usage_reported": bool(usage_payload),
+        "usage_reported": usage_seen,
         "usage": {
             "input_tokens": _usage_count(usage_payload, "prompt_tokens"),
             "output_tokens": _usage_count(usage_payload, "completion_tokens"),
@@ -475,6 +486,9 @@ def _stream_response(response, model: str, status_code: int,
             "reasoning_tokens": _usage_count(usage_payload, "reasoning_tokens"),
         },
     }
+    tool_calls = _finalize_stream_tool_calls(tool_fragments)
+    if tool_calls:
+        result["tool_calls"] = tool_calls
     if first_delta_kind is not None:
         result["first_delta_kind"] = first_delta_kind
     if first_reasoning_ms is not None:
@@ -482,6 +496,115 @@ def _stream_response(response, model: str, status_code: int,
     if first_content_ms is not None:
         result["time_to_first_content_ms"] = first_content_ms
     return result
+
+
+def _merge_tool_call_delta(fragments: Dict[int, Dict[str, Any]],
+                           value: Any, status_code: int) -> None:
+    if value is None:
+        return
+    if not isinstance(value, list):
+        raise ProviderError(
+            "malformed_response",
+            "HTTP %d stream tool_calls was not an array" % status_code,
+        )
+    for item in value:
+        if not isinstance(item, dict):
+            raise ProviderError(
+                "malformed_response",
+                "HTTP %d stream tool call was not an object" % status_code,
+            )
+        index = item.get("index")
+        if isinstance(index, bool) or not isinstance(index, int) or index < 0:
+            raise ProviderError(
+                "malformed_response",
+                "HTTP %d stream tool call lacked a valid index" % status_code,
+            )
+        fragment = fragments.setdefault(index, {
+            "id": "", "name": "", "arguments": [],
+        })
+        call_id = item.get("id")
+        if call_id is not None:
+            if not isinstance(call_id, str) or not call_id.strip():
+                raise ProviderError(
+                    "malformed_response",
+                    "HTTP %d stream tool call had an invalid id" % status_code,
+                )
+            if fragment["id"] and fragment["id"] != call_id:
+                raise ProviderError(
+                    "malformed_response",
+                    "HTTP %d stream tool call changed id" % status_code,
+                )
+            fragment["id"] = call_id
+        function = item.get("function")
+        if function is None:
+            continue
+        if not isinstance(function, dict):
+            raise ProviderError(
+                "malformed_response",
+                "HTTP %d stream tool function was not an object" % status_code,
+            )
+        name = function.get("name")
+        if name is not None:
+            if not isinstance(name, str) or not name.strip():
+                raise ProviderError(
+                    "malformed_response",
+                    "HTTP %d stream tool call had an invalid name" % status_code,
+                )
+            if fragment["name"] and fragment["name"] != name:
+                raise ProviderError(
+                    "malformed_response",
+                    "HTTP %d stream tool call changed name" % status_code,
+                )
+            fragment["name"] = name
+        arguments = function.get("arguments")
+        if arguments is not None:
+            if not isinstance(arguments, str):
+                raise ProviderError(
+                    "malformed_response",
+                    "HTTP %d stream tool arguments were not a string"
+                    % status_code,
+                )
+            fragment["arguments"].append(arguments)
+
+
+def _finalize_stream_tool_calls(
+        fragments: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not fragments:
+        return []
+    calls = []
+    seen_ids = set()
+    for index in sorted(fragments):
+        fragment = fragments[index]
+        if not fragment["id"] or not fragment["name"] or not fragment["arguments"]:
+            raise ProviderError(
+                "malformed_response",
+                "HTTP stream tool call %d was incomplete" % index,
+            )
+        raw_arguments = "".join(fragment["arguments"])
+        try:
+            arguments = json.loads(raw_arguments)
+        except ValueError as exc:
+            raise ProviderError(
+                "malformed_response",
+                "stream tool call arguments were not valid JSON: %s" % exc,
+            )
+        if not isinstance(arguments, dict):
+            raise ProviderError(
+                "malformed_response",
+                "stream tool call arguments were not an object",
+            )
+        if fragment["id"] in seen_ids:
+            raise ProviderError(
+                "malformed_response",
+                "HTTP stream reused tool call id %s" % fragment["id"],
+            )
+        seen_ids.add(fragment["id"])
+        calls.append({
+            "id": fragment["id"],
+            "name": fragment["name"],
+            "arguments": arguments,
+        })
+    return calls
 
 
 def _parse_response(raw: bytes, status_code: int, config: Dict[str, Any],

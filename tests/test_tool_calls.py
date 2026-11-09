@@ -186,6 +186,61 @@ class ToolCallTests(unittest.TestCase):
         self.assertFalse(offered[2]["available"])
         self.assertEqual(64, len(offered[2]["schema_hash"]))
 
+    def test_multiple_streamed_tool_fragments_execute_through_session(self):
+        from pocketchat.provider import _stream_response
+
+        class StreamResponse:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __init__(self, second=False):
+                self.second = second
+
+            def __iter__(self):
+                if self.second:
+                    yield (b'data: {"choices":[{"delta":{"content":"done"},'
+                           b'"finish_reason":"stop"}],"usage":{"prompt_tokens":2,'
+                           b'"completion_tokens":1}}\n')
+                    yield b'data: [DONE]\n'
+                    return
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":1,"id":"call_2","type":"function",'
+                       b'"function":{"name":"read_file","arguments":"{\\"path\\":\\"facts"}}]},'
+                       b'"finish_reason":""}]}\n')
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":0,"id":"call_1","type":"function",'
+                       b'"function":{"name":"read_file","arguments":"{\\"path\\":\\"facts.txt\\"}"}}]},'
+                       b'"finish_reason":"tool_calls"}]}\n')
+                yield (b'data: {"choices":[{"delta":{"tool_calls":['
+                       b'{"index":1,"function":{"arguments":".txt\\"}"}}]}}]}\n')
+                yield b'data: [DONE]\n'
+
+        class StreamingToolAdapter(FakeToolAdapter):
+            def complete(self, messages, config, api_key, on_delta=None,
+                         prepared_payload=None):
+                self.calls.append(list(messages))
+                return _stream_response(
+                    StreamResponse(second=len(self.calls) > 1),
+                    "m", 200, on_delta=on_delta)
+
+        adapter = StreamingToolAdapter([])
+        session = Session(self.config(adapter),
+                          self.root / "traces" / "multi_stream.jsonl",
+                          "run_multi_stream", api_key="secret-tool")
+        self.assertEqual("completed", session.run(["read twice"]))
+        self.assertEqual(2, len(adapter.calls))
+        tool_messages = [message for message in adapter.calls[1]
+                         if message.get("role") == "tool"]
+        self.assertEqual(
+            [message["tool_call_id"] for message in tool_messages],
+            ["call_1", "call_2"])
+        self.assertEqual(
+            [message["name"] for message in tool_messages],
+            ["read_file", "read_file"])
+        self.assertEqual(
+            [json.loads(message["content"])["source"]
+             for message in tool_messages],
+            ["facts.txt", "facts.txt"])
+
     def test_adapter_rebuild_drift_is_not_sent(self):
         adapter = FakeToolAdapter([text_response()])
         original_build = adapter.build_payload
