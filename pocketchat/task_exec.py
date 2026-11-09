@@ -49,6 +49,14 @@ class TaskExecutionError(ValueError):
         self.report = report
 
 
+class TaskCancelledError(TaskExecutionError):
+    """A confirmed boundary was persisted; no pending step was started."""
+
+    def __init__(self, *, report, results):
+        super().__init__("task cancelled at a confirmed step boundary", report=report)
+        self.results = [dict(result) for result in results]
+
+
 def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -317,7 +325,7 @@ def _write_execution_report(execution: ExecutionPlan, root: Path,
                             changes: List[Dict[str, Any]],
                             issues: List[Dict[str, str]],
                             error: Dict[str, str] = None,
-                            recovery=None, task_budget=None) -> Path:
+                            recovery=None, task_budget=None, cancellation=None) -> Path:
     task_ids = sorted({item["task_id"] for item in results
                        if isinstance(item.get("task_id"), str)
                        and item["task_id"]})
@@ -331,6 +339,10 @@ def _write_execution_report(execution: ExecutionPlan, root: Path,
         "changes": changes,
         "evidence_issues": issues,
     }
+    if cancellation is not None:
+        from .tasking import validate_cancellation_report
+        payload["cancellation"] = cancellation
+        validate_cancellation_report(payload)
     if task_budget is not None:
         payload["task_budget"] = task_budget.to_dict()
     if error is not None:
@@ -402,7 +414,7 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                  trace_dir, session_dir, acceptance=None, command_runner=None,
                  stop_after=None, resume_report=None, expected_report_sha256=None,
                  model_repair=None, spec=None, plan=None, api_key=None,
-                 task_budget=None):
+                 task_budget=None, cancellation=None):
     """Execute converted steps serially and persist a bounded report.
 
     Dependency order is validated by TaskPlan parsing, so each step is a
@@ -413,6 +425,18 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
     """
     if not isinstance(execution, ExecutionPlan):
         raise TaskExecutionError("execute_plan needs an authorized ExecutionPlan")
+    if cancellation is not None:
+        from .tasking import TaskCancellation, TaskError
+        if not isinstance(cancellation, TaskCancellation):
+            raise TaskExecutionError("cancellation needs a task cancellation owner")
+        try:
+            cancellation.validate_for(execution.spec_sha256, execution.plan_sha256)
+        except TaskError as exc:
+            raise TaskExecutionError(str(exc)) from exc
+    if cancellation is not None and model_repair == "model":
+        # Repair retry archives use a separate run identity. Until that evidence
+        # chain supports recovery, refuse this combination before any effect.
+        raise TaskExecutionError("cancellation cannot be combined with model repair")
     if model_repair not in (None, "model"):
         raise TaskExecutionError("model_repair must be 'model' when supplied")
     if model_repair == "model":
@@ -436,7 +460,8 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
     if resume_report is not None:
         previous, recovery = prepare_recovery(
             execution, root, resume_report, expected_report_sha256,
-            trace_dir=trace_dir, session_dir=session_dir)
+            trace_dir=trace_dir, session_dir=session_dir,
+            cancellation=cancellation)
         previous_budget = previous.get("task_budget")
         budget = task_budget
         if budget is None and previous_budget is not None:
@@ -469,6 +494,7 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
         return results  # A fully checked no-op must not create another successor.
     attempted = 0
     error = None
+    cancelled = False
     try:
         for step in execution.steps[completed_count:]:
             if any(dependency not in previous_ids for dependency in step.depends_on):
@@ -479,6 +505,9 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                 results.append({"step_id": step.id, "status": "not_executed",
                                 "reason": "previous_step_did_not_complete"})
                 continue
+            if cancellation is not None and cancellation.requested:
+                cancelled = True
+                break
             if stop_after is not None and attempted >= stop_after:
                 results.append({"step_id": step.id, "action": step.action,
                                 "status": "not_executed", "reason": "step_boundary"})
@@ -565,12 +594,48 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
             except AttributeError:
                 pass
         raise
+    # A request received during the last successful step still has a boundary.
+    cancelled = cancelled or (
+        cancellation is not None and cancellation.requested
+        and all(result["status"] == "completed" for result in results))
+    metadata = None
+    if cancelled:
+        from .tasking import CANCELLATION_SCHEMA, TaskError, validate_cancellation_report
+        boundary = len(results)
+        results.extend({"step_id": step.id, "action": step.action,
+                        "status": "not_executed", "reason": "task_cancelled"}
+                       for step in execution.steps[boundary:])
+        metadata = {"schema_version": CANCELLATION_SCHEMA, "state": "cancelled",
+                    "spec_sha256": execution.spec_sha256,
+                    "plan_sha256": execution.plan_sha256,
+                    "owner_sha256": cancellation.owner_sha256,
+                    "boundary_index": boundary}
+        try:
+            cleaned = _report_steps(root, results)
+            validate_cancellation_report({
+                "cancellation": metadata, "spec_sha256": execution.spec_sha256,
+                "plan_sha256": execution.plan_sha256,
+                "steps": cleaned, "evidence_issues": issues})
+            from .task_recovery import _check_completed
+            for expected, result in zip(execution.steps[:boundary], cleaned[:boundary]):
+                _check_completed(root, expected, result, changes)
+        except (TaskError, TaskRecoveryError) as exc:
+            # A nominally completed custom runner without bound artifacts is
+            # not a safe cancellation/recovery boundary.
+            error = {"type": "TaskExecutionError",
+                     "message": "task cancellation needs confirmed step evidence"}
+            path = _write_execution_report(execution, root, results, changes, issues,
+                                           error, recovery, task_budget)
+            raise TaskExecutionError(error["message"],
+                                     report=path.relative_to(root).as_posix()) from exc
     report_path = _write_execution_report(
         execution, root, results, changes, issues, error, recovery,
-        task_budget)
+        task_budget, metadata)
     relative_report = report_path.relative_to(root).as_posix()
     for result in results:
         result.setdefault("execution_report", relative_report)
+    if cancelled:
+        raise TaskCancelledError(report=relative_report, results=results)
     return results
 
 
@@ -596,13 +661,19 @@ def _parse_execution_report(data: Dict[str, Any], name: str) -> Dict[str, Any]:
             "execution report %s is not an object" % name)
     allowed = {"schema_version", "report_id", "spec_sha256", "plan_sha256",
                "task_ids", "steps", "changes", "evidence_issues", "recovery",
-               "task_budget"}
+               "task_budget", "cancellation"}
     if "error" in data:
         allowed.add("error")
         if not isinstance(data["error"], dict):
             raise TaskExecutionError("execution report %s has an invalid error"
                                      % name)
     _closed(data, allowed, "execution report")
+    if "cancellation" in data:
+        from .tasking import TaskError, validate_cancellation_report
+        try:
+            validate_cancellation_report(data)
+        except TaskError as exc:
+            raise TaskExecutionError(str(exc)) from exc
     if "recovery" in data:
         link = data["recovery"]
         if (not isinstance(link, dict) or set(link) != {"report", "sha256"}
