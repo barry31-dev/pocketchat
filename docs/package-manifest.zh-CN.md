@@ -1,0 +1,142 @@
+# 包清单
+
+`PC-PACKAGE-MANIFEST-1` 为现有 release smoke 真正构建、安装的包字节增加确定、
+有界的说明。清单是包证据，不是发布、签名、来源真实性结论或公开授权。
+
+## API
+
+```python
+build_package_manifest(
+    source,
+    *,
+    source_kind,
+    max_members=2048,
+    max_member_bytes=8_388_608,
+    max_total_bytes=67_108_864,
+    max_report_bytes=262_144,
+)
+```
+
+`source_kind` 只有两种：
+
+- `wheel`：调用方明确选择的一份 wheel；
+- `installed_tree`：调用方明确选择的一份 `site-packages` 根。只遍历其中精确的
+  `pocketchat/` 与匹配的 `pocketchat-<version>.dist-info/`，不扫描其他已安装包。
+
+调用会读取包字节，但不修改 wheel 或安装树；不负责构建、安装、import、provider、
+凭据、网络或任意工作区搜索。
+
+## 报告契约
+
+成功结果是可 JSON 序列化的封闭对象：
+
+```json
+{
+  "schema": "pocketchat-package-manifest.v1",
+  "schema_version": 1,
+  "source_kind": "wheel",
+  "package": "pocketchat",
+  "version": "1.1.0",
+  "entry_point": {
+    "name": "pocketchat",
+    "target": "pocketchat.cli:main"
+  },
+  "groups": {
+    "metadata": [],
+    "modules": [],
+    "package_data": [],
+    "schemas": []
+  },
+  "members": []
+}
+```
+
+`members` 按路径稳定排序，每行只有 `path`、`category`、`bytes` 与 `sha256`。
+路径是包内 POSIX 相对路径；报告不含源绝对路径或文件正文。`groups` 只是这些行的
+确定投影，不是第二份库存。
+
+生成的 `__pycache__`、`.pyc`、`.pyo` 路径不属于可比 payload。安装元数据
+`INSTALLER`、`REQUESTED`、`direct_url.json` 只有直接位于所选
+`pocketchat-<version>.dist-info/` 根下时才排除；嵌套在 `pocketchat/` 下的同名路径
+仍是包数据。`RECORD` 会登记，但 wheel / 安装树比较时只排除所选 dist-info 根下的
+`RECORD`，因为安装器可为已安装文件改写它；其余模块、schema、包数据与 metadata
+必须一致。
+
+## 必需表面与拒绝
+
+两种来源都必须只有一个 `pocketchat/` 与一个匹配的
+`pocketchat-<version>.dist-info/`。现有发布关键模块、5 份 schema、`METADATA`、
+`WHEEL`、`RECORD` 与 `entry_points.txt` 都必须存在；metadata 名称 / 版本与
+`pocketchat = pocketchat.cli:main` 必须相符。
+
+以下情况 fail closed：
+
+- 重复、绝对、父级、反斜杠、大小写碰撞或 NFC 碰撞路径；
+- 加密 wheel 成员、wheel link、安装树 symlink 或其他非普通文件；
+- 未知来源类型、包 / 版本 / entry point 不符、第二个包身份、必需资源缺失或已移除的
+  web/server 表面重新出现；
+- 非正整数限额、成员过多、单成员过大、总字节超限或 canonical 报告超限。
+
+超限会拒绝输入，不会截断后冒充完整。
+
+## Release smoke 接线
+
+`build_wheel()` 把 wheel manifest 绑定进 `WheelArtifact`；
+`inspect_installed()` 定位干净 venv 的 `site-packages` 并生成安装树 manifest，随后保留
+原有 installed `--version` 与完整 `task ... --help` smoke。`run_release_smoke()` 核对
+包身份与全部可比成员摘要，并在不删除旧 JSON 字段的前提下新增 `package_manifests`。
+
+在产品根运行：
+
+```bash
+python scripts/release_smoke.py --json
+```
+
+## 验证范围
+
+2026-11-05，macOS + CPython 3.13.9 + pip 25.3 实际构建并安装了当前 wheel；
+最终 smoke 登记 67 个纳入成员，wheel SHA-256 为
+`edc233bf0f7cb554440bea4ea5094202311f7571a03a84bebe370012f569f980`，wheel / 安装树
+payload 一致，11 条 task help 命令全部通过。这只证明该次本地运行。另两次连续构建的
+wheel 容器摘要不同（`c563154f...` / `33da6dd4...`），但 canonical manifest 字节完全
+一致，SHA-256 都是
+`a4abfa4972e2e3cf80462df0eb8aeb3bb4ba50ec8fface137dc37591265a2b87`。因此本轮证明的是
+清单确定性，不声称 ZIP 容器可复现。
+
+2026-11-07 又在 post-fix 候选
+`fefb970bd112bd0ed32f943a2b917da4646318ad` 上用 macOS、CPython 3.13.9 与
+pip 25.3 复核。默认隔离构建在真正构建 PocketChat 之前，因配置的代理在 pip
+获取 `setuptools>=61` 时握手超时而停止；这是环境失败，不是产品结果。同一解释器
+已安装满足要求的 setuptools 80.9.0 与 wheel 0.48.0，因此按文档使用
+`--no-build-isolation` 回退后，wheel 构建、干净 venv 安装、两份 manifest 配对
+以及 11 条 task help 命令全部完成；产出 277450 字节 wheel，SHA-256 为
+`7b9a57e303e1a65f31adebc26c5ef6cc098212da2e04c0f185c2e13b9ee6f3d7`，wheel /
+安装树 manifest 各纳入 67 个成员。这只证明该次本地回退运行；该次运行没有观察
+精确 SHA CI、Linux/Windows 或 public main 集成。
+
+2026-11-08 的后续隔离构建使用精确证据候选
+`2032ead1b8e6d167472078fb270637cc1c6ac626`，环境为 macOS、CPython 3.13.9、
+pip 25.3 与 setuptools 80.9.0。先显式下载一次构建依赖，再由既有 release smoke
+在 `PIP_NO_INDEX=1` 与本地 wheelhouse 下执行 PEP 517 隔离构建，未使用
+`--no-build-isolation`。wheel 构建、干净 venv 安装、wheel / 安装树 manifest
+配对、`pip check`、版本回读及 11 条 task help 命令均退出 0。wheel 为 277450
+字节，SHA-256 为
+`0a7e130c37d1ffd06b4ed7abce8568baf8894cb872afaecf067810e87301e23f`；
+两份 manifest 各纳入 67 个成员，含全部五份随包 schema。
+
+2026-11-09 只回读已保存的 observation、smoke JSON 与 wheel 摘要，使本说明与
+既有结果一致，没有重复构建、安装或产品测试。证据只覆盖已保存产物与那次精确
+本地运行，不代表文档后继候选重新运行过、联网依赖获取可靠、干净公开安装、精确
+SHA CI、Linux/Windows、wheel 字节可复现或 public main 集成。其余门禁、人工
+合入签字与公开动作授权均不变；结构化记录见
+[`review-package-manifest-v1.json`](review-package-manifest-v1.json)。
+
+Apple Command Line Tools 的 CPython 3.9.6 使用 pip 21.2.4：隔离构建生成了
+`UNKNOWN-0.0.0`；显式非隔离回退又使用低于本仓 `setuptools>=61` 要求的
+setuptools 58.0.4。两条失败都没有进入有效 PocketChat 包清单，不能外推成“所有
+CPython 3.9 不支持”。Linux、Windows、精确候选 CI、tag、Release 与包索引上传仍需
+以后真实证据；没有运行就继续写未验证。
+
+### 日常集成回读（2026-11-10）
+
+保留原实现与测试字节；历史构建和审查记录仍只覆盖各自候选及运行环境，不冒充本轮新结果。维护者 2026-11-09 常授权已委托 agent 完成日常技术签字、任务分支交付、精确候选必需 CI 与 main 集成，旧人工签字等待不再阻塞该日常范围。精确候选 CI 与 main 回读仍需各自证据；本段不声称已创建 tag、Release 或上传包。
