@@ -32,12 +32,12 @@ For a new `queued`, `ready` or `in_progress` row, `branch`, `write_scope` and
 `approved_by` are mandatory before a development branch is created. Historical
 `delivered` rows below predate this contract and are retained as evidence.
 
-The approved row lands on `main` first. A development branch points to that row
-but does not edit this file merely to claim or complete work. Planner commits
-may add approved future rows while development branches are active; after a
-product branch lands, an integrator records `delivered` in a separate serialized
-queue-maintenance commit. This keeps planning and development concurrent without
-making every task branch contend on one Markdown file.
+The readable contract exists before implementation, but inside the approved
+roadmap it may land with implementation instead of requiring a separate planning
+PR. A development branch does not edit this file merely to claim or complete
+work. Planner/integrator updates remain serialized; a task-specific issue or
+review record avoids contention on this shared file. Historical rows saying
+"main first" describe their old approval procedure, not a new daily stop gate.
 
 This approval queue does not mirror live claim or lease state. A row may remain
 `ready` while an external coordinator holds its operational lease; duplicating
