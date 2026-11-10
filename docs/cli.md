@@ -54,9 +54,11 @@ file-change store is created. The model is offered only granted `read_file` and
 `propose_file_change`; it cannot grant, confirm, apply, undo or use immediate
 `write_file`. Apply success consumes the target's write grant, so undo needs a fresh
 disclosed write grant. Profile/session/grant changes, a stale SessionFile view, an
-in-flight reply or a foreign writer refuse confirmation. Cancellation acceptance,
-the reusable golden fixture and development-wheel validation remain pending; these
-commands are a reviewed internal checkpoint, not the completed package or release.
+in-flight reply or a foreign writer refuse confirmation. `/files cancel` revokes
+grants and unconfirmed review without undoing applied files. Cancelled requests
+retain a still-live worker/writer until exit. The [offline golden fixture](file-work-validation.md)
+can run against an installed development wheel; real-provider/manual acceptance
+and formal release remain separately evidenced.
 See [file-work.md](file-work.md) for the transaction and evidence contract.
 
 The reasoning level is recorded in `run.started` for every run. It is placed

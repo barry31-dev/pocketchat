@@ -278,9 +278,12 @@ metadata, and `/undo CHANGE_ID` previews one persisted compensation. The model c
 only read granted paths and propose changes; it cannot grant, confirm, apply or undo.
 File controls require both stdin and stdout to be TTYs. Piped input is refused before
 creating a session, trace or file-change store. A successful apply consumes that
-path's write grant, so undo requires a fresh disclosed write grant. Cancellation
-acceptance, the reusable golden fixture and development-wheel validation are still
-pending; this checkpoint is not the completed file-work package or a release.
+path's write grant, so undo requires a fresh disclosed write grant. `/files cancel`
+invalidates grants and an unconfirmed review, without undoing applied effects.
+Interrupted runs do the same; a still-live request retains its writer until exit.
+The [offline golden fixture](docs/file-work-validation.md) covers the shared
+controller and can run against an installed development wheel. Real-provider/manual
+acceptance and formal release are separate; a development pass is not a release.
 
 ## Compare
 

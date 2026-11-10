@@ -53,6 +53,18 @@ class FileTerminalTests(unittest.TestCase):
                           tool_call_id='call-one', max_bytes=1)
         return self.work.state()['pending']['change']['change_id']
 
+    def test_cancel_pending_review_invalidates_digest_without_applying(self):
+        self.grants()
+        identifier = self.propose()
+        preview = self.command('/apply ' + identifier)
+        self.assertIn('cancelled', self.command('/files cancel'))
+        with self.assertRaises(FileWorkError):
+            self.confirm(preview)
+        self.assertIsNone(self.work.state()['pending'])
+        self.assertEqual([], self.work.state()['write_paths'])
+        self.assertEqual('before\n', (self.root / 'facts.txt').read_text())
+        self.assertEqual('proposed', self.work.store.load_record(identifier)['events'][-1]['type'])
+
     def test_untrusted_status_or_change_listing_cannot_reveal_or_create_state(self):
         with self.assertRaises(FileWorkError):
             self.command('/files', trusted=False)

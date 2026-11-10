@@ -392,6 +392,14 @@ class AgentTUI:
                 reply = "agent: %s: %s" % (type(exc).__name__, exc)
             with self._lock:
                 if generation != self._generation:
+                    # A cancelled but still-live request owns the Session until
+                    # it exits. Only this worker can release its busy slot.
+                    if self._worker is threading.current_thread():
+                        self.busy = False
+                        self._worker = None
+                        self.streaming_content = ""
+                        self.streaming_reasoning = ""
+                        self.thinking_started = None
                     return
                 if self.streaming_reasoning:
                     self.transcript.append(("reasoning", self.streaming_reasoning))
@@ -423,18 +431,20 @@ class AgentTUI:
         """Interrupt the current request and drop any late response."""
         with self._lock:
             self._generation += 1
-            self.busy = False
             worker = self._worker
         if worker is not None and worker.is_alive():
             self._interrupt_worker()
         with self._lock:
-            if self._worker is worker:
+            if self._worker is worker and (worker is None or not worker.is_alive()):
                 self._worker = None
+                self.busy = False
+                if self._session is not None and self._session.file_work is not None:
+                    self._session.file_work._invalidate()
 
     def close(self) -> None:
-        """Finish the current turn as cancelled before the renderer exits."""
+        """Cancel without releasing ownership from a still-running request."""
         self.cancel_send()
-        if self._session is not None:
+        if self._session is not None and self._worker is None:
             self._session._release_session_writer()
 
     def run_command(self, line: str) -> str:

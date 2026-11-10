@@ -2,8 +2,9 @@
 
 > Proposal/confirmation/apply and persistent undo exist as library primitives.
 > The opt-in Session read/propose checkpoint and trusted full-screen/line terminal
-> confirmation checkpoint now exist. Cancellation acceptance, the reusable golden
-> path, development-wheel acceptance and release evidence remain pending.
+> confirmation checkpoint now exist. Cancellation and the reusable offline golden
+> fixture are covered by the closeout tests; exact development-wheel evidence is
+> recorded for each candidate. Real-provider/manual and release evidence are separate.
 > The user requested the first usable chat-and-file-work loop on 2026-11-05.
 > Approval reachability and scheduling live in [the slice queue](slice-queue.md).
 > Publication status stays in [the release ledger](release-ledger.md).
@@ -74,10 +75,18 @@ Summarize a.txt and propose the change.
   persisted change metadata without a path grant; undo still requires a fresh exact
   write grant for the target.
 
-Directory/glob grants, session-wide undo, cancellation acceptance, the reusable
-golden fixture and development-wheel validation are still outside this checkpoint.
-The complete package remains pending until those required paths are integrated and
-reviewed; no release is implied.
+A trusted `/files cancel` revokes file grants and invalidates an unconfirmed
+review without undoing applied changes. An interrupted model run also invalidates
+its grants/pending proposal and records `run.cancelled`. If a provider remains
+blocked after the bounded interrupt, the controller keeps its worker/busy slot
+and Session writer until that request exits; a late answer cannot enable a second
+writer. This does not guarantee prompt cancellation of arbitrary blocking I/O.
+
+The reusable [file-work validation fixture](file-work-validation.md) exercises
+real files, rejection, apply/readback, restart/undo, conflicts and cancellation
+through this shared controller. Only the provider is substituted. Directory/glob
+grants, session-wide undo, real-provider/manual acceptance and formal release
+remain outside this offline validation.
 
 ## 3. Proposal, persistence and result contract
 
@@ -158,7 +167,7 @@ stored proposal remains evidence, not restart authorization.
 The trusted-terminal checkpoint attaches this service to both existing terminal
 controllers and exposes apply/readback plus persisted single-change undo only after
 separate digest-bound confirmation. The complete `PC-FILE-CHAT-1` package remains
-unfinished: cancellation acceptance and the reusable development-wheel golden path
+covered by the reusable offline fixture; real-provider/manual acceptance and formal release remain separate
 must still be integrated. A completed model run still does not imply changed files.
 
 Bounds: UTF-8 text only, at most the existing 16 KiB per input/candidate file;

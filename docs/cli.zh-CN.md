@@ -48,8 +48,10 @@ pocketchat agent --session notes
 文件命令都会在创建 Session、trace 或 file-change store 前拒绝。模型只获得已授权的
 `read_file` 与 `propose_file_change`，不能授权、确认、apply、undo 或调用立即 `write_file`。
 apply 成功后会消费目标 write grant，因此 undo 需要 fresh disclosed write grant。profile/session/
-grant 变化、过期 SessionFile view、在飞 reply 或其他 writer 都拒绝确认。取消验收、可复用黄金
-fixture 与开发 wheel 验证仍待完成；这些命令只是已复审内部检查点，不代表整包完成或发布。
+grant 变化、过期 SessionFile view、在飞 reply 或其他 writer 都拒绝确认。`/files cancel`
+撤销授权和未确认 review，不撤销已写入文件；取消后仍未退出的请求保留 worker/writer。
+[离线黄金 fixture](file-work-validation.zh-CN.md) 可在已安装开发 wheel 上运行；真实 provider、
+人工文件终端验收和正式发布各自记录。
 交易与证据契约见 [file-work.zh-CN.md](file-work.zh-CN.md)。
 
 每次 run 都会把思考强度记录到 `run.started`。只有所选 profile 含
