@@ -251,6 +251,8 @@ class BranchContinuationTests(BranchTestBase):
                           "turn_000003", "turn_000004"])
 
     def test_show_reads_the_child_and_the_parent_as_one_conversation(self):
+        self.base = self.base / "q2-history"
+        self.base.mkdir()
         config = self._config()
         self._run("run", "q1", "--session", "notes", "--config", str(config))
         self._run("run", "q2", "--session", "notes", "--config", str(config))
@@ -263,12 +265,16 @@ class BranchContinuationTests(BranchTestBase):
 
         shown = self._run("show", "fork")
         self.assertEqual(shown.returncode, 0, shown.stdout + shown.stderr)
-        # The child starts where the parent stopped, so it holds the first
-        # exchange and not the second -- the fork point is what was named.
-        self.assertIn("q1", shown.stdout)
-        self.assertNotIn("q2", shown.stdout)
-        self.assertIn("q3", shown.stdout)
-        self.assertIn("turn_000004", shown.stdout)
+        # Check the conversation, not metadata such as the q2-bearing trace
+        # path. The fork inherits the first exchange, not the second.
+        shown_turns = [line for line in shown.stdout.splitlines()
+                       if line.startswith("turn ")]
+        self.assertEqual(shown_turns, [
+            "turn turn_000001  you> q1",
+            "turn turn_000002  model> stub reply",
+            "turn turn_000003  you> q3",
+            "turn turn_000004  model> stub reply",
+        ])
         # And the parent still holds its second exchange: the fork did not
         # move it out.
         self.assertEqual([m["content"] for m in parent_turns],

@@ -1,0 +1,88 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "tests/test_branching.py",
+    "docs/review-branch-show-regression-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "slice": "PC-BRANCH-SHOW-REGRESSION-1",
+  "base_commit": "1474e5598dc046d0c64567008c3a750cf8cb858f",
+  "authority": "Maintainer standing routine-development delegation dated 2026-11-09; test-only maintenance within the current CLI roadmap.",
+  "goal": "Check branch show conversation content independently of trace filesystem paths, retaining plain-text CLI coverage.",
+  "not_doing": [
+    "No runtime, CLI format, version or queue change.",
+    "No rebuild or replacement of the previously prepared release wheel.",
+    "No real-provider/manual acceptance, formal tag, Release or upload."
+  ],
+  "done_when": "A q2-bearing workspace deterministically exposes the previous false assertion, and exact ordered conversation turn assertions pass while rejecting an injected q2 exchange.",
+  "write_scope": [
+    "tests/test_branching.py",
+    "docs/review-branch-show-regression-v1.json"
+  ],
+  "plan": [
+    "Force q2 into this test workspace name and run the existing targeted test; record the exact assertion failure.",
+    "Compare only complete turn lines to the four expected ordered inherited and child messages, preserving turn ids and speaker roles.",
+    "Run the branching module once after the change and a no-source-change negative output control.",
+    "Obtain fresh-context diff review, then use routine PR, exact-head CI and main readback."
+  ],
+  "budget_stop": "One bounded maintenance result; stop on ownership conflict, unexpected effects or a blocking review finding. No new slice after 75 minutes of this run.",
+  "rollback": "Leave runtime and the previous prepared artifact unchanged; revert only this maintenance patch if its test oracle is invalid.",
+  "evidence": [
+    {
+      "command": "python3 -B -m unittest tests.test_branching.BranchContinuationTests.test_show_reads_the_child_and_the_parent_as_one_conversation -v (q2-bearing workspace, original assertion)",
+      "result": "Python 3.9.6, exit 1: q2 was found only in the trace filesystem path; the rendered conversation was q1/reply/q3/reply."
+    },
+    {
+      "command": "python3 -B -m unittest tests.test_branching -v",
+      "result": "Python 3.9.6, exit 0: 10 tests passed, including the q2-bearing workspace."
+    },
+    {
+      "command": "Targeted branch-show test with an injected extra q2 turn in captured show output",
+      "result": "Negative-control harness exit 0: one expected assertion failure rejected turn_000005 you> q2; this tests the oracle, not a changed runtime."
+    },
+    {
+      "command": "ruff check tests/test_branching.py and same-path baseline stdin comparison",
+      "result": "ruff 0.17.3: each full-file lint exited 1 with the same five inherited findings (I001, two UP031, PLW1510, RUF059), all on unchanged lines; no new finding."
+    },
+    {
+      "command": "ruff check --select E9,F tests/test_branching.py; git diff --check; JSON parse",
+      "result": "ruff 0.17.3 E9/F and diff/JSON checks exited 0. Full-file style limitations are recorded separately."
+    }
+  ],
+  "reviewed_by": [
+    "Author self-review",
+    "Independent fresh-context agent under the maintainer standing routine-development delegation"
+  ],
+  "unverified_scope": "Not run: full local suite, packaging/build, real providers, manual terminal and release actions. This is a test oracle correction, not evidence of a runtime conversation leak.",
+  "independent_review": {
+    "assessment": "APPROVE",
+    "findings": [],
+    "reason": "Exact ordered turn-line equality checks ids, roles and q1/reply/q3/reply, rejects any additional contract-formatted q2 turn, and excludes trace paths. The q2-history workspace deterministically exposes the previous oracle defect.",
+    "reviewed_files": [
+      "AGENTS.md",
+      "tests/test_branching.py",
+      "docs/review-branch-show-regression-v1.json",
+      "pocketchat/cli.py:2736-2804"
+    ],
+    "reviewed_functions": [
+      "BranchContinuationTests.test_show_reads_the_child_and_the_parent_as_one_conversation",
+      "_cmd_show: scoped plain-text output contract"
+    ],
+    "limitations": [
+      "Static read-only scoped diff/contract review; no execution or edits.",
+      "Saved execution/lint logs were not independently inspected; actual results are author-run evidence.",
+      "No runtime, CI, main integration or release readiness approval."
+    ]
+  },
+  "reviewed_test_sha256": "f555188dff8129058bbc4e9664880dd6c9caa4451f8dab72b14e9dea9e516981",
+  "handoff": "Routine test-only correction; exact candidate CI and main readback are retained by delivery evidence. The original release artifact remains separate and its external acceptance/publication conditions remain unchanged."
+}
