@@ -1,6 +1,7 @@
 # Chat and file work: first closed-loop design
 
-> Selected design, not an implemented command surface or a release claim.
+> The original-scope proposal/confirmation/apply core now exists as library
+> primitives; it is not an implemented command surface, undo path or release claim.
 > The user requested the first usable chat-and-file-work loop on 2026-11-05.
 > Approval reachability and scheduling live in [the slice queue](slice-queue.md).
 > Publication status stays in [the release ledger](release-ledger.md).
@@ -99,6 +100,16 @@ use private directory/file permissions where supported. A hidden directory is
 not a Git exclusion: documentation must tell users not to publish these records.
 There is no automatic cleanup of undoable records.
 
+The file-change service lives in `pocketchat.file_changes`,
+`pocketchat.file_change_store` and the unregistered
+`tools.execute_propose_file_change` helper. It persists the closed proposal,
+before/candidate objects, trusted confirmation, prepared/apply receipts and
+identity-bound undo receipts. Reopening the workspace store is sufficient to
+undo a successful change or compute a dependency-safe session compensation
+order; no in-memory cache is authoritative. It is not registered in
+`tool_contracts`, the CLI, Session or UI, so this package still exposes no
+default model or user mutation command.
+
 Bounds: UTF-8 text only, at most the existing 16 KiB per input/candidate file;
 64 KiB per rendered diff, 64 KiB per metadata record, 16 MiB per workspace change
 store, one pending proposal per turn. Count encoded bytes, including events and
@@ -131,6 +142,19 @@ chat/read behavior has its own capability contract. A declared primitive is not
 an execution result. Keep the existing OS/Python CI matrix; prioritize actual
 macOS CPython 3.13 fixture evidence for the new loop.
 
+The implemented core uses descriptor-relative `O_NOFOLLOW` traversal, private
+0700/0600 store entries, an exclusive identity-bound writer claim, exclusive
+same-directory temporary files, directory/file `fsync`, atomic replace (or
+exclusive link for create), and reopened readback. A runtime missing those
+primitives returns `file_unsupported_runtime`. After an observed successful rename/link,
+readback refusal or a receipt-store error is `file_recovery_required` with
+`effect_disposition=applied`, not a pre-write conflict or a no-op. The available
+before-image/record evidence is retained and normal claim release is skipped;
+that decision survives a secondary claim-verification/preservation failure.
+An unavailable store does not prove a durable receipt or current claim ownership,
+and does not authorize replay or automatic stale-claim takeover. Successful undo
+requires an explicit bounded approval identity and exact persisted lineage.
+
 Preflight hashing plus atomic replace is **not general cross-process CAS**.
 Document the cooperative single-writer/local-filesystem boundary. Detectable
 external edits or path replacement must refuse without changing outside files.
@@ -152,12 +176,13 @@ Undo is a narrow compensating transaction:
   exclusively and its identity/hash remain unchanged. This does not expose a
   delete tool or allow removing arbitrary files/directories.
 - Reverse A -> B -> C as C -> B -> A. Atomic restore can create a new inode:
-  the verified undo receipt must link the restored predecessor change and its
-  new observed identity. The next undo accepts only that proven compensation
+  the verified undo receipt links the restored predecessor change and its new
+  observed identity. The next undo accepts only that proven compensation
   lineage, never an arbitrary same-hash replacement or an obsolete inode.
-  Repeated undo does not replay a side effect.
-  Session-wide undo previews the reverse list, stops at the first conflict and
-  reports completed and remaining items. It is not an atomic multi-file rollback.
+  Repeated undo returns the same durable receipt without replaying a side effect.
+  The library derives a deterministic reverse order from persisted session
+  records, stops at the first conflict and reports completed and remaining items.
+  It is not an atomic multi-file rollback.
 - Session checkpoint/rewind does not touch files; file undo does not erase chat
   or trace. After a restart, query the persisted records, not an in-memory cache.
 - An unresolved prepared record enters recovery inspection. Reconcile bound

@@ -1,0 +1,231 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/file-work.md",
+    "docs/file-work.zh-CN.md",
+    "docs/review-file-change-v1.json",
+    "docs/security.md",
+    "docs/security.zh-CN.md",
+    "pocketchat/file_change_store.py",
+    "pocketchat/file_changes.py",
+    "pocketchat/tools.py",
+    "tests/test_file_change_store.py",
+    "tests/test_file_changes.py",
+    "tests/test_file_undo.py",
+    "tests/test_tools.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 10,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "FILE-CHANGE-DIFF-PARTIAL-PERSISTENCE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:proposal:validate-before-persistence",
+      "reason": "A bounded red test showed an over-limit diff could leave a proposed record before the caller received file_too_large. Diff validation now precedes all private object/record writes, and the regression asserts both store directories remain empty."
+    },
+    {
+      "id": "FILE-CHANGE-CREATE-EFFECT-DISPOSITION",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:apply:create-link-effect-classification",
+      "reason": "A bounded red test showed create cleanup failure after a successful exclusive link was reported as zero-effect conflict even though the target existed. The mutation bit is now set immediately after replace/link, so later cleanup or fsync failures report file_recovery_required with effect_disposition=applied and preserve the writer claim."
+    },
+    {
+      "id": "FILE-CHANGE-QUOTA-TEST-EQUALITY",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-change:tests:quota-equality-boundary",
+      "reason": "The final suite exposed a test assertion that replayed an unchanged record and expected a quota error at exact capacity. The implementation correctly allows projected size == max_bytes; the regression now uses a larger recovery record and verifies the rejection boundary."
+    },
+    {
+      "id": "FILE-CHANGE-DIRFD-REPLACE-CAPABILITY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:runtime:advertised-atomic-rename",
+      "reason": "New-diff review found that secure-runtime admission checked descriptor-relative os.rename while record and target replacement called os.replace, which is not advertised in os.supports_dir_fd on the current runtime. A simulated ENOSYS replacement failed during prepared persistence before the fix; both call sites now use the checked descriptor-relative os.rename primitive and the regression passes."
+    },
+    {
+      "id": "FILE-CHANGE-CANDIDATE-READ-RECOVERY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:apply:candidate-read-after-prepare",
+      "reason": "A bounded red test showed that a candidate-object read failure after the durable prepared transition escaped as file_invalid_record, which suggested a zero-effect retry and released the recovery claim. The apply path now preserves the writer claim and reports file_recovery_required with effect_disposition=none when preparation cannot be completed; the target remains unchanged and the prepared record stays available for inspection."
+    },
+    {
+      "id": "FILE-CHANGE-RECOVERY-PRESERVE-FAILURE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:apply:preserve-failure-classification",
+      "reason": "Fresh-context review found that the new recovery handler called the fallible claim-preservation path before committing the no-release decision. If the store was unavailable, the raw store error could escape and finally could release the prepared lock after recovery. The handler now sets preserve_claim before attempting preservation, tolerates a preservation failure, and still returns file_recovery_required with effect_disposition=none; a mocked-outage regression covers the path."
+    },
+    {
+      "id": "FILE-CHANGE-UTF8-PROPOSAL-REFUSAL",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-change:proposal:utf8-encode-error-boundary",
+      "reason": "New-diff review found an unpaired surrogate escaping as UnicodeEncodeError. The red regression reproduced the raw exception and stopped before its filesystem assertions; the fixed regression then asserted that the create target did not exist and records/objects were empty. The UTF-8 refusal itself occurs before proposal persistence."
+    },
+    {
+      "id": "FILE-CHANGE-UTF8-RED-EVIDENCE-SCOPE",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-change:review:utf8-red-assertion-coverage",
+      "reason": "Independent fresh-context review of fa9e54ef54d9c22e712526e04362898c28ec926c..d4510f113490604e7337812a96fe39a6a12eb758 identified that the uncaught red exception stopped before filesystem assertions. The record now attributes those assertions only to the fixed green run, rather than inventing red-stage execution."
+    },
+    {
+      "id": "FILE-CHANGE-POST-COMMIT-READBACK-DISPOSITION",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:apply:post-commit-readback-error-disposition",
+      "reason": "A red real-filesystem regression for both replace and create observed candidate bytes at the target, then failed because post-commit FileChangeError was classified as file_conflict. After observed rename/link success, readback refusal now reports file_recovery_required/applied and preserves unresolved record/claim evidence; the new regression passes."
+    },
+    {
+      "id": "FILE-CHANGE-POST-COMMIT-PRESERVE-FAILURE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:apply:post-commit-preserve-secondary-error",
+      "reason": "Red regressions observed the real applied file before failing on raw secondary FileChangeStoreError, including a receipt-time store rename/symlink replacement. Applied/unknown and receipt-error paths now set no-release intent before fallible preservation and contain secondary store errors, preserving the original recovery classification. Both regressions pass."
+    },
+    {
+      "id": "FILE-CHANGE-UNDO-GRANT-BOUNDARY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:undo:current-write-grant",
+      "reason": "The first undo API draft required local approval and exact persisted identity but omitted the current write-path grant named by the approved contract. A red signature/behavior regression exposed the missing boundary; undo and session compensation now require write_paths, persist a zero-effect rejected event when revoked, and the regression passes."
+    },
+    {
+      "id": "FILE-CHANGE-SESSION-UNRESOLVED-STATE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:undo-session:unresolved-recovery-block",
+      "reason": "A red restart regression showed session compensation returned undone with an empty list while the same session held undo_prepared plus a preserved writer claim after receipt failure. Session inventory now returns recovery_required before selecting any earlier applied change and reports the unresolved and remaining ids."
+    },
+    {
+      "id": "FILE-CHANGE-UNDO-LINEAGE-REVALIDATION",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:undo:successor-lineage-revalidation",
+      "reason": "A red real-filesystem regression rewrote an unrelated undone receipt to name an earlier change and showed the first draft trusted the receipt field alone, accepting a same-hash replacement identity. Restored identities are now accepted only when the successor immutable before identity and digest independently recompute the same predecessor relation; the forged receipt is refused as file_conflict."
+    },
+    {
+      "id": "FILE-CHANGE-WINDOWS-UNSUPPORTED-TEST-ADMISSION",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:tests:unsupported-runtime-admission",
+      "reason": "Exact-head PR #45 CI passed Ubuntu/macOS but both Windows jobs errored during test setUp because FileChangeStore intentionally refuses runtimes without descriptor-relative no-follow I/O. The implementation was correct; the new secure-filesystem suites lacked the portability admission pattern already used by evidence verifier tests. Secure file-change classes and the one tool helper test now skip only when the capability is absent, while a separate Windows-capable regression asserts FileChangeUnsupportedRuntime occurs before .pocketchat state is created."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/file-work.md",
+    "docs/file-work.zh-CN.md",
+    "docs/review-file-change-v1.json",
+    "docs/security.md",
+    "docs/security.zh-CN.md",
+    "pocketchat/file_change_store.py",
+    "pocketchat/file_changes.py",
+    "pocketchat/tools.py",
+    "tests/test_file_change_store.py",
+    "tests/test_file_changes.py",
+    "tests/test_file_undo.py",
+    "tests/test_tools.py"
+  ],
+  "reviewed_evidence": [
+    "C: the original approval row at product main b42fa5b5d1119040be850ddfce072a5b84621c47 was re-read byte-for-byte. The UTF-8 body between the heading newline and the next-heading separator is bytes [44655,46333), SHA-256 28d9988ef3f342fbb559ad94c341d87f00d1c1f02ff4406753c81a6cfefff59b, matching the execution projection. The prior afb1f3f0 recomputation included the terminating separator newline; no scope, permission or product approval was changed.",
+    "Red first: the over-limit diff persistence test and create cleanup effect-classification test failed for their expected reasons before the minimal fixes; both targeted regressions then passed.",
+    "V: CPython 3.9.6 ran python3 -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; 40 tests passed, exit 0.",
+    "V: CPython 3.13.9 ran the same scoped unittest command; 40 tests passed, exit 0.",
+    "V: Ruff 0.17.3 ran python3.13 -m ruff check --select E9,F on the six changed Python files; all checks passed, exit 0.",
+    "V: tests.test_release_process_docs ran 16 documentation/process tests; all passed, exit 0.",
+    "V: git diff --check returned exit 0 after the final candidate.",
+    "C: deep file-safety review checked closed records and event transitions, normalized workspace-relative paths, sensitive/binary refusal, private 0700/0600 storage, descriptor-relative O_NOFOLLOW traversal, exclusive creation/replacement, before identity+hash checks before and after preparation, independent reopened readback, truthful effect disposition and preserved recovery claim.",
+    "C: static call-site review found the helper only in pocketchat/tools.py plus tests/docs; it is not registered in tool_contracts, CLI, Session or UI, and existing read/write tool contracts remain covered by the scoped suite.",
+    "C: bilingual file-work and security docs describe the internal store, unregistered helper, cooperative single-writer boundary, unchanged grants/policy checks, independent readback and the explicit absence of undo/default mutation/public release.",
+    "C: review round 1 fixed the two major safety findings with red regressions; review round 2 re-read the full diff and closed the quota-test boundary.",
+    "C: review round 3 inspected only the new capability regression and two replacement call sites; it confirmed the implementation now uses only primitives present in os.supports_dir_fd and leaves state transitions and scope unchanged.",
+    "V: after the capability fix, CPython 3.9.6 and CPython 3.13.9 each ran the scoped unittest command with 41 tests passed, exit 0; Ruff 0.17.3 E9/F and git diff --check passed. No open blocker/major finding remains. No separate fresh-context reviewer was available, so that stronger evidence is listed as unverified.",
+    "C: round 4 exhausted the new prepared-to-candidate-read boundary. A candidate object read failure now preserves the identity-bound writer claim and raises file_recovery_required with effect_disposition=none instead of treating the prepared transaction as an invalid record with an ordinary retry.",
+    "V: after the candidate-read recovery fix, CPython 3.9.6 and CPython 3.13.9 each ran python3 -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; 42 tests passed, exit 0; Ruff 0.17.3 E9/F and git diff --check passed.",
+    "C: fresh-context round 5 found a P2 in the first candidate-read recovery change: claim.preserve() could fail while the store was unavailable, bypassing recovery classification and allowing normal release. Preserve intent is now set before the fallible call and preservation errors are contained.",
+    "V: after the preserve-failure fix, CPython 3.9.6 and CPython 3.13.9 each ran python3 -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; 43 tests passed, exit 0; Ruff 0.17.3 E9/F and git diff --check passed.",
+    "C: round 6 found an unpaired surrogate escaping as UnicodeEncodeError. Its red regression reproduced the uncaught exception and stopped before the filesystem assertions; after the fix, the green regression asserted an absent create target and empty records/objects. Red exception reproduction and green zero-effect assertions are separate evidence.",
+    "V: after the UTF-8 refusal fix, CPython 3.9.6 and CPython 3.13.9 each ran python3 -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; 44 tests passed, exit 0; Ruff 0.17.3 E9/F and git diff --check passed.",
+    "C: independent fresh-context round 7 inspected only the UTF-8 refusal diff, not the earlier safety package; it found one evidence-attribution P2, now fixed. That reviewer did not run tests.",
+    "V: CPython 3.13.9 red readback regression ran 1 test with replace/create subtests; both failed at file_recovery_required versus file_conflict, exit 1. Candidate target bytes had been asserted before the failing classification assertion. After the minimal boundary fix the test passed, exit 0.",
+    "V: two CPython 3.13.9 red preservation regressions failed at FileChangeStoreError versus FileChangeError after actual target/record readback, exit 1. After no-release ordering and error-containment fixes, both tests passed, exit 0.",
+    "V: CPython 3.13.9 and CPython 3.9.6 each ran python -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; each ran 47 tests, OK, exit 0. Ruff 0.17.3 E9/F on the two newly changed Python files passed, exit 0.",
+    "C: review metadata was rebuilt and validated against the cumulative 11-path task diff using the shared review-record core. Its machine category floor remains medium/standard; this file-mutation/recovery change additionally requires the deep safety checks recorded below. Rounds after three are new-diff-only, not repeated full-package reviews.",
+    "C: independent fresh-context round 8 found no actionable finding in the current post-commit diff. It checked successful rename/link classification, no-release ordering before fallible preservation, unresolved prepared/receipt state and real-filesystem regression scope. The reviewer did not run tests; unknown disposition remains static-only and the older full package was not reopened.",
+    "Red: persistent replace undo initially failed because undo_file_change was absent; after the minimal event/parser/atomic-restore implementation, restart and idempotence passed.",
+    "Red: create undo initially raised created-file undo is not implemented; after identity-bound unlink and absence readback, unchanged create removal passed while an arbitrary same-hash inode remained a conflict.",
+    "Red: chained undo first returned restores_change_id=null; after persisted record inventory and predecessor/successor identity lineage, C-to-B-to-A passed across new inodes.",
+    "Red: session compensation APIs were absent; after deterministic persisted reverse ordering, full restart compensation passed and first-conflict execution stopped with completed/remaining ids.",
+    "Red review finding: undo omitted the current write_paths boundary. After the focused fix, a revoked grant returns file_permission_denied, leaves candidate bytes unchanged and persists a rejected event.",
+    "Red review finding: an undo_prepared receipt failure was silently skipped by session compensation. After the focused fix, unresolved prepared/recovery state returns recovery_required before any earlier undo.",
+    "Red review finding: a forged successor receipt could authorize an unrelated same-hash inode. After recomputing the successor immutable before relation, the forged lineage is refused as file_conflict.",
+    "V: macOS CPython 3.9.6 and 3.13.9 each ran the scoped file_changes/file_change_store/file_undo/tools unittest set with 56 tests OK before the final review fixes; a final rerun is required because the grant and lineage fixes changed code afterward.",
+    "V: tests.test_release_process_docs ran 16 tests OK; Ruff 0.17.3 E9/F, compileall and git diff --check passed before the final review fixes and must be rebound by the final rerun.",
+    "V: final post-review rerun on macOS: CPython 3.9.6 and CPython 3.13.9 each ran python -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_file_undo tests.test_tools -v; each ran 58 tests, OK, exit 0.",
+    "V: final adjacent documentation run executed python3 -B -m unittest tests.test_release_process_docs -v; 16 tests passed, exit 0.",
+    "V: final Ruff 0.17.3 E9/F on file_changes.py, file_change_store.py and test_file_undo.py passed; python3 compileall, review JSON decoding and git diff --check each exited 0.",
+    "CI red: PR #45 run 42735708927 bound to head fd6da92 (pull-request merge 35f17dd) passed Ubuntu 3.9/3.13, macOS 3.9/3.13 and release smoke; Windows 3.9/3.13 failed with FileChangeUnsupportedRuntime from test setUp, not a product mutation fallback.",
+    "V: after capability-gating only secure file-change test surfaces, macOS CPython 3.9.6 ran the four scoped modules with 59 tests OK and one expected unsupported-runtime class skip.",
+    "V: a local unsupported-capability simulation set os.supports_dir_fd to empty before importing the four modules; 59 tests ran with 43 secure-path skips, the explicit unsupported-runtime/store-zero-state regression passed, and there were zero errors/failures."
+  ],
+  "unverified_scope": "Complete safe-file-change library package with persistent single-change and session undo on macOS CPython 3.9.6 and 3.13.9. No Session/CLI/UI/model wiring, default mutation entry, real provider, full repository suite, Windows/Linux execution, automatic stale-writer-claim takeover, hostile-process or network-filesystem crash proof, release-wheel acceptance, tag, Release or package upload. Public branch/PR/CI/main facts are recorded only after the controlled delivery path runs.",
+  "review_context": {
+    "why": [
+      "PC-FILE-CHANGE-1 now requires the existing proposal/apply checkpoint and persistent undo/restart lineage to form one complete safe-file-change service.",
+      "The expanded package must reverse A-to-B-to-C as C-to-B-to-A, refuse arbitrary same-hash identity replacement, remove only an unchanged owned create, and stop session compensation at the first conflict or unresolved recovery state."
+    ],
+    "not_doing": [
+      "No tool-contract registration, Session/CLI/UI/model wiring, default mutation entry, general delete surface, release version/tag/Release/package upload or paid provider action.",
+      "No automatic takeover of a preserved writer claim and no hostile-process/network-filesystem exactly-once claim."
+    ],
+    "diff_walk": [
+      "pocketchat/file_change_store.py: private deterministic record inventory used after restart; unexpected record-directory entries still fail closed.",
+      "pocketchat/file_changes.py: closed undo_prepared/undone transitions, exact current grant and target identity/hash checks, atomic restore or owned-create removal, durable receipt/idempotence, predecessor/successor lineage revalidation and dependency-safe session compensation.",
+      "tests/test_file_undo.py: real-filesystem replace/create, restart, chained undo, same-hash replacement, revoked grant, prepare/receipt failure, unresolved session state and forged successor-lineage regressions.",
+      "Existing proposal/apply/store/tool tests remain the earlier package evidence; bilingual file-work/security docs now describe the implemented library boundary without claiming a command surface."
+    ],
+    "static_checks": [
+      "Undo cannot start without an explicit bounded approval identity and a current write-path grant.",
+      "Before mutation, undo persists undo_prepared with the exact candidate digest, observed identity, action and computed predecessor link.",
+      "Replace undo atomically restores the persisted before object and independently reopens it; create undo unlinks only the exact applied identity/hash and verifies absence.",
+      "A restored inode is trusted for the next undo only when the successor receipt and the successor immutable before identity both prove the predecessor relation.",
+      "Session compensation inventories persisted records after restart, computes reverse dependency order, stops on the first conflict and refuses to proceed past prepared/undo_prepared/recovery_required state.",
+      "Receipt-store failure after a real undo preserves undo_prepared plus the writer claim and reports file_recovery_required/applied; prepare persistence failure leaves target bytes unchanged.",
+      "The proposal helper remains unregistered; no model, CLI, Session or UI path can call apply or undo in this package.",
+      "Unsupported runtimes do not emulate weaker file I/O: secure filesystem suites are capability-gated and a separate regression proves FileChangeStore refuses before creating private state."
+    ],
+    "review_notes": [
+      "The 12:12 private patch was treated as an untrusted recovery candidate and compared against this live tree; current differences were reviewed and tested under the new lease.",
+      "The review record is generated from the repository review ladder core and extended with the product evidence schema.",
+      "Round 4 reviewed only the candidate-read recovery diff and its focused regression; earlier reviewed code was not re-opened because no new change touched it.",
+      "Round 5 was an independent fresh-context review of the current uncommitted diff. It found the preserve-failure path; only that finding, the minimal fix and its regression were reviewed in this round.",
+      "Round 6 reviewed only the unpaired-surrogate validation diff and its regression; unchanged implementation was not re-opened.",
+      "Round 7 independently reviewed the prior UTF-8 new diff and corrected a red/green evidence-attribution overclaim without rerunning its unchanged checks.",
+      "Round 8 independently reviewed only d4510f113490604e7337812a96fe39a6a12eb758 to the current post-commit code/test diff and necessary nearby contracts. It found no actionable issue, checked that those files did not change during review, and ran no tests. This is not a full-package or public-release verdict.",
+      "Round 9 preserved the prior eight-round history and reviewed only the expanded undo/restart diff plus its composition with the already-reviewed proposal/apply contract. The standing 2026-11-09 technical-review delegation was used; no human sign-off or separate subagent was claimed.",
+      "Round 10 is limited to the CI portability diff. GitHub Actions run 42735708927 provided the red evidence: Ubuntu/macOS and release smoke passed, while both Windows jobs failed only because the intentional unsupported-runtime exception occurred in test setUp."
+    ],
+    "gaps": [
+      "The new fault injections use actual macOS files and commits. Readback/preserve faults are injected; receipt-store rename/symlink replacement is real. The two double-failure tests cover replace only; unknown disposition is static-only. No expanded undo/restart, model/CLI/Session/UI/provider, full repository suite, Windows/Linux, hostile-process/network-filesystem crash proof or public integration."
+    ],
+    "required_security_review": {
+      "risk": "high",
+      "depth": "deep",
+      "scope": "post-commit readback, effect disposition, available durable evidence and cooperative claim preservation",
+      "status": "current-diff-independently-reviewed",
+      "evidence": "Real replace/create readback fixtures, real store replacement/restore readback, red/green regressions, both scoped Python runs, and an independent static review of the exact new code/test diff; unknown is not runtime-verified."
+    }
+  }
+}

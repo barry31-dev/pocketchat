@@ -294,3 +294,58 @@ def execute_write_file(root: Path, path: str, content: str, *,
         })
     return {"path": normalized, "bytes": len(content.encode("utf-8")),
             "content": content, "overwritten": bool(candidate.exists() and overwrite)}
+
+
+def execute_propose_file_change(root: Path, path: str, content: str, *,
+                                read_paths: Iterable[str],
+                                write_paths: Iterable[str],
+                                store,
+                                owner: Dict[str, Any],
+                                origin: Dict[str, Any],
+                                policy_sha256: str,
+                                change_id: str | None = None,
+                                recorder=None,
+                                tool_call_id: str = "") -> Dict[str, Any]:
+    """Persist a proposal only; confirmation and apply remain separate calls.
+
+    This helper is intentionally not registered in the model tool contract or
+    CLI. The later chat/file service may call it after explicit session grants.
+    """
+    from .file_changes import propose_file_change
+
+    normalized = _normalize(path)
+    if recorder is not None:
+        recorder.append("permission.requested", {
+            "action": "propose", "resource": normalized,
+            "tool": "propose_file_change",
+        })
+        recorder.append("permission.resolved", {
+            "decision": "approved", "decided_by": "workspace_policy",
+        })
+        recorder.append("tool.call.started", {
+            "tool": "propose_file_change", "tool_call_id": tool_call_id,
+            "args_summary": "propose %s" % normalized,
+        })
+    result = propose_file_change(
+        root, path, content, store=store, owner=owner, origin=origin,
+        policy_sha256=policy_sha256, read_paths=read_paths,
+        write_paths=write_paths, change_id=change_id)
+    change = result["change"]
+    summary = {
+        "status": "pending",
+        "change_id": change["change_id"],
+        "proposal_sha256": change["proposal_sha256"],
+        "path": change["path"],
+        "operation": change["operation"],
+        "diff": result["diff"],
+        "diff_bytes": result["diff_bytes"],
+    }
+    if recorder is not None:
+        recorder.append("tool.call.completed", {
+            "tool": "propose_file_change", "tool_call_id": tool_call_id,
+            "status": "completed", "duration_ms": 0,
+            "result_bytes": result["diff_bytes"],
+            "result_truncated": False,
+            "effect_disposition": "pending",
+        })
+    return summary
