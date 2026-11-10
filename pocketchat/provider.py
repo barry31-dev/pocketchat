@@ -28,7 +28,8 @@ import urllib.request
 from typing import Any, Dict, List, Optional, cast
 
 from .request import canonical_bytes
-from .tool_contracts import contract_names, contract_summary, provider_tool
+from .tool_contracts import (contract_names, contract_summary, provider_tool,
+                             file_work_contract_summary)
 
 DEFAULT_CHAT_PATH = "/chat/completions"
 MAX_ERROR_BODY_CHARS = 2000
@@ -168,6 +169,9 @@ def build_payload(messages: List[Dict[str, str]],
 
 
 def tool_offer(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if "file_work_tools" in config:
+        return [provider_tool(name) for name in config["file_work_tools"]
+                if name in ("read_file", "propose_file_change")]
     enabled = {
         "read_file": config.get("tool_read_enabled") is True,
         "write_file": config.get("tool_write_enabled") is True,
@@ -178,6 +182,10 @@ def tool_offer(config: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def tool_offer_summary(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if "file_work_tools" in config:
+        return file_work_contract_summary([
+            name for name in config["file_work_tools"]
+            if name in ("read_file", "propose_file_change")])
     return contract_summary({
         "read_file": config.get("tool_read_enabled") is True,
         "write_file": config.get("tool_write_enabled") is True,

@@ -326,3 +326,18 @@ also checks unique ids, hashes, state/reason compatibility and aggregate state.
 The receipt embeds the operator plan but public JSON omits it and artifact
 bodies. Full field semantics, bounds, historical reporting and unsupported
 platform behavior are in [task-acceptance.md](task-acceptance.md).
+
+### Opt-in file-work proposal references
+
+Only a host-activated file-work Session offers `propose_file_change`. Its paired
+`pocketchat-tool-result.v1` envelope uses `kind=propose_file_change`,
+`status=pending`, and `effect_disposition=pending`: the model has proposed text,
+not applied it. `content` is a bounded JSON reference containing `change_id`,
+`proposal_sha256`, `path` and `operation`; the complete diff and before bytes
+remain in the file-work service/store. A truncated reference is not approval.
+The existing read/write/task envelopes and trace schema are unchanged. The
+proposal's trace `tool.call.completed` payload records
+`file_change_status=proposed` and `change_id`, with the generic effect field
+absent because the stable trace enum has no pending classification. A later
+trusted file action must have its own evidence; model completion is not that
+action. See [file work](file-work.md#session-readpropose-checkpoint).

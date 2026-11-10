@@ -1,6 +1,7 @@
 # 聊天与文件工作：首个闭环设计
 
-> 原范围的提案/确认/apply 核心已作为库级原语实现；**它仍不是现有命令、undo 路径或发布声明**。
+> 提案/确认/apply 与持久撤销已作为库级原语实现，Session 的可选 read/propose 检查点也已接入。
+> **可信终端 apply/undo、开发 wheel 验收与发布凭证仍待完成。**
 > 依据用户 2026-11-05 的首个聊天/读写闭环要求。
 > 批准记录与顺序见 [slice queue](slice-queue.md)，发布事实只见 [release ledger](release-ledger.md)。
 > [English](file-work.md)
@@ -72,8 +73,32 @@ operation 只允许 create/replace。proposal digest 不含自身、approval 和
 与尚未注册的 `tools.execute_propose_file_change` helper：保存封闭提案、
 before/candidate 对象、可信确认、prepared/apply 回执及 identity-bound undo 回执。
 重启后重新打开 workspace store，即可撤销已成功修改或计算 dependency-safe session
-补偿顺序；内存缓存不具权威性。它仍未注册进 `tool_contracts`、CLI、Session 或 UI，
-因此本包没有开放默认模型/用户修改命令。
+补偿顺序；内存缓存不具权威性。helper 本身仍不是默认模型/用户修改命令。
+
+### Session read/propose 检查点
+
+可信宿主可显式创建 `FileWork(workspace)` 并作为 `Session(..., file_work=service)` 传入；
+普通 CLI/默认 Session 不自动开启。服务初始无授权，不导入 profile 既有授权，并绑定工作区 identity、
+Session run identity 与 provider/profile/model。宿主必须先展示 `service.disclosure()`，再携带
+匹配的 disclosure digest 调用 `service.grant(...)`，明确 exact read/write paths。
+展示告知属于宿主责任；模型文本或文件名提及不能调用授权。仅支持精确文本文件路径（最多 64 个，
+每个最多 1024 UTF-8 字节），拒绝目录、glob、内部存储与敏感路径。
+
+该模式仅提供已授权 `read_file` 与 `propose_file_change`；立即 `write_file`、grant、apply、approve、
+undo 均不向模型开放。提案声明不扩大 legacy task/profile 工具清单。读取与提案复用核心的
+descriptor-relative no-follow 边界；缺少安全原语时拒绝该模式文件 I/O，不降级，也不改普通聊天/旧工具行为。
+
+提案先持久保存 before/candidate 与记录，再返回一个配对的 `pending` result。模型得到有界
+change/proposal/path/operation 引用，不是已执行声明；trace 的既有 effect enum 不增加 pending；提案 completed event 单独记录
+`file_change_status=proposed` 与 `change_id`，不伪报 applied 或 read-only。完整 diff 从
+`service.state()["pending"]` 的防御性副本读取，本检查点不批准它。
+存在待审提案时，拒绝另一提案，并从下一次 provider offer 去掉提案工具。授权变更使 pending 展示与
+request-policy binding 失效；即使目标变成目录仍可撤权。工作区替换、不同 Session 或
+provider/profile/model 改变后，拒绝沿用旧授权，不向新目的地再发起该绑定的请求。
+重启新服务不自动激活授权/批准；已存提案只是证据，不是重启授权。
+
+`PC-FILE-CHAT-1` 整包仍未完成：两个可信终端入口、apply/undo 确认、取消与开发 wheel 黄金路径
+还需接续。本检查点未开放默认修改入口，模型 run 完成仍不代表文件已修改。
 
 边界：UTF-8，单原文件/候选文件沿用 16 KiB；完整 diff 64 KiB，元数据记录 64 KiB，
 每 workspace 修改存储 16 MiB，每 turn 一个 pending。按编码后字节计数，包含事件和对象文件。
@@ -92,7 +117,7 @@ conflict、recovery_required。文件记录是事实源，session/trace 只引�
 缺必需原语或无法证明所有权时拒绝变更，聊天/只读按各自能力合同；原语存在不等于运行通过。
 保留现有 OS/Python CI，首要实际验证环境 macOS CPython 3.13。
 
-已实现核心使用 descriptor-relative `O_NOFOLLOW` 遍历、0700/0600 私有存储、
+已实现核心使用descriptor-relative `O_NOFOLLOW` 遍历、0700/0600 私有存储、
 绑定身份的独占 writer claim、同目录独占临时文件、文件/目录 `fsync`、replace
 原子替换（create 使用独占 link）以及重新打开后的 readback。缺 primitive 时返回
 `file_unsupported_runtime`。已观察到 rename/link 成功之后，回读拒绝或回执存储错误

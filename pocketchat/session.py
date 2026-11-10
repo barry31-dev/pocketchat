@@ -28,6 +28,9 @@ from .context_projection import ContextProjectionError, project_context
 from .provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
 from .provider import estimate_tokens, tool_offer_summary
 from .tool_contracts import ToolContractError, parse_arguments
+from .file_work import FileWorkError
+from .file_changes import FileChangeError
+from .file_change_store import FileChangeStoreError
 from .request_admission import AdmissionError, admit_for_config
 from .task_budget import TaskBudgetError
 from .tool_results import ResultProjectionError, project_result
@@ -185,7 +188,7 @@ class Session:
                  run_id: Optional[str] = None, session_path: Optional[Path] = None,
                  verbose: bool = False, api_key: Optional[str] = None,
                  initial_messages: Optional[List[Dict[str, Any]]] = None,
-                 on_delta=None, task_observer=None) -> None:
+                 on_delta=None, task_observer=None, file_work=None) -> None:
         self.config = config
         self.verbose = verbose
         loaded_key = api_key if api_key is not None else load_api_key(config)
@@ -263,6 +266,18 @@ class Session:
         self._context_projection: Optional[Dict[str, Any]] = None
         self._projection_sidecar = ""
         self._memory_recall: Optional[Dict[str, Any]] = None
+        self.file_work = file_work
+        if file_work is not None:
+            try:
+                file_work.bind(
+                    config, self.run_id, host_identity=object(),
+                    conversation_id=(self.session_file.conversation_id
+                                     if self.session_file else None),
+                    branch=(self.session_file.branch_id or "main"
+                            if self.session_file else "main"))
+            except FileWorkError as exc:
+                self._release_session_writer()
+                raise ConfigError(str(exc)) from exc
 
     def config_summary(self) -> Dict[str, Any]:
         """The run configuration as the recorder sees it.
@@ -274,6 +289,13 @@ class Session:
         # profiles can point at the same model: without the name, a run's
         # config_summary would not say which of them ran.
         profile = self.config.get("profile")
+        summary_config = dict(self.config)
+        summary_config.pop("file_work_tools", None)
+        if self.file_work is not None:
+            try:
+                summary_config = self.file_work.request_config(summary_config)
+            except FileWorkError:
+                summary_config["file_work_tools"] = []
         return {
             "profile": profile if isinstance(profile, str) else "",
             "model": self.config["model"],
@@ -307,7 +329,7 @@ class Session:
                 "memory_recall_max_excerpt_bytes", 4096),
             "memory_recall_max_recall_tokens": self.config.get(
                 "memory_recall_max_recall_tokens", 1024),
-            "tools": tool_offer_summary(self.config),
+            "tools": tool_offer_summary(summary_config),
             "verbose": self.verbose,
             "pocketchat_version": pocketchat.__version__,
         }
@@ -559,6 +581,17 @@ class Session:
         tool_call_limit = _bounded_count(config, "tool_call_max_count", 2)
         tool_result_limit = _bounded_count(config, "tool_result_max_bytes", 16 * 1024)
         while True:
+            # Only an explicitly supplied host service may activate this mode.
+            # Re-evaluate live grants before every physical provider request.
+            config = dict(config)
+            config.pop("file_work_tools", None)
+            config.pop("file_work_policy_sha256", None)
+            if self.file_work is not None:
+                try:
+                    self.file_work.request_config(self.config)
+                    config = self.file_work.request_config(config)
+                except FileWorkError as exc:
+                    raise SessionError(exc.error_type, str(exc)) from exc
             self.request_count += 1
             self.turn_attempt_count += 1
             attempt_index = self.turn_attempt_count
@@ -836,6 +869,8 @@ class Session:
                                  config: Dict[str, Any],
                                  result_limit: int) -> str:
         tool_name = call.get("name")
+        if self.file_work is not None:
+            return self._execute_file_work_call(call, config, result_limit)
         enabled = ((tool_name == "read_file"
                     and config.get("tool_read_enabled") is True)
                    or (tool_name == "write_file"
@@ -972,6 +1007,71 @@ class Session:
         except ResultProjectionError as exc:
             raise SessionError(exc.error_type, str(exc)) from exc
 
+    def _execute_file_work_call(self, call, config, result_limit):
+        name = str(call.get("name") or "")
+        call_id = str(call.get("id") or "")
+        if name not in ("read_file", "propose_file_change"):
+            return self._tool_failure_result(
+                call, "unsupported_tool", "operation is not model-callable in file work",
+                result_limit, effect_disposition="none")
+        try:
+            arguments = parse_arguments(name, call.get("arguments"))
+        except ToolContractError as exc:
+            return self._record_invalid_arguments(call, str(exc), result_limit)
+        self.recorder.append("permission.requested", {
+            "action": "read" if name == "read_file" else "propose",
+            "resource": arguments["path"], "tool": name,
+        })
+        self.recorder.append("tool.call.started", {
+            "tool": name, "tool_call_id": call_id, "args_summary": name,
+        })
+        try:
+            result = self.file_work.execute(
+                name, arguments, config=self.config,
+                policy_sha256=config.get("file_work_policy_sha256", ""),
+                run_id=self.run_id, tool_call_id=call_id, max_bytes=result_limit)
+        except (FileChangeStoreError, OSError) as exc:
+            raise SessionError("file_store_unavailable", str(exc)) from exc
+        except (FileWorkError, FileChangeError) as exc:
+            error_type = exc.error_type
+            # The transaction core preserves its underlying store/I/O cause.
+            # Do not turn failed persistence into a correctable tool refusal.
+            if isinstance(exc.__cause__, (FileChangeStoreError, OSError)):
+                raise SessionError(error_type, str(exc)) from exc
+            self.recorder.append("permission.resolved", {
+                "decision": "denied", "decided_by": "session_grant",
+            })
+            self.recorder.append("tool.call.failed", {
+                "tool": name, "tool_call_id": call_id, "status": "failed",
+                "error": {"type": error_type, "message": str(exc)},
+                "duration_ms": 0, "guardrail_refusal": True,
+            })
+            return self._tool_failure_result(call, error_type, str(exc), result_limit)
+        effect = "pending" if name == "propose_file_change" else "none"
+        self.recorder.append("permission.resolved", {
+            "decision": "approved", "decided_by": "session_grant",
+        })
+        completed = {
+            "tool": name, "tool_call_id": call_id, "status": "completed",
+            "duration_ms": 0,
+            "result_bytes": len(json.dumps(result).encode("utf-8")),
+            "result_truncated": bool(result.get("truncated", False)),
+        }
+        if name == "propose_file_change":
+            # The stable trace enum has no pending value. Do not claim either
+            # an applied target or a read-only operation: proposal persistence
+            # is described separately, without changing that existing enum.
+            completed["file_change_status"] = "proposed"
+            completed["change_id"] = json.loads(result["content"])["change_id"]
+        else:
+            completed["effect_disposition"] = "none"
+        self.recorder.append("tool.call.completed", completed)
+        try:
+            return project_result(call_id, name, result, max_bytes=result_limit,
+                                  effect_disposition=effect).encoded
+        except ResultProjectionError as exc:
+            raise SessionError(exc.error_type, str(exc)) from exc
+
     def _record_invalid_arguments(self, call: Dict[str, Any], message: str,
                                   result_limit: int) -> str:
         self.recorder.append("tool.call.failed", {
@@ -985,14 +1085,15 @@ class Session:
             call, "invalid_arguments", message, result_limit)
 
     def _tool_failure_result(self, call: Dict[str, Any], error_type: str,
-                             message: str, result_limit: int) -> str:
+                             message: str, result_limit: int, *,
+                             effect_disposition=None) -> str:
         try:
             projection = project_result(
                 str(call.get("id") or ""),
                 str(call.get("name") or "unknown"),
                 {"status": "failed", "error": {
                     "type": error_type, "message": message}},
-                max_bytes=result_limit,
+                max_bytes=result_limit, effect_disposition=effect_disposition,
             )
         except ResultProjectionError as exc:
             raise SessionError(exc.error_type, str(exc)) from exc
