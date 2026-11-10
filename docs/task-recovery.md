@@ -64,6 +64,14 @@ checks every completed step:
 - task ids agree with the report, and no unresolved evidence issue or runner
   exception is present.
 
+Completed write paths in the report are relative to the caller workspace,
+including the TaskSpec's `workspace_root` prefix. For example, a task rooted at
+`notes` that writes `report.md` records `notes/report.md`; a separate
+`report.md` at the caller root is neither evidence for that write nor an output
+to replay. Resume checks the nested file's exact bytes before starting pending
+steps. Reports created before this path fix are not rewritten: missing or
+misbound evidence still refuses recovery rather than guessing a replacement.
+
 Evidence reads reuse the bounded, no-follow reader (1 MiB per artifact) and
 reject nonregular files, symlink traversal and changed-during-read files.
 A pending step's trace/session/command-archive and create-only file paths must

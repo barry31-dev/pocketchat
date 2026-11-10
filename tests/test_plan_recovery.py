@@ -77,6 +77,69 @@ class PlanRecoveryTests(unittest.TestCase):
         defaults.update(kwargs)
         return execute_plan(self.execution, **defaults)
 
+    def use_nested_workspace(self):
+        (self.root / "notes").mkdir()
+        self.spec = parse_spec({**self.spec.source, "workspace_root": "notes"})
+        self.plan = parse_plan({
+            **self.plan.source, "spec_sha256": spec_sha256(self.spec),
+        }, spec=self.spec)
+        self.execution = authorize(
+            self.plan, self.spec, expected_plan_sha256=plan_sha256(self.plan))
+
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
+    def test_nested_workspace_report_resumes_without_repeating_completed_write(self):
+        self.use_nested_workspace()
+        report, sha, initial = self.boundary(1)
+        payload = json.loads(report.read_text())
+        self.assertEqual([], payload["evidence_issues"])
+        self.assertEqual(["notes/report.md"], [c["path"] for c in payload["changes"]])
+        target = self.root / "notes/report.md"
+        self.assertEqual(digest(target), payload["changes"][0]["new_sha256"])
+        self.assertEqual(len(target.read_bytes()), payload["changes"][0]["bytes"])
+        preserved = {path: path.read_bytes() for path in (
+            report, target, Path(initial[0]["trace"]), Path(initial[0]["session"]))}
+        results = self.resume(report, sha)
+        self.assertEqual(["completed"] * 3, [r["status"] for r in results])
+        self.assertEqual(initial[0]["task_id"], results[0]["task_id"])
+        self.assertEqual(4, len(self.adapter.calls))
+        self.assertEqual(1, self.runner.call_count)
+        self.assertEqual("last\n", (self.root / "notes/last.md").read_text())
+        self.assertFalse((self.root / "report.md").exists())
+        self.assertFalse((self.root / "last.md").exists())
+        self.assertEqual(preserved, {p: p.read_bytes() for p in preserved})
+        latest = next(p for p in report.parent.glob("*.json") if p != report)
+        cumulative = json.loads(latest.read_text())
+        self.assertEqual(["notes/report.md", "notes/last.md"],
+                         [c["path"] for c in cumulative["changes"]])
+        self.assertEqual(sha, cumulative["recovery"]["sha256"])
+        self.resume(latest, digest(latest))
+        self.assertEqual(4, len(self.adapter.calls))
+        self.assertEqual(1, self.runner.call_count)
+        self.assertEqual(2, len(list(report.parent.glob("*.json"))))
+
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
+    def test_nested_workspace_evidence_does_not_bind_root_same_name(self):
+        self.use_nested_workspace()
+        decoy = self.root / "report.md"
+        decoy.write_text("unrelated root report\n")
+        report, sha, _ = self.boundary(1)
+        payload = json.loads(report.read_text())
+        self.assertEqual("notes/report.md", payload["changes"][0]["path"])
+        self.assertEqual(digest(self.root / "notes/report.md"),
+                         payload["changes"][0]["new_sha256"])
+        self.assertNotEqual(digest(decoy), payload["changes"][0]["new_sha256"])
+        decoy.write_text("unrelated root report changed\n")
+        self.resume(report, sha)
+        self.assertEqual("unrelated root report changed\n", decoy.read_text())
+
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS, "requires secure descriptor-relative reads")
+    def test_changed_nested_output_refuses_before_resuming(self):
+        self.use_nested_workspace()
+        report, sha, _ = self.boundary(1)
+        self.assertEqual([], json.loads(report.read_text())["evidence_issues"])
+        (self.root / "notes/report.md").write_text("external edit\n")
+        self.refuse(report, sha)
+
     def boundary(self, count=2):
         results = self.execute(stop_after=count)
         self.assertEqual(["completed"] * count + ["not_executed"] * (3-count),
