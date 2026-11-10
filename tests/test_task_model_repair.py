@@ -139,6 +139,71 @@ class AttemptTests(unittest.TestCase):
         return run_command_template(
             self.root, self.spec.commands[0], trace_path=trace, run_id="check")
 
+    def test_repair_prompt_binds_the_actual_authorized_source_snapshot(self):
+        first = self.run_first()
+        adapter = StubAdapter(json.dumps(action()))
+        result, details = attempt_model_repair(
+            command_runner=lambda template_id, trace, run_id: run_command_template(
+                self.root, self.spec.commands[0], trace_path=trace, run_id=run_id),
+            template_id="check", trace_path=self.root / "traces/check.jsonl",
+            run_id="check", failed=first, spec=self.spec, plan=self.plan,
+            config={**self.config, "provider_adapter": adapter},
+            api_key="", root=self.root)
+        self.assertTrue(result.ok)
+        prompt = json.loads(adapter.calls[0][0]["content"].split("\n", 1)[1])
+        self.assertIn("editable_sources", prompt,
+                      "a code repair needs the actual authorized source, not only logs")
+        sources = {source["path"]: source for source in prompt["editable_sources"]}
+        self.assertEqual("wrong\n", sources["answer.txt"]["content"])
+        self.assertEqual(6, sources["answer.txt"]["bytes"])
+        self.assertEqual(details["action"]["original_sha256"],
+                         sources["answer.txt"]["sha256"])
+        self.assertNotIn("input.txt", sources)
+        self.assertEqual(details["failure_fingerprint"], prompt["failure_fingerprint"])
+
+    def test_committed_source_change_during_provider_call_is_not_absorbed(self):
+        first = self.run_first()
+        adapter = StubAdapter(json.dumps(action()))
+        complete = adapter.complete
+        def concurrent_commit(*args, **kwargs):
+            (self.root / "answer.txt").write_text("human decision\n", encoding="utf-8")
+            for command in (("add", "answer.txt"), ("commit", "-m", "human edit")):
+                subprocess.run(["git", "-C", str(self.root), *command],
+                               capture_output=True, check=True)
+            return complete(*args, **kwargs)
+        adapter.complete = concurrent_commit
+        retries = []
+        with self.assertRaisesRegex(ModelRepairError, "changed since snapshot"):
+            attempt_model_repair(
+                command_runner=lambda *args: retries.append(args),
+                template_id="check", trace_path=self.root / "traces/check.jsonl",
+                run_id="check", failed=first, spec=self.spec, plan=self.plan,
+                config={**self.config, "provider_adapter": adapter},
+                api_key="", root=self.root)
+        self.assertEqual([], retries)
+        self.assertEqual("human decision\n", (self.root / "answer.txt").read_text())
+
+    def test_credential_in_authorized_source_is_not_sent_to_provider(self):
+        secret = "fixture-source-credential"
+        (self.root / "answer.txt").write_text(secret + "\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.root), "add", "answer.txt"],
+                       capture_output=True, check=True)
+        subprocess.run(["git", "-C", str(self.root), "commit", "-m", "source fixture"],
+                       capture_output=True, check=True)
+        first = self.run_first()
+        adapter = StubAdapter(json.dumps(action()))
+        retries = []
+        with self.assertRaisesRegex(ModelRepairError, "credential"):
+            attempt_model_repair(
+                command_runner=lambda *args: retries.append(args),
+                template_id="check", trace_path=self.root / "traces/check.jsonl",
+                run_id="check", failed=first, spec=self.spec, plan=self.plan,
+                config={**self.config, "provider_adapter": adapter},
+                api_key=secret, root=self.root)
+        self.assertEqual([], retries)
+        self.assertEqual([], adapter.calls)
+        self.assertEqual([], adapter.payloads)
+
     def test_repair_usage_is_settled_into_the_shared_task_budget(self):
         from pocketchat.task_budget import TaskBudget
         first = self.run_first()
@@ -524,7 +589,7 @@ class ExecutePlanIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         (self.root / "input.txt").write_text("bounded input\n", encoding="utf-8")
         (self.root / "answer.txt").write_text("wrong\n", encoding="utf-8")
         for args in (("init",), ("config", "user.name", "Test"),
@@ -564,6 +629,63 @@ class ExecutePlanIntegrationTests(unittest.TestCase):
         self.assertEqual("repaired", evidence["outcome"])
         self.assertNotIn("content", evidence["action"])
         self.assertFalse(evidence["task_acceptance_pass"])
+
+    def repaired_boundary(self):
+        adapter = StubAdapter(json.dumps(action()))
+        self.repair_config = {"provider_adapter": adapter, "model": "repair-model"}
+        results = execute_plan(
+            self.execution, run_task=lambda **_: None,
+            workspace=self.root, config=self.repair_config,
+            trace_dir=self.root / "traces", session_dir=self.root / "sessions",
+            command_runner=self.runner, model_repair="model",
+            spec=self.spec, plan=self.plan)
+        report = (self.root / results[0]["execution_report"]).resolve()
+        return report, __import__("hashlib").sha256(report.read_bytes()).hexdigest(), adapter
+
+    def test_repaired_command_resume_has_no_command_or_edit_replay(self):
+        report, digest, adapter = self.repaired_boundary()
+        files = [p for parent in (self.root / "traces", self.root / ".pocketchat")
+                 for p in parent.rglob("*") if p.is_file()]
+        files.append(self.root / "answer.txt")
+        before = {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in files}
+        command = mock.Mock(side_effect=AssertionError("completed command replayed"))
+        results = execute_plan(
+            self.execution, run_task=mock.Mock(side_effect=AssertionError("edit replayed")),
+            workspace=self.root, config=self.repair_config,
+            trace_dir=self.root / "traces", session_dir=self.root / "sessions",
+            command_runner=command, model_repair="model", spec=self.spec, plan=self.plan,
+            resume_report=report, expected_report_sha256=digest)
+        self.assertEqual("completed", results[0]["status"])
+        command.assert_not_called()
+        self.assertEqual(1, len(adapter.calls))
+        self.assertEqual(before, {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
+                                  for p in files})
+
+    def test_changed_repaired_source_refuses_before_resume(self):
+        report, digest, _ = self.repaired_boundary()
+        (self.root / "answer.txt").write_text("later human edit\n", encoding="utf-8")
+        command = mock.Mock()
+        with self.assertRaisesRegex(ValueError, "repaired file changed"):
+            execute_plan(
+                self.execution, run_task=lambda **_: None, workspace=self.root,
+                config=self.repair_config, trace_dir=self.root / "traces",
+                session_dir=self.root / "sessions", command_runner=command,
+                model_repair="model", spec=self.spec, plan=self.plan,
+                resume_report=report, expected_report_sha256=digest)
+        command.assert_not_called()
+
+    def test_changed_repair_receipt_refuses_before_resume(self):
+        report, digest, _ = self.repaired_boundary()
+        (self.root / ".pocketchat/task-repair/check.json").write_text("{}\n")
+        command = mock.Mock()
+        with self.assertRaisesRegex(ValueError, "evidence bytes changed"):
+            execute_plan(
+                self.execution, run_task=lambda **_: None, workspace=self.root,
+                config=self.repair_config, trace_dir=self.root / "traces",
+                session_dir=self.root / "sessions", command_runner=command,
+                model_repair="model", spec=self.spec, plan=self.plan,
+                resume_report=report, expected_report_sha256=digest)
+        command.assert_not_called()
 
     def test_execute_plan_rejects_unbound_repair_sources(self):
         with self.assertRaisesRegex(TaskExecutionError, "does not match"):

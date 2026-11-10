@@ -552,18 +552,22 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
                 evidence = (command.to_dict()
                             if callable(getattr(command, "to_dict", None)) else {})
                 evidence = dict(evidence)
+                completed_trace = (Path(command.trace_path)
+                                   if repair_details is not None else path)
+                completed_run = (step.id + ".retry-1"
+                                 if repair_details is not None else step.id)
                 if isinstance(evidence.get("trace"), str):
-                    evidence["trace"] = str(path)
+                    evidence["trace"] = str(completed_trace)
                 if repair_details is not None:
                     evidence["repair"] = repair_details
                 results.append({
                     "step_id": step.id,
                     "action": "run_command",
-                    "run_id": step.id,
+                    "run_id": completed_run,
                     "status": "completed" if getattr(command, "ok", False)
                     else "failed",
                     "exit_code": getattr(command, "exit_code", None),
-                    "trace": str(path),
+                    "trace": str(completed_trace),
                     "evidence": evidence,
                 })
                 bind_step_evidence(root, results[-1])
@@ -731,8 +735,12 @@ def _parse_execution_report(data: Dict[str, Any], name: str) -> Dict[str, Any]:
                 "execution report %s has an open or malformed step" % name)
         if "evidence_hashes" in step:
             hashes = step["evidence_hashes"]
+            hash_fields = {"record", "trace", "session", "archive"}
+            if (step.get("action") == "run_command"
+                    and isinstance((step.get("evidence") or {}).get("repair"), dict)):
+                hash_fields.update({"repair", "repair_request", "first_trace", "first_archive"})
             if (not isinstance(hashes, dict)
-                    or set(hashes) - {"record", "trace", "session", "archive"}
+                    or set(hashes) - hash_fields
                     or any(not _sha(value) for value in hashes.values())):
                 raise TaskExecutionError("execution report %s has invalid evidence hashes" % name)
         digest = step.get("archive_sha256")

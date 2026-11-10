@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "slice": "PC-CODE-REPAIR-1",
+  "base_commit": "ac73e67bc99cda15c027e473b48faabbab0ce398",
+  "authority": "Agent technical decision under the maintainer standing routine-development delegation of 2026-11-09.",
+  "contract": {
+    "goal": "Complete one source-bound bounded code-repair task through the existing authorized task exec CLI: a small Swift Package fails its local tests, one explicitly granted source is repaired, the same template is rerun once, actual source/diff/command evidence is handed off, and exact-boundary resume does not replay the repair or commands.",
+    "not_doing": [
+      "New task runtime, arbitrary shell or command selection",
+      "Installing packages, launching a simulator, network or real provider calls",
+      "Automatic overwrite approval or general planning",
+      "Formal tag, Release or package upload"
+    ],
+    "write_scope": [
+      "pocketchat/task_model_repair.py",
+      "tests/test_task_model_repair.py",
+      "tests/test_code_repair_demo.py",
+      "examples/code-repair-demo.py",
+      "docs/code-repair.md",
+      "docs/code-repair.zh-CN.md",
+      "docs/review-code-repair-v1.json",
+      "README.md",
+      "README.zh-CN.md",
+      "CHANGELOG.md",
+      "pocketchat/task_exec.py",
+      "pocketchat/task_recovery.py",
+      "tests/test_plan_recovery.py"
+    ],
+    "done_when": "Two red source-binding regressions turn green; focused real-file tests cover approved repair, same-failure stop, invalid action, stale source and context/credential refusal; one real Swift Package CLI fixture records failed and successful test commands, the exact edit and diff and no-replay resume; fresh-context scoped review, exact-head CI and main readback complete routine delivery.",
+    "evidence": "This task review record, the focused tests, and examples/code-repair-demo.py evidence.json and original command/repair/report artifacts.",
+    "budget_stop": "One bounded slice; no new slice after 75 minutes, checkpoint after 100 minutes. At most three scoped review rounds. Only new concerns justify repeated checks.",
+    "rollback": "Ordinary revert of this change; keep create-only evidence and never rewrite shared Git history."
+  },
+  "design": {
+    "alternatives": [
+      "Forward authenticated, bounded overwrite snapshots before the repair request and reuse the exact chosen snapshot at apply (selected).",
+      "Only add a hardcoded code-repair example with the existing log-only repair prompt (rejected: missing actual authorized source and unbound provider-time baseline).",
+      "Introduce a new code-agent runtime or arbitrary command surface (rejected: duplicates existing task tools and broadens permissions)."
+    ],
+    "selected": "Keep the existing opt-in repair and command schemas; add bounded authorized source observations to its request and hold them through the existing stale-write guard. The offline provider demonstrates orchestration only; actual Swift tests validate the fixture candidate."
+  },
+  "plan": [
+    "Add red tests for actual source payload and a clean committed source change during the provider call, preserving all existing refusal checks.",
+    "Snapshot each explicitly overwritable source before payload/provider work; bound the whole request and reject configured credential content; apply only the selected original snapshot.",
+    "Add a red exact-resume regression for the existing model-repaired command: bind its successful retry trace/run and retained repair/failure/request evidence; reject changed repaired source before any resume action.",
+    "Add an offline CLI fixture and focused orchestration tests for failure, repair, same-template retry, diff/artifact binding and no-replay resume.",
+    "Run focused Python checks and one serial real Swift Package fixture under observed memory headroom, then finish scoped independent review and controlled delivery."
+  ],
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27.0, CPython 3.9.6",
+      "command": "python3.13 -B -m unittest tests.test_task_model_repair tests.test_plan_recovery -v",
+      "result": "52 tests passed; source binding, real fingerprint and exact repaired-command recovery red regressions turned green. Initial recovery test-path alias errors were corrected before the valid red run.",
+      "log_sha256": "75f8c391ea41a4dea0ec741eec912a89eae62a3e4aa2316dab2a55a21e9c5404"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.13 -B -m unittest tests.test_code_repair_demo -v",
+      "result": "2 portable real-file/declared-command fixture tests passed; this validator does not compile Swift.",
+      "log_sha256": "4c236b21c7134c9f2d378845423e38742f4b32174d0686cd8c6a08641abfe8f4"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff 0.17.3 check --select E9,F <six changed Python paths>",
+      "result": "All checks passed under the repository-required profile. The initial broader default profile returned 131 lint/style findings and was not treated as the required-profile result."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "unverified",
+      "command": "python3.13 -B examples/code-repair-demo.py --output <new private evidence directory>",
+      "result": "Exit 1: the selected Command Line Tools could not resolve XCTest before any test assertion; the bounded retry also exited 1. No successful real Swift acceptance claimed. Selected swift reports Apple Swift 6.4, arm64 macOS 27.0. Swap remained 1120.81 MiB before/after; free memory moved 50% to 44%; no OOM observed.",
+      "log_sha256": "bdd83853a16f0a6c19d5aedf0c54f9811855b2fa0b22fbe268f51bf233ab02cd"
+    }
+  ],
+  "review_rounds": [],
+  "unverified": [
+    "Real-provider diagnosis quality; arbitrary user projects and commands; remote/network side effects; OS-level sandbox; other-platform manual Swift execution; formal publication."
+  ],
+  "scope_amendment": {
+    "at": 1794342039.347064,
+    "added_paths": [
+      "pocketchat/task_exec.py",
+      "pocketchat/task_recovery.py",
+      "tests/test_plan_recovery.py"
+    ],
+    "reason": "The existing command step still points at the failed original trace after a successful repair, while strict recovery expects a successful same-run archive. A complete code-repair/resume path requires this narrowly bounded evidence integration.",
+    "authority": "Agent technical decision under the maintainer standing routine-development delegation of 2026-11-09.",
+    "original_contract_sha256": "176bbef210dbbaf7ade4b1996aad46732811da9f58ee01881f1f511fae5d2082"
+  },
+  "checkpoint": {
+    "state": "private_candidate_pending_swift_acceptance_and_independent_review",
+    "completed": false,
+    "next_action": "Use the existing full Xcode Swift testing toolchain and SDK explicitly in the declared fixture command, without changing global settings or installing dependencies; inspect the preserved review and complete only missing coverage/fixes, then controlled push/PR/exact CI/main readback.",
+    "unverified": "Independent core and added-fixture review unfinished; successful Swift run, full product suite/build/wheel/install, exact candidate CI and public integration not done. No real provider, tag, Release or upload."
+  }
+}

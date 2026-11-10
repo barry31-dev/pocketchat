@@ -197,6 +197,17 @@ def _evidence_paths(root, result):
     if result.get("action") == "run_command":
         trace = Path(paths["trace"])
         paths["archive"] = (trace.parent / "command-evidence" / (trace.stem + ".json")).as_posix()
+        repair = (result.get("evidence") or {}).get("repair")
+        if repair is not None:
+            step_id = result.get("step_id")
+            if (not isinstance(repair, dict) or not isinstance(step_id, str)
+                    or not step_id or "/" in step_id or "\\" in step_id):
+                raise TaskRecoveryError("invalid repaired command identity")
+            base = Path(".pocketchat/task-repair")
+            paths["repair"] = (base / (step_id + ".json")).as_posix()
+            paths["repair_request"] = (base / (step_id + ".attempt-1.json")).as_posix()
+            paths["first_trace"] = (trace.parent / (step_id + ".jsonl")).as_posix()
+            paths["first_archive"] = (trace.parent / "command-evidence" / (step_id + ".json")).as_posix()
     else:
         from .tasking import _record_path
         paths["record"] = _record_path(Path("."), result.get("task_id")).as_posix()
@@ -229,7 +240,7 @@ def _json_lines(data):
     return rows
 
 
-def _trace_events(data):
+def _trace_events(data, *, terminal="run.finished"):
     events = _json_lines(data)
     ids = set()
     for event in events:
@@ -244,7 +255,7 @@ def _trace_events(data):
     terminals = [event for event in events if event["type"] in (
         "run.finished", "run.failed", "run.cancelled")]
     if (events[0]["type"] != "run.started" or len(terminals) != 1
-            or terminals[0] != events[-1] or events[-1]["type"] != "run.finished"):
+            or terminals[0] != events[-1] or events[-1]["type"] != terminal):
         raise TaskRecoveryError("recovery trace has no unique completed boundary")
     return events
 
@@ -276,6 +287,40 @@ def _session_records(data, run_ids, paths, root):
         raise TaskRecoveryError("invalid session tool context") from exc
 
 
+def _check_repair(root, expected, repair, paths, captured):
+    """Bind the first failure, request, receipt and actual repaired bytes."""
+    from .task_model_repair import MODEL_REPAIR_SCHEMA
+    from .task_repair import failure_fingerprint
+    from types import SimpleNamespace
+    receipt = _decode(captured["repair"])
+    if (not isinstance(receipt, dict)
+            or receipt.get("schema_version") != MODEL_REPAIR_SCHEMA
+            or receipt.get("repair_mode") != "model"
+            or receipt.get("step_id") != expected.id
+            or receipt.get("outcome") != "repaired"
+            or receipt.get("attempted") is not True or receipt.get("attempts") != 2
+            or any(receipt.get(key) != value for key, value in repair.items())):
+        raise TaskRecoveryError("repair summary conflicts with its receipt")
+    first = _decode(captured["first_archive"])
+    first_events = _trace_events(captured["first_trace"], terminal="run.failed")
+    if (not isinstance(first, dict) or first.get("run_id") != expected.id
+            or first.get("template_id") != expected.command_template_id
+            or first.get("exit_code") in (None, 0)
+            or any(event["run_id"] != expected.id for event in first_events)
+            or receipt.get("failure_fingerprint") != failure_fingerprint(SimpleNamespace(to_dict=lambda: first))):
+        raise TaskRecoveryError("repair first failure identity conflicts")
+    if (receipt.get("request_snapshots") != [paths["repair_request"]]
+            or receipt.get("request_snapshot_sha256") != [_sha(captured["repair_request"])]):
+        raise TaskRecoveryError("repair request bytes conflict with receipt")
+    action = receipt.get("action")
+    if not isinstance(action, dict):
+        raise TaskRecoveryError("repair receipt lacks an edit binding")
+    data = _read(root, _relative(root, action.get("path")), protect=True)
+    if (_sha(data) != action.get("new_sha256")
+            or len(data) != action.get("bytes_after")):
+        raise TaskRecoveryError("repaired file changed after the boundary")
+
+
 def _check_completed(root, expected, step, changes):
     from .task_command import CommandError, load_command_evidence
     from .tasking import TaskError, parse_record, policy_digest
@@ -289,14 +334,17 @@ def _check_completed(root, expected, step, changes):
             raise TaskRecoveryError("completed step evidence bytes changed")
         events = _trace_events(captured["trace"])
         if expected.action == "run_command":
-            if any(event["run_id"] != expected.id for event in events):
+            evidence = step.get("evidence")
+            repair = evidence.get("repair") if isinstance(evidence, dict) else None
+            run_id = expected.id + ".retry-1" if repair is not None else expected.id
+            if any(event["run_id"] != run_id for event in events):
                 raise TaskRecoveryError("command trace belongs to another run")
             archive = load_command_evidence(root, paths["trace"])
             if captured["archive"] != _read(root, paths["archive"]):
                 raise TaskRecoveryError("command evidence changed while reading")
             if (step.get("archive_sha256") != hashes["archive"]
-                    or step.get("run_id") != expected.id
-                    or archive.get("run_id") != expected.id
+                    or step.get("run_id") != run_id
+                    or archive.get("run_id") != run_id
                     or archive.get("template_id") != expected.command_template_id
                     or archive.get("exit_code") != 0 or archive.get("timed_out") is not False
                     or step.get("exit_code") != 0):
@@ -305,11 +353,15 @@ def _check_completed(root, expected, step, changes):
             if not isinstance(evidence, dict):
                 raise TaskRecoveryError("completed command has no summary")
             for key, value in evidence.items():
+                if key == "repair":
+                    continue
                 actual = archive.get(key)
                 if key == "trace":
                     actual = _relative(root, actual)
                 if value != actual:
                     raise TaskRecoveryError("command summary conflicts with archive")
+            if repair is not None:
+                _check_repair(root, expected, repair, paths, captured)
             return
         record = parse_record(_decode(captured["record"]), task_id=step.get("task_id"))
         if (record.state != "completed"

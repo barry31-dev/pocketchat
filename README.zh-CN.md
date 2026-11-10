@@ -363,3 +363,7 @@ Apache-2.0。见 `LICENSE`。
 `v0.3.0` 源码版本仍保持公开。
 
 本文的中文版与英文版逐命令一致，英文版见 [`README.md`](README.md)。
+
+### 来源绑定的代码修复
+
+现有可选任务修复在请求前绑定实际授权源码，并支持成功 retry 后的精确无重放恢复。可运行[离线 Swift Package 夹具](docs/code-repair.zh-CN.md)；它执行真实本地测试，不认证真实 provider 的诊断质量。
