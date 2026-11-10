@@ -1,7 +1,8 @@
 # Chat and file work: first closed-loop design
 
-> The original-scope proposal/confirmation/apply core now exists as library
-> primitives; it is not an implemented command surface, undo path or release claim.
+> Proposal/confirmation/apply and persistent undo exist as library primitives.
+> The opt-in Session read/propose checkpoint also exists, but trusted terminal
+> apply/undo, development-wheel acceptance and release evidence remain pending.
 > The user requested the first usable chat-and-file-work loop on 2026-11-05.
 > Approval reachability and scheduling live in [the slice queue](slice-queue.md).
 > Publication status stays in [the release ledger](release-ledger.md).
@@ -106,9 +107,47 @@ The file-change service lives in `pocketchat.file_changes`,
 before/candidate objects, trusted confirmation, prepared/apply receipts and
 identity-bound undo receipts. Reopening the workspace store is sufficient to
 undo a successful change or compute a dependency-safe session compensation
-order; no in-memory cache is authoritative. It is not registered in
-`tool_contracts`, the CLI, Session or UI, so this package still exposes no
-default model or user mutation command.
+order; no in-memory cache is authoritative. The helper itself is not a default
+model or user mutation command.
+
+### Session read/propose checkpoint
+
+A trusted host may explicitly construct `FileWork(workspace)` and supply it as
+`Session(..., file_work=service)`. Normal CLI/default sessions do not activate
+this mode. The service starts with no grants, ignores existing profile grants,
+and binds its workspace identity, Session run identity and provider/profile/model.
+The host must show `service.disclosure()` before calling `service.grant(...)`
+with the exact read/write paths and matching disclosure digest. Disclosure is a
+host responsibility; model text or a filename mention cannot invoke grants.
+Only exact text-file paths are supported (at most 64, each at most 1024 UTF-8
+bytes); directories, globs, internal storage and sensitive paths are refused.
+
+This mode offers only granted `read_file` and `propose_file_change`; immediate
+`write_file`, grant, apply, approve and undo are never model-callable. The new
+proposal declaration does not extend the legacy task/profile tool inventory.
+Reads and proposals reuse the core descriptor-relative no-follow boundary;
+unavailable secure primitives refuse this mode's file I/O, without downgrading
+it or changing ordinary chat/legacy tool behavior.
+
+A proposal preserves the before bytes/candidate and durable record before
+returning one paired `pending` result. The bounded model result contains a
+change/proposal/path/operation reference, not an applied claim. The stable trace effect enum is unchanged: a proposal completed event records
+`file_change_status=proposed` and `change_id`, omitting the generic effect field
+rather than claiming an applied target or a read-only operation. The complete diff
+is available through a defensive copy of `service.state()["pending"]`; this
+checkpoint does not approve it. While that proposal is pending, another proposal
+is refused and its tool is omitted from the next provider offer. Grant changes
+invalidate pending presentation and request-policy bindings. Revocation remains
+possible if a target becomes a directory. Workspace replacement, a different
+Session or a provider/profile/model change refuse reusing the old grants; the
+new destination does not receive another request from this file-work binding.
+Restarted services have no implicitly active grants or pending approvals. The
+stored proposal remains evidence, not restart authorization.
+
+The complete `PC-FILE-CHAT-1` package remains unfinished: both trusted terminal
+paths, apply/undo confirmation, cancellation and development-wheel golden-path
+validation must still be integrated. No default mutation entry is exposed by
+this checkpoint, and a completed model run still does not imply changed files.
 
 Bounds: UTF-8 text only, at most the existing 16 KiB per input/candidate file;
 64 KiB per rendered diff, 64 KiB per metadata record, 16 MiB per workspace change

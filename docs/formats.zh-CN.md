@@ -228,3 +228,15 @@ task-record/policy/plan 身份、时间、执行状态及逐项 bytes/SHA-256。
 落盘记录内含操作者 plan；公开 JSON 不复制 plan 或产物正文。
 字段语义、预算、历史报告与平台边界只见
 [task-acceptance.zh-CN.md](task-acceptance.zh-CN.md)。
+
+### 可选文件工作提案引用
+
+只有宿主显式启用的文件工作 Session 提供 `propose_file_change`。其配对
+`pocketchat-tool-result.v1` envelope 使用 `kind=propose_file_change`、
+`status=pending`、`effect_disposition=pending`：模型提出文本，但没有 apply。
+`content` 是包含 `change_id`、`proposal_sha256`、`path`、`operation` 的有界 JSON 引用；
+完整 diff 与 before bytes 仍属于文件工作服务/存储，截断引用不是批准。
+既有 read/write/task envelope 与 trace schema 不变。提案 `tool.call.completed` trace payload
+单独记录 `file_change_status=proposed` 与 `change_id`，不写 generic effect 字段，因为稳定 trace enum
+没有 pending 分类。后续可信文件动作需要自己的证据，模型完成不等于该动作。
+详见[文件工作](file-work.zh-CN.md#session-readpropose-检查点)。

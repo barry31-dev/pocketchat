@@ -1,0 +1,151 @@
+{
+  "schema_version": "pocketchat-file-chat-review.v1",
+  "slice": "PC-FILE-CHAT-1",
+  "base_commit": "677fcd0514afa1e936104721d5c458591e69ec75",
+  "checkpoint": "Session read/propose integration only",
+  "authority": "maintainer standing routine-development delegation, 2026-11-09",
+  "goal": "Connect a host-owned, explicitly disclosed file-work service to Session without exposing model mutation or inheriting profile grants.",
+  "alternatives": [
+    {
+      "approach": "Reuse immediate write_file",
+      "disposition": "rejected: bypasses proposal and confirmation boundary"
+    },
+    {
+      "approach": "Duplicate the file transaction service",
+      "disposition": "rejected: discards the already reviewed persistence and rollback core"
+    },
+    {
+      "approach": "Host-owned grant/proposal facade over existing file service",
+      "disposition": "selected: preserves legacy tools, exact grants and durable proposals"
+    }
+  ],
+  "plan": [
+    "Observe red owner-module and real Session protocol tests for disclosure, exact grants, one pending proposal, no immediate write and revocation/profile mismatch.",
+    "Implement bounded FileWork facade; declare propose-only chat contract separately from the stable legacy task-tool inventory.",
+    "Connect opt-in Session dispatch and provider offers; keep legacy/default sessions unchanged and record paired bounded proposal references.",
+    "Verify only affected owner/protocol/compatibility layers; review the new checkpoint diff and land through routine delivery."
+  ],
+  "done_when": "This checkpoint allows explicitly granted read and durable proposal-only tool calls in a Session; original bytes remain unchanged and no apply/undo tool is offered. Full package acceptance remains pending until trusted terminal apply/undo and development-wheel evidence.",
+  "write_scope": [
+    "pocketchat/file_work.py",
+    "pocketchat/session.py",
+    "pocketchat/provider.py",
+    "pocketchat/tool_contracts.py",
+    "tests/test_file_work.py",
+    "tests/test_file_work_tools.py",
+    "tests/test_tool_contracts.py",
+    "docs/file-work.md",
+    "docs/file-work.zh-CN.md",
+    "docs/review-file-chat-v1.json",
+    "docs/formats.md",
+    "docs/formats.zh-CN.md"
+  ],
+  "risk": "high: file permissions and provider boundary; independent new-diff-only technical review required",
+  "review_rounds": [
+    {
+      "round": 1,
+      "scope": "new chat checkpoint only; not the historical file-transaction core",
+      "status": "incomplete",
+      "reason": "stream disconnected before completion",
+      "next": "Reuse the recorded coverage; independently review the two new descriptor/effect fixes and confirm the final recommendation without rerunning the old file core."
+    }
+  ],
+  "verification": [
+    {
+      "command": "python3 -m unittest discover -s tests -p 'test_file_work*.py' -v",
+      "python": "3.9.6",
+      "platform": "macOS arm64",
+      "tests": 22,
+      "result": "green",
+      "exit": 0,
+      "why_repeat": "New descriptor-identity and refused-write-effect fixes justified the final run; the canonical-path fixture was corrected and old pathname-only seam explicitly observed red."
+    },
+    {
+      "command": "unittest discover of test_tool_contracts.py, test_tool_calls.py, test_provider.py, test_session.py, test_session_integrity.py, test_session_read_errors.py, test_tool_results.py",
+      "tests": 55,
+      "result": "green",
+      "exit": 0,
+      "scope": "Existing legacy protocol and Session paths; no full-suite rerun."
+    },
+    {
+      "command": "ruff check --select E9,F on the six affected Python files",
+      "tool": "ruff 0.17.3",
+      "result": "green",
+      "exit": 0
+    }
+  ],
+  "not_run": [
+    "Full-screen/line terminal integration, apply/undo through terminals, cancellation integration, real provider, development-wheel golden path, Windows runtime and formal release."
+  ],
+  "rollback": "Revert this opt-in checkpoint; default CLI/model behavior is unchanged.",
+  "red_evidence": [
+    "The new facade and Session keyword/contract were absent before implementation.",
+    "A directory-replaced grant could not be revoked; a same-inode workspace symlink was not rejected by the facade; config_summary advertised legacy writes in file mode.",
+    "Same-run-id different Session could import facade grants, and stored owners did not use actual persisted conversation/branch.",
+    "A proposal trace emitted pending outside the stable effect enum."
+  ],
+  "code_blob_sha256": {
+    "pocketchat/file_work.py": "e3e8bff10f11c66d8a4745105bcd5a354f6b33cd1763e1993d821fdbed758f54",
+    "pocketchat/session.py": "45c85ce6983ee8399c58ff23f2caf652cb918a37efa5182c80a0a9f551875a00",
+    "pocketchat/provider.py": "da1327db447fec4a47b456080b05a8dea1f0e8987d7d53d3f7df686e56098862",
+    "pocketchat/tool_contracts.py": "2ac657fa45d49ad8df387ce7cbb8892bdd0619fe2020d6e2286dd6b605da0724",
+    "tests/test_file_work.py": "3190364cf43300c49f9e45d26b575ffa2051ded67fe95e1d7419903d7be745da",
+    "tests/test_file_work_tools.py": "9e2ab13ff0596c3ac63eaff7ad9e9052aaac377f8beb0b2f9fa536c1fd384bfe"
+  },
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/file-work.md",
+    "docs/file-work.zh-CN.md",
+    "docs/formats.md",
+    "docs/formats.zh-CN.md",
+    "docs/review-file-chat-v1.json",
+    "pocketchat/file_work.py",
+    "pocketchat/provider.py",
+    "pocketchat/session.py",
+    "pocketchat/tool_contracts.py",
+    "tests/test_file_work.py",
+    "tests/test_file_work_tools.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "CHAT-GRANT-SESSION-BINDING",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:session-instance-and-conversation-binding",
+      "reason": "Observed red same-run-id reuse and owner mismatch; a per-Session host token now prevents reuse and owner uses persisted conversation/branch."
+    },
+    {
+      "id": "CHAT-ROOT-DESCRIPTOR-IDENTITY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:read:attest-opened-root",
+      "reason": "An independently recorded namespace seam exposed pathname-only checks. A corrected canonical-path regression rejects the old seam; reads now attest and pin the opened workspace descriptor before no-follow traversal."
+    },
+    {
+      "id": "CHAT-REFUSED-WRITE-EFFECT",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:refused-write:zero-target-effect",
+      "reason": "Red regression showed refused write_file inherited applied effect from the legacy result projector; the file-work refusal now explicitly records none."
+    },
+    {
+      "id": "CHAT-TRACE-EFFECT-CONTRACT",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:trace:stable-effect-enum",
+      "reason": "Red enum check rejected pending in the stable trace schema; proposal trace stores proposed/change identity separately without extending the enum or claiming applied/read-only."
+    }
+  ],
+  "independent_review_status": "incomplete: the fresh-context agent read the checkpoint and recorded bounded probes, then disconnected before final recommendation; no independent approval is claimed.",
+  "security_review_depth": "deep review remains pending on the fixed new diff before main integration",
+  "delivery_status": "review-pending checkpoint candidate only; no main or full-package completion claim"
+}

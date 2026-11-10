@@ -94,6 +94,30 @@ def _contracts():
 
 CONTRACTS = _contracts()
 
+# The stable task/profile inventory remains closed. This proposal contract is
+# offered only through a host-owned FileWork session, never task-policy tools.
+FILE_WORK_CONTRACTS = {
+    "propose_file_change": ToolContract(
+        name="propose_file_change",
+        description="Propose one bounded UTF-8 file change; never apply it.",
+        parameters=_path_parameters({
+            "content": {"type": "string", "description": "Proposed UTF-8 text"},
+        }),
+        required=("path", "content"),
+        argument_types={"path": str, "content": str},
+    ),
+}
+
+
+def _contract(name):
+    return CONTRACTS.get(name) or FILE_WORK_CONTRACTS.get(name)
+
+
+def file_work_contract_summary(names):
+    return [{"name": name, "available": True,
+             "schema_hash": _contract(name).schema_hash} for name in names]
+
+
 
 def contract_names() -> Tuple[str, ...]:
     return tuple(CONTRACTS)
@@ -101,7 +125,7 @@ def contract_names() -> Tuple[str, ...]:
 
 def provider_tool(name: str) -> Dict[str, Any]:
     """Return a provider tool declaration copied from the host contract."""
-    contract = CONTRACTS.get(name)
+    contract = _contract(name)
     if contract is None:
         raise ToolContractError("unknown tool contract %r" % name)
     return {
@@ -116,7 +140,7 @@ def provider_tool(name: str) -> Dict[str, Any]:
 
 def parse_arguments(name: str, value: Any) -> Dict[str, str]:
     """Validate one model-supplied argument object without touching I/O."""
-    contract = CONTRACTS.get(name)
+    contract = _contract(name)
     if contract is None:
         raise ToolContractError("unknown tool contract %r" % name)
     if not isinstance(value, dict):
