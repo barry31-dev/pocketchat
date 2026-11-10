@@ -108,3 +108,13 @@ task-policy 名称和宿主参数校验现在都来自同一个封闭 contract �
 保持 additive 且默认关闭：未启用工具不出现，合法调用参数不变，未知参数在 I/O
 之前返回有界 `invalid_arguments`。Trace 的 `tools[]` 仍列出三个名称、可用标志与
 逐 contract schema hash。边界见 [security.zh-CN.md](security.zh-CN.md)。
+
+
+## v1.2 候选兼容边界
+
+文件工作流为 additive、opt-in 接口，保留既有 CLI/JSON/退出码和 `read_file` /
+create-only `write_file` 契约，不给模型立即 apply/undo、自批或扩权。新 facade 只提供
+明确授权的读取和提案，仍需可信终端确认及 fresh exact undo grant。`/files cancel`
+失效未确认动作，不改写已应用回执。安全描述符能力不支持时拒绝对应文件操作，
+普通聊天不因此关闭。精确候选和真实 provider/人工产物验收要求见
+[发布候选说明](release-1.2.zh-CN.md)。

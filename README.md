@@ -1,5 +1,10 @@
 # pocketchat
 
+For the version 1.2 source-candidate preparation and exact-artifact checklist,
+see [release-1.2.md](docs/release-1.2.md). Publication facts are owned by the
+[release ledger](docs/release-ledger.md); source and offline fixture results do
+not certify a real provider or manual file-terminal acceptance.
+
 `pocketchat` is a small single-user CLI chat agent. It is **not** a general
 agent: it has no code execution, no shell and no unbounded tool surface. Its
 optional local tools are explicit, allowlisted and workspace-confined. It holds

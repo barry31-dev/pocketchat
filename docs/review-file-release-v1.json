@@ -1,0 +1,93 @@
+{
+  "schema_version": "pocketchat-file-release-review.v1",
+  "slice": "PC-FILE-RELEASE-1",
+  "base_commit": "8ad2a9f7e22847e94dd68e81837edf3967389712",
+  "authority": "Agent routine preparation under the public development process and maintainer instruction of 2026-11-10 to finish unfinished work; no specific tag/Release permission is inferred.",
+  "goal": "Prepare the approved version 1.2.0 file-work candidate, its consistent package/instructions and exact frozen offline wheel evidence.",
+  "not_doing": [
+    "Real-provider or manual file-work acceptance",
+    "Formal tag, Release, upload or shared-history rewrite",
+    "Stage B activation or a new runtime"
+  ],
+  "done_when": "Version and package sources agree on 1.2.0, candidate instructions retain permission/cancellation/platform limits, focused packaging tests and exact-source clean-wheel golden acceptance pass, review/CI/main preparation integration are read back. The original full release done_when still requires real-provider/manual acceptance and exact external-action authority plus publication/readback.",
+  "write_scope": [
+    "pocketchat/__init__.py",
+    "pyproject.toml",
+    "CHANGELOG.md",
+    "README.md",
+    "README.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/compatibility.zh-CN.md",
+    "docs/release-ledger.md",
+    "docs/file-work-validation.md",
+    "docs/file-work-validation.zh-CN.md",
+    "docs/pocketchat-evidence-matrix.md",
+    "docs/release-1.2.md",
+    "docs/release-1.2.zh-CN.md",
+    "docs/review-file-release-v1.json",
+    "docs/slice-queue.md"
+  ],
+  "plan": [
+    "Serialized integrator readback: mark the accepted file-chat development package delivered and name the original release card task preparation branch before implementation.",
+    "Observe the actual CLI target-version check red for 1.2.0; update only existing version sources and candidate instructions, with no runtime/schema change.",
+    "Run existing focused package checks, review the new metadata/docs diff, then commit and freeze exact candidate/wheel outside the source tree.",
+    "Run the reusable installed-wheel fixture and required exact-candidate CI; integrate preparation and retain the original card for its actual remaining release conditions."
+  ],
+  "budget_stop": "One release preparation slice. Stop corresponding real-provider/manual/external release actions on missing evidence or exact authority; do not claim the full release delivered.",
+  "rollback": "Ordinary reviewed revert before a formal release; do not move published tags or rewrite shared history.",
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Actual source CLI --version compared with the approved 1.2.0 target",
+      "result": "Before preparation: pocketchat 1.1.0; target assertion failed, exit 1. No synthetic test file was added for reversible metadata."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "PYTHONPATH=tests:. python3.13 -B -m unittest test_release_smoke test_package_independence -v",
+      "result": "25 focused packaging/independence cases passed, exit 0 on macOS/CPython 3.13.9. This is not yet the final 1.2 wheel build or a real provider run."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.13 -B -m pocketchat --version; Ruff 0.17.3 E9/F on runtime version source; git diff --check",
+      "result": "Source CLI reports pocketchat 1.2.0; lint and whitespace checks pass, exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Authenticated GitHub release names and remote tag refs for v1.2.0/1.2.0 on 2026-11-10",
+      "result": "No named release or matching tag ref observed. Covers only those GitHub names, not a package index or future state."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Controlled pre-push public-content check and attribution diff readback",
+      "result": "The initial unpushed review attribution matched a reserved contributor-file token. The attribution now refers to the public development process without that token; no policy allowance was added and no public history was rewritten."
+    }
+  ],
+  "reviews": [
+    {
+      "scope": "All 12 changed/new preparation files; version agreement, registered scope, status/compatibility claims, local links and PR45/49 ancestry",
+      "reviewer": "Fresh-context agent under maintainer technical-review delegation",
+      "source_type": "current code/tests/schema (C)",
+      "verification": "verified",
+      "conclusion": "No blocker or major findings; one minor evidence-status label was corrected to canonical verified and read back.",
+      "findings": [
+        {
+          "id": "RELEASE-STATUS-ENUM",
+          "severity": "minor",
+          "status": "fixed",
+          "fingerprint": "release-review:verification:noncanonical-status",
+          "reason": "Use verified for verification status; retain the actual prior mismatch in result. Metadata-only correction read back, no product test repeated."
+        }
+      ],
+      "limitations": "Static review only; tests/builds/fixtures/CI not rerun by reviewer. No real-provider/manual acceptance, external release authority or unchanged-runtime review claimed."
+    }
+  ],
+  "unverified": [
+    "Exact committed candidate/wheel and new-head CI are bound after source inputs are frozen.",
+    "Artifact-bound real-provider/manual acceptance and specific tag/Release authority are missing; the full original release card remains unfinished."
+  ]
+}

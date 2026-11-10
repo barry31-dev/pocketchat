@@ -154,3 +154,16 @@ does not authorize a tag, GitHub Release or package-index upload.
 - Unverified: real provider behavior/quality and billing, isolated-build
   reproducibility at another machine, package-index reachability, and all
   artifacts outside the exact SHA/run/artifact IDs above.
+
+
+### Version 1.2.0 preparation (not published)
+
+- Publication: not performed. Tag, Release URL, publication time and uploaded
+  artifact: not recorded. No package-index action is implied.
+- Source preparation and acceptance procedure: [release-1.2.md](release-1.2.md).
+  Exact candidate/wheel identity and machine results are recorded after freezing
+  that candidate; none are copied from the version 1.1 development wheel.
+- Required outstanding authority/evidence: artifact-bound real-provider and
+  manual file-terminal acceptance, then specific tag/Release authorization and
+  remote artifact/public-install readback. The routine development delegation
+  does not remove these release requirements.
