@@ -373,6 +373,8 @@ class Session:
         except KeyboardInterrupt:
             status = "cancelled"
             reason = "interrupted by the user"
+            if self.file_work is not None:
+                self.file_work._invalidate()
         except SessionError as exc:
             status = "failed"
             error = {"type": exc.error_type, "message": exc.message}

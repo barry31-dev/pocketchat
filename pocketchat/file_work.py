@@ -288,6 +288,9 @@ class FileWork:
         command, args = parts[0], parts[1:]
         if not trusted:
             raise FileWorkError('file authorization requires trusted interactive terminal input')
+        if command == '/files' and args == ['cancel']:
+            self._invalidate()
+            return 'Pending file review cancelled; file grants revoked. Applied receipts are unchanged.'
         if command == '/files' and not args:
             state = {key: value for key, value in self.state().items() if key != 'pending'}
             state['pending_change_id'] = (self._pending['change']['change_id']
@@ -383,5 +386,5 @@ class FileWork:
             receipt = undo_file_change(self.workspace, self.store, change['change_id'],
                                        approval_id=approval_id, write_paths=self._write_paths)
             return self._terminal_text(json.dumps({'status': 'undone', 'receipt': receipt}, sort_keys=True))
-        raise FileWorkError('usage: /files [read|write|revoke <paths>] | /diff | '
+        raise FileWorkError('usage: /files [cancel|read|write|revoke <paths>] | /diff | '
                             '/apply [change-id] | /changes | /undo <change-id> | /confirm <digest>')

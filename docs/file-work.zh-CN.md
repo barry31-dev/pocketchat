@@ -1,7 +1,8 @@
 # 聊天与文件工作：首个闭环设计
 
 > 提案/确认/apply 与持久撤销已作为库级原语实现；Session 的可选 read/propose 与可信的
-> 全屏/line 终端确认检查点也已接入。取消验收、可复用黄金路径、开发 wheel 验收与发布凭证仍待完成。
+> 全屏/line 终端确认也已接入。取消与离线黄金路径已有定向测试；开发 wheel 验收绑定精确候选，
+> 真实 provider/人工文件终端验收与正式发布凭证仍单独记录。
 > 依据用户 2026-11-05 的首个聊天/读写闭环要求。
 > 批准记录与顺序见 [slice queue](slice-queue.md)，发布事实只见 [release ledger](release-ledger.md)。
 > [English](file-work.md)
@@ -56,8 +57,9 @@ run/chat/task、profile grants 和 create-only write_file 保持原义。不做 
   store 前拒绝。重启不恢复授权或批准；可信终端无需路径 grant 即可列出该 conversation 的持久变更
   元数据，但 undo 仍要求目标路径的 fresh exact write grant。
 
-目录/glob 授权、session-wide undo、取消验收、可复用黄金 fixture 与开发 wheel 验证仍不属于本检查点。
-整包需等这些必需路径接线并复审后才完成，本检查点不代表发布。
+取消和可复用离线黄金 fixture 见[开发验收](file-work-validation.zh-CN.md)，开发 wheel 必须
+绑定精确候选。目录/glob 授权、session-wide undo、真实 provider/人工文件终端验收和正式发布
+不在离线验收范围内。
 
 ## 3. 记录与结果
 
@@ -104,8 +106,8 @@ provider/profile/model 改变后，拒绝沿用旧授权，不向新目的地再
 重启新服务不自动激活授权/批准；已存提案只是证据，不是重启授权。
 
 可信终端检查点已把该服务接到两个现有终端控制器；apply/readback 与持久单变更 undo 只有在
-另一次 digest-bound 确认后才执行。`PC-FILE-CHAT-1` 整包仍未完成：取消验收与可复用的开发 wheel
-黄金路径还需接续；模型 run 完成仍不代表文件已修改。
+另一次 digest-bound 确认后才执行。取消及可复用黄金路径有离线回归；开发 wheel 与远端 CI
+逐候选绑定。模型 run 完成仍不代表文件已修改，离线验证也不认证真实 provider 或正式发布。
 
 边界：UTF-8，单原文件/候选文件沿用 16 KiB；完整 diff 64 KiB，元数据记录 64 KiB，
 每 workspace 修改存储 16 MiB，每 turn 一个 pending。按编码后字节计数，包含事件和对象文件。
@@ -199,3 +201,16 @@ GitHub Release 不隐含依赖包索引凭据。发布后回读 tag 身份、Rel
 
 后续只在 [开发路线](agent-development-master-plan.zh-CN.md) 保留连续任务、记忆/Skill、有界协作的阶段目标；
 远程执行需另行产品决策，不预建几十张卡，也不把框架迁移放在首版之前。
+
+
+### 取消与开发验收收口
+
+可信终端可用 `/files cancel` 撤销文件授权和未确认的提案；已写入的回执不改变，
+撤销仍走新的授权与 `/undo` 确认。模型运行被中断时记录 `run.cancelled` 并失效
+待确认状态。请求在有界中断后仍未退出时，控制器保留 busy/worker 和 Session 写者，
+不允许第二个请求或文件命令抢占；不保证任意阻塞 I/O 都能即时取消。
+
+[开发验收 fixture](file-work-validation.zh-CN.md) 通过共享控制器操作真实临时文件，
+验证聊天、授权读取、提案拒绝、替换/创建、写后回读、重启撤销、冲突拒绝与取消。
+仅替换 provider，不模拟 apply/undo/持久化。源码、开发 wheel、真实 provider、人工
+终端易用性与正式发布是不同证据；本次不将离线成功外推为后三项。

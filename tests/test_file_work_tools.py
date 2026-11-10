@@ -49,6 +49,29 @@ class FileWorkProtocolTests(unittest.TestCase):
         work.grant(read_paths=['facts.txt'], write_paths=['facts.txt', 'new.txt'],
                    disclosure_sha256=work.disclosure()['sha256'])
 
+    @unittest.skipUnless(SECURE_RUNTIME, 'secure descriptor-relative file work required')
+    def test_cancelled_run_revokes_pending_proposal_and_grants(self):
+        session, work, adapter = self.session([
+            multi_tool_response(('proposal', 'propose_file_change',
+                                 {'path': 'facts.txt', 'content': 'after\n'}))])
+        self.grant(work)
+        complete = adapter.complete
+        def interrupt_after_proposal(*args, **kwargs):
+            if not adapter.responses:
+                raise KeyboardInterrupt
+            return complete(*args, **kwargs)
+        adapter.complete = interrupt_after_proposal
+        self.assertEqual('cancelled', session.run(['change then cancel']))
+        self.assertIsNone(work.state()['pending'])
+        self.assertEqual([], work.state()['write_paths'])
+        self.assertEqual([], work.state()['read_paths'])
+        self.assertEqual('before\n', (self.root / 'facts.txt').read_text())
+        records = work.store.list_change_ids()
+        self.assertEqual(1, len(records))
+        self.assertEqual('proposed', work.store.load_record(records[0])['events'][-1]['type'])
+        events = [json.loads(line) for line in session.trace_path.read_text().splitlines()]
+        self.assertEqual('run.cancelled', events[-1]['type'])
+
     def test_new_contract_does_not_expand_legacy_task_tool_inventory(self):
         self.assertEqual(('read_file', 'write_file', 'memory_search'), contract_names())
         self.assertEqual({'path': 'facts.txt', 'content': 'after'}, parse_arguments(

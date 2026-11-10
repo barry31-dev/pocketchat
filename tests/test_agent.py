@@ -522,6 +522,38 @@ class AgentCommandTests(unittest.TestCase):
         tui.send("hello")
         self.assertEqual(tui.transcript[0], ("you", "hello"))
 
+    def test_cancellation_keeps_live_worker_and_writer_until_exit(self):
+        import threading
+        from pocketchat.tui import AgentTUI
+        tui = AgentTUI(AgentState(profile='local', model='local-model', session='main'),
+                       {'local': {'model': 'local-model'}}, {'local': 'local-model'})
+        started, finish = threading.Event(), threading.Event()
+        tui._session = mock.Mock()
+        def slow_send(text):
+            started.set()
+            finish.wait(3)
+            return 'late reply'
+        tui._send_once = slow_send
+        tui._interrupt_worker = mock.Mock()  # Simulate a provider stuck in blocking I/O.
+        tui.start_send('first')
+        self.assertTrue(started.wait(1))
+        worker = tui._worker
+        try:
+            tui.close()
+            self.assertIs(worker, tui._worker)
+            self.assertTrue(tui.busy)
+            tui._session._release_session_writer.assert_not_called()
+            self.assertIn('already running', tui.run_command('/files'))
+            tui.start_send('must not start')
+            self.assertEqual([('you', 'first')], tui.transcript)
+        finally:
+            finish.set()
+            worker.join(3)
+        self.assertFalse(worker.is_alive())
+        self.assertFalse(tui.busy)
+        self.assertIsNone(tui._worker)
+        self.assertEqual([('you', 'first')], tui.transcript)
+
     def test_tui_send_can_be_cancelled_while_the_provider_runs(self):
         import threading
         import time
@@ -545,7 +577,13 @@ class AgentCommandTests(unittest.TestCase):
         tui.start_send("hello")
         self.assertTrue(started.wait(1))
         self.assertTrue(tui.busy)
+        worker = tui._worker
         tui.cancel_send()
+        # A blocked provider may outlive the bounded interrupt. Wait for the
+        # actual worker exit before asserting its slot is released; the held-
+        # worker test above separately proves ownership remains until then.
+        worker.join(3)
+        self.assertFalse(worker.is_alive())
         self.assertFalse(tui.busy)
         self.assertEqual(tui.transcript, [("you", "hello")])
 

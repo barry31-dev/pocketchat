@@ -333,9 +333,123 @@
       "status": "fixed",
       "fingerprint": "file-work:terminal:all-commands-trusted",
       "reason": "The service trusted gate now precedes bare status and change listing; direct tests prove neither untrusted command reveals paths or creates the store."
+    },
+    {
+      "id": "CHAT-CLOSEOUT-WORKER-EXIT-REVIEW",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:cancel:worker-exit-skips-grant-invalidation",
+      "reason": "A red threaded regression preserved the prior proposal when interruption occurred outside Session.run. The cancelled worker now invalidates file work and releases its Session writer before clearing its handle/busy slot; green regression proves the old confirmation is refused."
+    },
+    {
+      "id": "CHAT-CLOSEOUT-TERMINAL-EVIDENCE",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-work:fixture:run-finished-terminal-name",
+      "reason": "A red fixture assertion found completed terminals missing from evidence. The fixture now maps stable run.finished to completed; the affected golden/cancellation tests pass."
+    },
+    {
+      "id": "CHAT-CLOSEOUT-CI-CANCEL-WAIT",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-work:test:cancel-join-boundary-timing",
+      "reason": "Remote failure reproduced the old immediate-slot assertion at the bounded interrupt deadline. Await actual worker exit before asserting released ownership; the event-controlled test still verifies retention while live."
     }
   ],
   "independent_review_status": "three bounded full rounds completed; final post-round-3 new-diff-only closure approved; no open findings and no full-package acceptance claim.",
   "security_review_depth": "deep terminal review covered provider disclosure, exact grants, pipe refusal, SessionFile identity/size, writer concurrency, pending consumption, fresh undo grants, complete diff rendering and Unicode control spoofing; historical transaction-core review remains unchanged.",
-  "delivery_status": "reviewed trusted-terminal checkpoint; cancellation acceptance, golden fixture, development wheel and full PC-FILE-CHAT-1 completion remain pending"
+  "delivery_status": "Source closeout: cancellation and reusable golden fixture focused tests completed; exact candidate installed-wheel/CI integration evidence is recorded after commit. Real-provider/manual and formal-release evidence remain separate.",
+  "closeout_contract": {
+    "base_commit": "0495bd590be45ed17c2a7a154ae3ebcc625db470",
+    "goal": "Complete required file-work cancellation and reusable real-filesystem/development-wheel acceptance for the original PC-FILE-CHAT-1 package.",
+    "exclusions": [
+      "No new runtime or immediate model writes",
+      "No directory grants, shell, remote tools or Stage B activation",
+      "No real-provider claim, formal tag, Release or package upload"
+    ],
+    "done_when": "Cancelled runs revoke unconfirmed file actions; slow cancelled workers retain ownership until exit; a reusable offline fixture executes ordinary chat, disclosure/grants, read/propose/reject, replace/create, readback, restart/undo, stale conflict and cancellation with exact evidence; it passes against a development wheel installed outside the checkout and wrong output fails acceptance; reviewed candidate passes required CI and is integrated.",
+    "write_scope": [
+      "pocketchat/file_work.py",
+      "pocketchat/session.py",
+      "pocketchat/tui.py",
+      "tests/test_file_work_cli.py",
+      "tests/test_file_work_tools.py",
+      "tests/test_agent.py",
+      "tests/test_file_work_e2e.py",
+      "examples/file-work-demo.py",
+      "docs/file-work.md",
+      "docs/file-work.zh-CN.md",
+      "docs/file-work-validation.md",
+      "docs/file-work-validation.zh-CN.md",
+      "docs/review-file-chat-v1.json",
+      "README.md",
+      "README.zh-CN.md",
+      "docs/cli.md",
+      "docs/cli.zh-CN.md"
+    ],
+    "budget_stop": "Continue only the original leased package. Review new diff without reopening previously settled rounds; at most three rounds for new findings.",
+    "rollback": "Ordinary reviewed revert; keep historical change records/receipts untouched.",
+    "plan": [
+      "Write red cancellation and outstanding-worker ownership tests.",
+      "Invalidate grants on cancellation and keep live worker/writer ownership until completion.",
+      "Write red reusable-fixture acceptance tests; implement deterministic real-file golden path over the existing trusted controller.",
+      "Run focused tests and installed-wheel fixture, independently review only new changes, then exact-candidate CI/main integration."
+    ],
+    "evidence_types": "Current code/tests (C) and local offline run (V), tracked separately from status."
+  },
+  "closeout_verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "PYTHONPATH=tests:. python3.13 -B -m unittest <three new cancellation cases> -v",
+      "result": "Before fixes: pending proposal/grants survive cancellation and live worker/writer is released too early; 2 assertion failures and unsupported cancel command, exit 1."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "PYTHONPATH=tests:. python3.13 -B -m unittest <four cancellation tests> -v",
+      "result": "4 tests passed, exit 0, CPython 3.13.9/macOS."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "PYTHONPATH=tests:. python3.13 -B -m unittest test_file_work_e2e -v",
+      "result": "3 fixture tests red before implementation; then 3 passed including non-Git, dirty Git and deliberate wrong output. Initial fixture provider-injection validation error was corrected without changing product configuration."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "PYTHONPATH=tests:. python3.13 -B -m unittest test_file_work test_file_work_cli test_file_work_tools test_file_work_e2e test_agent -v",
+      "result": "138 tests passed, exit 0, CPython 3.13.9/macOS; includes existing real-terminal smoke, not a manual file-work usability claim."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "PYTHONPATH=tests:. python3.13 -B -m unittest <worker-exit stale-review and fixture completed-status regressions> -v",
+      "result": "2 red assertion failures; after cleanup/status fixes 6 affected cancellation/golden tests passed, exit 0. No repeat full focused run."
+    },
+    {
+      "source_type": "remote CI and local run (V)",
+      "status": "verified defect and focused fix",
+      "command": "CI run 42802200228 Ubuntu Python 3.9/macOS Python 3.13; two affected local unittest cases",
+      "result": "Each remote job ran 1615 tests and failed only the prior cancellation test immediate busy=False assertion. Its sleeping worker may survive the 2s bounded interrupt, so the test now waits for actual worker exit before the released-slot assertion. Both local cases passed, exit 0. Runtime/package code unchanged by this test-only correction."
+    }
+  ],
+  "closeout_unverified_at_commit": [
+    "Installed-wheel fixture and remote CI must be bound after the exact candidate commit exists; their results are external evidence.",
+    "Real-provider and manual file-work terminal usability not run.",
+    "Not a formal release or Stage B activation."
+  ],
+  "previous_checkpoint_delivery_status": "reviewed trusted-terminal checkpoint; cancellation acceptance, golden fixture, development wheel and full PC-FILE-CHAT-1 completion remain pending",
+  "closeout_review_history": [
+    {
+      "scope": "Full new cancellation/golden-fixture diff against 0495bd5; prior transaction/terminal rounds remain unchanged",
+      "status": "interrupted before final conclusion",
+      "observed_findings": [
+        "Cancelled worker can clear its handle before caller invalidation outside Session.run",
+        "Fixture must consume the real run.finished terminal name"
+      ],
+      "limitations": "Review stream disconnected; not a completed approval. Next review resumes only the two new fixes plus retained actual coverage."
+    }
+  ]
 }

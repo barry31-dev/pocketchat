@@ -237,8 +237,10 @@ OpenAI-compatible 端点，因为兼容端点对该扩展并不统一；本检�
 该 conversation 的持久变更元数据，`/undo CHANGE_ID` 预览一条持久补偿。模型只能读取已授权
 路径并提出修改，不能授权、确认、apply 或 undo。文件控制要求 stdin/stdout 都是真实 TTY；
 pipe 输入在创建 session、trace 或 file-change store 前拒绝。apply 成功后会消费该路径的 write
-grant，因此 undo 要重新展示并确认 fresh write grant。取消验收、可复用黄金 fixture 与开发 wheel
-验证仍未完成；本检查点不是文件工作整包完成或发布。
+grant，因此 undo 要重新展示并确认 fresh write grant。`/files cancel` 撤销授权与未确认 review，
+不撤销已写入效果；运行中断同样失效待确认状态，未退出请求保留写者。
+[离线黄金 fixture](docs/file-work-validation.zh-CN.md) 覆盖共享控制器，可在源码外已安装开发 wheel
+上运行。真实 provider、人工文件终端验收和正式发布各自记录，不将开发验证当发布。
 
 ## 对比
 
