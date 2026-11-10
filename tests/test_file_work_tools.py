@@ -122,6 +122,29 @@ class FileWorkProtocolTests(unittest.TestCase):
         self.assertEqual('none', results[2]['effect_disposition'])
         self.assertFalse((self.root / 'new.txt').exists())
 
+    @unittest.skipUnless(SECURE_RUNTIME, 'secure descriptor-relative file work required')
+    def test_underlying_file_errors_end_run_without_another_provider_request(self):
+        for failing_method, error in (
+                ('create_record', FileChangeStoreError('record persistence failed')),
+                ('write_object', FileChangeStoreError('object persistence failed')),
+                ('create_record', OSError('record I/O failed'))):
+            with self.subTest(method=failing_method, error=type(error).__name__):
+                session, work, adapter = self.session([
+                    multi_tool_response(('proposal', 'propose_file_change', {
+                        'path': 'facts.txt', 'content': 'after\n'})), text_response()])
+                self.grant(work)
+                with mock.patch.object(work.store, failing_method, side_effect=error):
+                    status = session.run(['change the file'])
+                self.assertEqual('failed', status)
+                self.assertEqual(1, len(adapter.calls))
+                self.assertIsNotNone(session.last_error)
+                self.assertIsNone(work.state()['pending'])
+                self.assertEqual('before\n', (self.root / 'facts.txt').read_text())
+                events = [json.loads(line) for line in session.trace_path.read_text().splitlines()]
+                self.assertEqual('run.failed', events[-1]['type'])
+                self.assertFalse(any(event['payload'].get('guardrail_refusal')
+                                     for event in events))
+
     def test_revocation_between_provider_request_and_tool_call_refuses(self):
         session, work, adapter = self.session([
             multi_tool_response(('read', 'read_file', {'path': 'facts.txt'})), text_response()])

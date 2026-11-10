@@ -1030,8 +1030,14 @@ class Session:
                 name, arguments, config=self.config,
                 policy_sha256=config.get("file_work_policy_sha256", ""),
                 run_id=self.run_id, tool_call_id=call_id, max_bytes=result_limit)
-        except (FileWorkError, FileChangeError, FileChangeStoreError, OSError) as exc:
-            error_type = getattr(exc, "error_type", "file_store_unavailable")
+        except (FileChangeStoreError, OSError) as exc:
+            raise SessionError("file_store_unavailable", str(exc)) from exc
+        except (FileWorkError, FileChangeError) as exc:
+            error_type = exc.error_type
+            # The transaction core preserves its underlying store/I/O cause.
+            # Do not turn failed persistence into a correctable tool refusal.
+            if isinstance(exc.__cause__, (FileChangeStoreError, OSError)):
+                raise SessionError(error_type, str(exc)) from exc
             self.recorder.append("permission.resolved", {
                 "decision": "denied", "decided_by": "session_grant",
             })

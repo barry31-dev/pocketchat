@@ -48,6 +48,23 @@
       "status": "incomplete",
       "reason": "stream disconnected before completion",
       "next": "Reuse the recorded coverage; independently review the two new descriptor/effect fixes and confirm the final recommendation without rerunning the old file core."
+    },
+    {
+      "round": 1,
+      "scope": "continuation of incomplete checkpoint review; all 11 new checkpoint paths, not the historical transaction core",
+      "status": "request_changes",
+      "finding": "CHAT-FATAL-STORE-ERROR",
+      "reviewed_candidate": "9f629a7da01f459e00100cc75415e6fbf43609e9",
+      "coverage": "Independent reviewer read all checkpoint code/tests/docs and relevant error/pairing/security/rollback contracts; reused existing evidence without rerunning tests."
+    },
+    {
+      "round": 2,
+      "scope": "new diff only: Session failure classification and its focused regression",
+      "status": "approved",
+      "reviewer": "independent fresh-context agent",
+      "authority": "maintainer standing routine-development delegation, 2026-11-09",
+      "binding": "9f629a7da01f459e00100cc75415e6fbf43609e9 plus current SHA-256 code blobs",
+      "result": "APPROVE; direct and wrapped underlying storage/I/O errors stop the run; no new findings; earlier four findings remain closed."
     }
   ],
   "verification": [
@@ -72,6 +89,20 @@
       "tool": "ruff 0.17.3",
       "result": "green",
       "exit": 0
+    },
+    {
+      "command": "PYTHONPATH=tests python3 -m unittest test_file_work_tools.FileWorkProtocolTests.test_underlying_file_errors_end_run_without_another_provider_request -v",
+      "python": "3.9.6",
+      "result": "red: all three subcases reproduced completed instead of failed; corrected focused regression green after fix",
+      "exit": 0,
+      "scope": "One new test with three persistence/I/O failure subcases. Initial fixed module run passed nine existing cases but new trace assertion used an incorrect event_type key; corrected only that test and reran it once. This is not a new full-suite pass."
+    },
+    {
+      "command": "ruff check --select E9,F pocketchat/session.py tests/test_file_work_tools.py",
+      "tool": "ruff 0.17.3",
+      "result": "green",
+      "exit": 0,
+      "scope": "Changed error dispatcher and regression only. python3 -m ruff was unavailable; used the existing CLI without installing dependencies."
     }
   ],
   "not_run": [
@@ -86,11 +117,11 @@
   ],
   "code_blob_sha256": {
     "pocketchat/file_work.py": "e3e8bff10f11c66d8a4745105bcd5a354f6b33cd1763e1993d821fdbed758f54",
-    "pocketchat/session.py": "45c85ce6983ee8399c58ff23f2caf652cb918a37efa5182c80a0a9f551875a00",
+    "pocketchat/session.py": "e54b790a9a6aa5b8b6e0a9a2546a12e2b77a8d1a6e378049c84acc05caa235c9",
     "pocketchat/provider.py": "da1327db447fec4a47b456080b05a8dea1f0e8987d7d53d3f7df686e56098862",
     "pocketchat/tool_contracts.py": "2ac657fa45d49ad8df387ce7cbb8892bdd0619fe2020d6e2286dd6b605da0724",
     "tests/test_file_work.py": "3190364cf43300c49f9e45d26b575ffa2051ded67fe95e1d7419903d7be745da",
-    "tests/test_file_work_tools.py": "9e2ab13ff0596c3ac63eaff7ad9e9052aaac377f8beb0b2f9fa536c1fd384bfe"
+    "tests/test_file_work_tools.py": "ee4d4ce3e58761b1668453983f9119acd09bbdb68e2fc0a8e32767620785ba1d"
   },
   "schema": "pocketchat-review-record.v1",
   "paths": [
@@ -112,7 +143,7 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 1,
+  "rounds": 2,
   "round_decision": "review",
   "round_scope": "full",
   "findings": [
@@ -143,9 +174,16 @@
       "status": "fixed",
       "fingerprint": "file-work:trace:stable-effect-enum",
       "reason": "Red enum check rejected pending in the stable trace schema; proposal trace stores proposed/change identity separately without extending the enum or claiming applied/read-only."
+    },
+    {
+      "id": "CHAT-FATAL-STORE-ERROR",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:session:store-io-error-treated-as-guard-refusal",
+      "reason": "Three red Session subcases showed record/object persistence or raw I/O failures continued to a completed model run. The dispatcher now raises SessionError for direct or preserved underlying storage/I/O exceptions before bounded guard refusals; focused regression proves one provider request, failed terminal status, no pending proposal and unchanged target."
     }
   ],
-  "independent_review_status": "incomplete: the fresh-context agent read the checkpoint and recorded bounded probes, then disconnected before final recommendation; no independent approval is claimed.",
-  "security_review_depth": "deep review remains pending on the fixed new diff before main integration",
-  "delivery_status": "review-pending checkpoint candidate only; no main or full-package completion claim"
+  "independent_review_status": "approved: complete checkpoint coverage retained, final new error-classification delta independently approved; no full-package acceptance claim.",
+  "security_review_depth": "deep: explicit file permission, provider disclosure, storage-failure and rollback review completed for this opt-in Session checkpoint; transaction-core history unchanged.",
+  "delivery_status": "reviewed opt-in checkpoint; full chat-and-file package remains incomplete"
 }
