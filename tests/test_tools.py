@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +16,13 @@ from pocketchat.tools import (ToolError, ToolPermissionError,
 from pocketchat.trace import TraceRecorder
 from tests._helpers import run_cli
 
+
+
+SECURE_FILE_CHANGES = (
+    all(hasattr(os, flag) for flag in ("O_NOFOLLOW", "O_DIRECTORY"))
+    and all(function in os.supports_dir_fd for function in (
+        os.open, os.mkdir, os.stat, os.unlink, os.link, os.rename))
+)
 
 class ReadFileToolTests(unittest.TestCase):
     def setUp(self):
@@ -164,6 +172,8 @@ class ReadFileToolTests(unittest.TestCase):
                         self.root, path, content, allowed_paths=[path],
                         recorder=recorder)
 
+    @unittest.skipUnless(
+        SECURE_FILE_CHANGES, "requires secure descriptor-relative file changes")
     def test_propose_file_change_is_pending_and_does_not_expose_immediate_overwrite(self):
         (self.root / "proposal.txt").write_text("old\n", encoding="utf-8")
         store = FileChangeStore(self.root)

@@ -33,7 +33,14 @@ ORIGIN = {
     "profile_id": "profile-1",
 }
 
+SECURE_FILE_CHANGES = (
+    all(hasattr(os, flag) for flag in ("O_NOFOLLOW", "O_DIRECTORY"))
+    and all(function in os.supports_dir_fd for function in (
+        os.open, os.mkdir, os.stat, os.unlink, os.link, os.rename))
+)
 
+@unittest.skipUnless(
+    SECURE_FILE_CHANGES, "requires secure descriptor-relative file changes")
 class FileChangeProposalTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

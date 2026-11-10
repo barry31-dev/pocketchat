@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from pocketchat.file_change_store import (FileChangeStore,
-                                          FileChangeStoreError)
+                                          FileChangeStoreError,
+                                          FileChangeUnsupportedRuntime)
 
+SECURE_FILE_CHANGES = (
+    all(hasattr(os, flag) for flag in ("O_NOFOLLOW", "O_DIRECTORY"))
+    and all(function in os.supports_dir_fd for function in (
+        os.open, os.mkdir, os.stat, os.unlink, os.link, os.rename))
+)
 
+@unittest.skipUnless(
+    SECURE_FILE_CHANGES, "requires secure descriptor-relative file changes")
 class FileChangeStoreTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -77,6 +86,17 @@ class FileChangeStoreTests(unittest.TestCase):
 
         with self.assertRaises(FileChangeStoreError):
             store.load_record(change_id)
+
+
+@unittest.skipIf(
+    SECURE_FILE_CHANGES, "runtime already supports secure file changes")
+class FileChangeUnsupportedRuntimeTests(unittest.TestCase):
+    def test_store_refuses_before_creating_private_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaises(FileChangeUnsupportedRuntime):
+                FileChangeStore(root)
+            self.assertFalse((root / ".pocketchat").exists())
 
 
 if __name__ == "__main__":
