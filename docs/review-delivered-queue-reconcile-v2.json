@@ -1,0 +1,32 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/review-delivered-queue-reconcile-v2.json",
+    "docs/slice-queue.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/review-delivered-queue-reconcile-v2.json",
+    "docs/slice-queue.md"
+  ],
+  "reviewed_evidence": [
+    "C: product main 1474e5598dc046d0c64567008c3a750cf8cb858f still labelled PC-CHAT-LIFECYCLE-1 and PC-PACKAGE-MANIFEST-1 ready after both exact product branches had merged.",
+    "C/V: authenticated PR #41 binds candidate 9ded1d4eb9b6d01a494fd9a3bec08c5e12657ee7 to merge 72bf2bc8f61b00c073da00e0ea03494fd378d835; both are ancestors of the baseline, and exact-head run 42652625582 has seven successful jobs.",
+    "C: docs/review-chat-lifecycle-v1.json retains eleven findings, all fixed. This maintenance change records delivery only; it does not rerun or expand that implementation evidence.",
+    "C/V: authenticated PR #43 binds candidate ae6bb690d389672bf98c6ca6c91fe205ab23188e to merge cab0d5caa7e8026b5539f743c4527945f0f4398f; both are ancestors of the baseline, and exact-head run 42691516522 has seven successful jobs.",
+    "C: docs/review-package-manifest-v1.json closes PM-1, PM-2, PM-5 and PM-6 and retains deferred minor limitations PM-3 and PM-4. The delivered row preserves those limits rather than reporting them fixed.",
+    "C: existing fleet delivery receipts bind PR #41 and PR #43 to their original declared baselines, exact introduced paths and product main without acceptance re-verification.",
+    "Docs-only review checked that only the two stale states/evidence paragraphs and this two-path maintenance record changed; no contract, scope, approval text, product code, test, CHANGELOG, version, release ledger, PC-FILE-RELEASE-1 or Stage B state changed.",
+    "V: on macOS with CPython 3.9.6, python3 -B -m unittest tests.test_release_process_docs -v ran 16 tests OK; python3 -m json.tool, git diff --check and targeted queue-state assertions all exited 0."
+  ],
+  "unverified_scope": "This maintenance candidate does not implement or rerun product behavior. It adds no provider/network call, real session/file observation, build, wheel, tag, Release, package upload, formal version 1.2 acceptance or Stage B activation. Exact-SHA CI for this docs candidate, public task-branch push, PR, merge and final product-main readback remain separate gates."
+}
