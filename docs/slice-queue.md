@@ -283,7 +283,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-CHAT-LIFECYCLE-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-chat-lifecycle`
 - **Write scope**: `pocketchat/tui.py`, `pocketchat/provider.py`,
   `tests/test_agent.py`, `tests/test_kernel.py`, `tests/test_tool_calls.py`,
@@ -312,10 +312,12 @@ and sidecar/preview binding as a separate slice.
   a second session format, a second executor, UI features or public release.
 - **Evidence**: `tests/test_agent.py`, `tests/test_kernel.py`,
   `tests/test_tool_calls.py`, `pocketchat/tui.py`, `pocketchat/provider.py`,
-  both provider-adapter docs and `docs/review-chat-lifecycle-v1.json`; the
-  implementation review records the observed red, focused tests, exact
-  candidate SHA and appropriate lint/diff evidence. Delivery is recorded only
-  after that reviewed candidate is integrated and read back from `main`.
+  both provider-adapter docs and `docs/review-chat-lifecycle-v1.json`; reviewed
+  candidate `9ded1d4eb9b6d01a494fd9a3bec08c5e12657ee7` merged by PR #41 as
+  `72bf2bc8f61b00c073da00e0ea03494fd378d835`. Exact-head workflow run
+  `42652625582` reports seven successful jobs. The implementation review retains
+  all eleven findings as fixed and keeps its original unverified scope; this
+  queue reconciliation does not rerun or widen that evidence.
 - **Approved by**: agent under the user 2026-11-07 planning/timer optimization
   authorization and the existing 2026-11-04 PocketChat routine delegation.
   This approval covers one bounded P0 chat lifecycle slice only; it does not
@@ -439,7 +441,7 @@ and sidecar/preview binding as a separate slice.
 
 #### `PC-PACKAGE-MANIFEST-1`
 
-- **State**: `ready`
+- **State**: `delivered`
 - **Branch**: `task/pocketchat-package-manifest`
 - **Write scope**: `scripts/release_smoke.py`, `tests/test_release_smoke.py`,
   `docs/package-manifest.md`, `docs/package-manifest.zh-CN.md`,
@@ -476,10 +478,12 @@ and sidecar/preview binding as a separate slice.
   version, CLI commands, schemas, CI workflow, tag, Release or package-index
   state.
 - **Evidence**: `scripts/release_smoke.py`, `tests/test_release_smoke.py`, both
-  package-manifest docs and `docs/review-package-manifest-v1.json`; the
-  implementation review records the observed red, focused/full tests, Ruff,
-  compile and diff checks plus the exact candidate SHA. Delivery is recorded
-  only after that candidate is reviewed and integrated.
+  package-manifest docs and `docs/review-package-manifest-v1.json`; reviewed
+  candidate `ae6bb690d389672bf98c6ca6c91fe205ab23188e` merged by PR #43 as
+  `cab0d5caa7e8026b5539f743c4527945f0f4398f`. Exact-head workflow run
+  `42691516522` reports seven successful jobs. The review closes PM-1, PM-2,
+  PM-5 and PM-6 while retaining deferred minor limitations PM-3 and PM-4; this
+  queue reconciliation does not silently close or reverify them.
 - **Approved by**: agent under the user 2026-11-04 16:34 PocketChat routine
   delegation and the user 2026-11-05 request for a non-conflicting PocketChat
   task. This approval covers the bounded package-evidence slice only; it does
