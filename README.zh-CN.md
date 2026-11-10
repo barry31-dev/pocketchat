@@ -230,8 +230,15 @@ pocketchat --profile hosted --reasoning high --session notes
 每条普通消息都是独立 run，并有自己的终止 trace 事件；session 文件负责在两轮之间
 携带对话。思考强度始终记录在 run 配置中；只有 profile 显式声明
 `reasoning_effort_supported: true` 时，才会把 `reasoning_effort` 发给
-OpenAI-compatible 端点，因为兼容端点对该扩展并不统一。在首版中，这个入口不包含
-工具、skill、记忆或文件访问。
+OpenAI-compatible 端点，因为兼容端点对该扩展并不统一；本检查点不改变其它已配置 agent 能力。
+当前可信终端检查点新增 opt-in 精确路径文件控制：`/files` 显示当前授权与 pending change id，
+`/files read|write PATH...` 展示 provider 告知与待确认的精确授权，`/diff` 或 `/apply` 展示
+完整 pending diff，`/confirm` 执行精确展示的动作，`/changes` 列出
+该 conversation 的持久变更元数据，`/undo CHANGE_ID` 预览一条持久补偿。模型只能读取已授权
+路径并提出修改，不能授权、确认、apply 或 undo。文件控制要求 stdin/stdout 都是真实 TTY；
+pipe 输入在创建 session、trace 或 file-change store 前拒绝。apply 成功后会消费该路径的 write
+grant，因此 undo 要重新展示并确认 fresh write grant。取消验收、可复用黄金 fixture 与开发 wheel
+验证仍未完成；本检查点不是文件工作整包完成或发布。
 
 ## 对比
 

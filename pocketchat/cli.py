@@ -51,7 +51,7 @@ from .recovery import (RecoveryError, create_checkpoint, rewind_to_checkpoint,
 from .replay import ReplayError, replay_snapshots
 from .selection import SelectionError, record_selection
 from .repl import echo_reply, goodbye, read_lines
-from .tui import TUIUnavailable, run_tui
+from .tui import AgentTUI, FILE_COMMANDS, TUIUnavailable, run_tui
 from .tools import (ToolError, ToolPermissionError, execute_read_file,
                     execute_write_file)
 from .service import (context_preview, export_record, export_session,
@@ -2664,46 +2664,70 @@ def _cmd_agent(args: argparse.Namespace) -> int:
             # used for piped input, rather than crashing during import.
             pass
 
+    controller = AgentTUI(state, profiles, models, config=root_config,
+                          workspace=Path.cwd(), verbose=args.verbose,
+                          trusted_input=bool(interactive and sys.stdout.isatty()))
     print("PocketChat agent. Commands: /model /session /reasoning /context /status /exit")
+    print("Trusted terminal file controls: /files /diff /apply /changes /undo /confirm")
     print(state.status_line())
-    for raw in read_lines(prompt="agent> "):
-        line = raw.strip()
-        if not line:
-            continue
-        try:
-            response = apply_command(state, line, profiles, models)
-        except AgentCommandError as exc:
-            print("agent: %s" % exc)
-            continue
-        if response == "exit":
-            break
-        if response is not None:
-            print(response)
-            continue
+    try:
+        for raw in read_lines(prompt="agent> "):
+            line = raw.strip()
+            if not line:
+                continue
+            if line.split()[0] in FILE_COMMANDS:
+                print(controller.run_command(line))
+                continue
+            previous_binding = (state.profile, state.session)
+            try:
+                response = apply_command(state, line, profiles, models)
+            except AgentCommandError as exc:
+                print("agent: %s" % exc)
+                continue
+            if previous_binding != (state.profile, state.session) and controller._session is not None:
+                if controller._session.file_work is not None:
+                    controller._session.file_work._invalidate()
+                controller._session._release_session_writer()
+            if response == "exit":
+                break
+            if response is not None:
+                print(response)
+                continue
 
-        try:
-            selected = profile_config(root_config, state.profile)
-        except ConfigError as exc:
-            print("agent: %s" % exc)
-            continue
-        selected["max_context_chars"] = state.context_chars
-        selected["reasoning_effort"] = state.reasoning
-        session_path = resolve_session_path(Path(state.session), DEFAULT_SESSIONS_DIR)
-        run_id = new_run_id()
-        trace_path = Path.cwd() / "traces" / ("%s.jsonl" % run_id)
-        session = Session(
-            config=selected,
-            trace_path=trace_path,
-            run_id=run_id,
-            session_path=session_path,
-            verbose=args.verbose,
-        )
-        status = session.run([line])
-        if not args.quiet and status == "completed" and session.turn_count:
-            echo_reply(session.last_reply())
-        if status != "completed":
-            print("agent: run %s" % status, file=sys.stderr)
-            return EXIT_RUN_FAILED
+            if controller.file_mode:
+                reply = controller.send(line)
+                if controller.last_error:
+                    print(reply, file=sys.stderr)
+                    return EXIT_RUN_FAILED
+                if not args.quiet:
+                    echo_reply(reply)
+                continue
+
+            try:
+                selected = profile_config(root_config, state.profile)
+            except ConfigError as exc:
+                print("agent: %s" % exc)
+                continue
+            selected["max_context_chars"] = state.context_chars
+            selected["reasoning_effort"] = state.reasoning
+            session_path = resolve_session_path(Path(state.session), DEFAULT_SESSIONS_DIR)
+            run_id = new_run_id()
+            trace_path = Path.cwd() / "traces" / ("%s.jsonl" % run_id)
+            session = Session(
+                config=selected,
+                trace_path=trace_path,
+                run_id=run_id,
+                session_path=session_path,
+                verbose=args.verbose,
+            )
+            status = session.run([line])
+            if not args.quiet and status == "completed" and session.turn_count:
+                echo_reply(session.last_reply())
+            if status != "completed":
+                print("agent: run %s" % status, file=sys.stderr)
+                return EXIT_RUN_FAILED
+    finally:
+        controller.close()
     if not args.quiet:
         goodbye()
     return EXIT_OK

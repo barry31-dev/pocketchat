@@ -35,7 +35,22 @@ pocketchat agent --session notes
 | `/reasoning LEVEL` | 设置 `minimal`、`low`、`medium` 或 `high` |
 | `/context N` | 设置下一条消息的字符预算 |
 | `/status` | 显示当前 profile、model、session、思考强度和预算 |
+| `/files` | 显示当前精确授权与 pending change id |
+| `/files read|write PATH...` | 展示 provider 告知与精确路径；只有显示的 `/confirm` 后才激活 |
+| `/files revoke PATH...` | 移除精确授权并使已展示确认失效 |
+| `/diff` / `/apply [CHANGE_ID]` | 展示完整 pending diff，不立即写入，并生成绑定 digest 的确认 |
+| `/changes` | 列出同 workspace、conversation 与 branch 所有的持久变更元数据 |
+| `/undo CHANGE_ID` | 要求 fresh exact write grant，再展示持久补偿 diff 与确认 |
+| `/confirm DIGEST` | 只执行当前精确展示的 grant、apply 或 undo 动作 |
 | `/exit` / `/quit` / `/bye` | 退出 agent |
+
+文件控制命令要求 stdin/stdout 都是真实 TTY。pipe 输入可以看到 line shell banner，但所有
+文件命令都会在创建 Session、trace 或 file-change store 前拒绝。模型只获得已授权的
+`read_file` 与 `propose_file_change`，不能授权、确认、apply、undo 或调用立即 `write_file`。
+apply 成功后会消费目标 write grant，因此 undo 需要 fresh disclosed write grant。profile/session/
+grant 变化、过期 SessionFile view、在飞 reply 或其他 writer 都拒绝确认。取消验收、可复用黄金
+fixture 与开发 wheel 验证仍待完成；这些命令只是已复审内部检查点，不代表整包完成或发布。
+交易与证据契约见 [file-work.zh-CN.md](file-work.zh-CN.md)。
 
 每次 run 都会把思考强度记录到 `run.started`。只有所选 profile 含
 `reasoning_effort_supported: true` 时，才会把该字段放进请求 body；否则它只是本地

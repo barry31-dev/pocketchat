@@ -11,12 +11,16 @@ import hashlib
 import json
 import os
 import stat
+import shlex
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from .file_change_store import FileChangeStore
 from .file_changes import (FileChangeError, _path, _read_target_at,
-                           _require_secure_target_runtime, propose_file_change)
+                           _require_secure_target_runtime, propose_file_change,
+                           confirm_file_change, apply_file_change, undo_file_change,
+                           parse_file_change, _render_diff)
 
 
 class FileWorkError(ValueError):
@@ -52,6 +56,7 @@ class FileWork:
         self._generation = 0
         self._pending = None
         self._store = None
+        self._terminal_review = None
 
     def bind(self, config, session_id: str, *, conversation_id=None, branch="main",
              host_identity=None) -> None:
@@ -70,6 +75,7 @@ class FileWork:
         self._read_paths = frozenset()
         self._write_paths = frozenset()
         self._pending = None
+        self._terminal_review = None
         self._generation += 1
 
     def _require_binding(self, config=None) -> None:
@@ -133,6 +139,7 @@ class FileWork:
             self._read_paths, self._write_paths = reads, writes
             self._generation += 1
             self._pending = None
+            self._terminal_review = None
 
     def revoke(self, paths) -> None:
         self._require_binding()
@@ -141,6 +148,7 @@ class FileWork:
         self._write_paths -= paths
         self._generation += 1
         self._pending = None
+        self._terminal_review = None
 
     @property
     def store(self):
@@ -234,3 +242,146 @@ class FileWork:
         reference = {key: change[key] for key in ('change_id', 'proposal_sha256', 'path', 'operation')}
         return {'status': 'pending', 'path': path,
                 'content': json.dumps(reference, sort_keys=True)}
+
+    @staticmethod
+    def _terminal_text(text):
+        # Do not let file/provider content erase or visually reorder the review.
+        rendered = []
+        for char in text:
+            code = ord(char)
+            if (code < 32 and char not in '\n\t') or 127 <= code <= 159:
+                rendered.append('\\x%02x' % code)
+            elif unicodedata.category(char) == 'Cf':
+                rendered.append(('\\u%04x' if code <= 0xffff else '\\U%08x') % code)
+            else:
+                rendered.append(char)
+        return ''.join(rendered)
+
+    def _preview_confirmation(self, action, text):
+        action = {**action, 'policy_sha256': self._policy()}
+        challenge = _digest(action)
+        self._terminal_review = {**action, 'challenge': challenge}
+        return self._terminal_text(text) + '\nConfirm explicitly: /confirm ' + challenge
+
+    def _owned_change(self, identifier):
+        change = parse_file_change(self.store.load_record(identifier))
+        owner = change['owner']
+        if (owner['workspace_sha256'] != _digest(str(self.workspace))
+                or owner['conversation_id'] != self._binding['conversation_id']
+                or owner['branch'] != self._binding['branch']):
+            raise FileWorkError('change does not belong to this conversation and workspace')
+        return change
+
+    def terminal_command(self, line, *, config, trusted=False):
+        """Host-only controls. The model dispatcher never calls this method.
+
+        A preview cannot authorize a mutation. A second trusted submission must
+        match the displayed action, proposal and current grant policy exactly.
+        """
+        self._require_binding(config)
+        try:
+            parts = shlex.split(line)
+        except ValueError as exc:
+            raise FileWorkError('malformed file command') from exc
+        if not parts:
+            raise FileWorkError('empty file command')
+        command, args = parts[0], parts[1:]
+        if not trusted:
+            raise FileWorkError('file authorization requires trusted interactive terminal input')
+        if command == '/files' and not args:
+            state = {key: value for key, value in self.state().items() if key != 'pending'}
+            state['pending_change_id'] = (self._pending['change']['change_id']
+                                          if self._pending else None)
+            return self._terminal_text(json.dumps(state, sort_keys=True))
+        if command == '/changes' and not args:
+            changes = []
+            for identifier in self.store.list_change_ids():
+                change = parse_file_change(self.store.load_record(identifier))
+                if (change['owner']['conversation_id'] == self._binding['conversation_id']
+                        and change['owner']['branch'] == self._binding['branch']
+                        and change['owner']['workspace_sha256'] == _digest(str(self.workspace))):
+                    changes.append({'change_id': identifier, 'path': change['path'],
+                                    'status': change['events'][-1]['type']})
+            return self._terminal_text(json.dumps(changes, sort_keys=True))
+        if command == '/files' and len(args) >= 2:
+            kind, values = args[0], args[1:]
+            if kind == 'revoke':
+                self.revoke(values)
+                return 'File grants revoked; pending confirmation invalidated.'
+            if kind in ('read', 'write'):
+                paths = sorted(self._paths(values))
+                disclosure = self.disclosure()
+                return self._preview_confirmation(
+                    {'kind': 'grant', 'access': kind, 'paths': paths,
+                     'disclosure_sha256': disclosure['sha256']},
+                    disclosure['text'] + '\nExact %s paths: %s' % (kind, json.dumps(paths)))
+        if command in ('/diff', '/apply') and len(args) <= 1:
+            if self._pending is None:
+                raise FileWorkError('no complete proposal is awaiting review')
+            change = self._pending['change']
+            if args and args[0] != change['change_id']:
+                raise FileWorkError('change is not the pending proposal')
+            if change['policy_sha256'] != self._policy():
+                raise FileWorkError('proposal grants are stale', 'file_stale_grants')
+            return self._preview_confirmation(
+                {'kind': 'apply', 'change_id': change['change_id'],
+                 'proposal_sha256': change['proposal_sha256']},
+                'Complete diff for %s (not applied):\n%s' % (
+                    change['change_id'], self._pending['diff']))
+        if command == '/undo' and len(args) == 1:
+            change = self._owned_change(args[0])
+            if change['path'] not in self._write_paths:
+                raise FileWorkError('undo requires a fresh exact write grant')
+            if change['events'][-1]['type'] != 'applied':
+                raise FileWorkError('change is not undoable')
+            after = self.store.read_object(change['after']['object'], change['after']['sha256'])
+            before = (self.store.read_object(change['before']['object'],
+                                             change['before']['sha256'])
+                      if change['operation'] == 'replace' else b'')
+            diff = _render_diff(change['path'], after.decode('utf-8'), before.decode('utf-8'))
+            effect = 'restore original bytes' if change['operation'] == 'replace' else 'remove created file'
+            return self._preview_confirmation(
+                {'kind': 'undo', 'change_id': change['change_id'],
+                 'proposal_sha256': change['proposal_sha256'],
+                 'receipt_sha256': _digest(change['events'][-1]['receipt'])},
+                'Undo %s: %s\n%s' % (change['change_id'], effect, diff))
+        if command == '/confirm' and len(args) == 1:
+            review = self._terminal_review
+            if (review is None or args[0] != review['challenge']
+                    or review['policy_sha256'] != self._policy()):
+                raise FileWorkError('confirmation does not match the displayed current action')
+            # Consume before any effect: an I/O failure is not a replay permit.
+            self._terminal_review = None
+            if review['kind'] == 'grant':
+                self.grant(**{review['access'] + '_paths': review['paths']},
+                           disclosure_sha256=review['disclosure_sha256'])
+                return 'Exact file grants activated for this session.'
+            change = self._owned_change(review['change_id'])
+            if change['proposal_sha256'] != review['proposal_sha256']:
+                raise FileWorkError('proposal changed after review', 'file_stale_proposal')
+            approval_id = 'terminal:' + review['challenge']
+            if review['kind'] == 'apply':
+                confirm_file_change(self.store, change['change_id'],
+                                    proposal_sha256=review['proposal_sha256'],
+                                    policy_sha256=self._policy(), approval_id=approval_id)
+                # A durable confirmation consumes the one in-memory proposal even
+                # when the subsequent mutation is refused. The record, not this
+                # stale preview, is then authoritative for the terminal outcome.
+                self._pending = None
+                receipt = apply_file_change(self.workspace, self.store, change['change_id'],
+                                            current_policy_sha256=self._policy(),
+                                            write_paths=self._write_paths)
+                # Undo is a separate destructive decision. Consume this path's
+                # write grant only after a verified apply so the compensating
+                # action must be preceded by a fresh, disclosed grant.
+                self._write_paths -= frozenset({change['path']})
+                self._generation += 1
+                return self._terminal_text(json.dumps({'status': 'applied', 'receipt': receipt}, sort_keys=True))
+            if (change['events'][-1]['type'] != 'applied'
+                    or _digest(change['events'][-1]['receipt']) != review['receipt_sha256']):
+                raise FileWorkError('undo changed after review', 'file_stale_proposal')
+            receipt = undo_file_change(self.workspace, self.store, change['change_id'],
+                                       approval_id=approval_id, write_paths=self._write_paths)
+            return self._terminal_text(json.dumps({'status': 'undone', 'receipt': receipt}, sort_keys=True))
+        raise FileWorkError('usage: /files [read|write|revoke <paths>] | /diff | '
+                            '/apply [change-id] | /changes | /undo <change-id> | /confirm <digest>')
