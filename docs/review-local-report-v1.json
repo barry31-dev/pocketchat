@@ -1,0 +1,184 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/task_sources.py",
+    "pocketchat/task_exec.py",
+    "tests/test_local_report.py",
+    "examples/local-report-demo.py",
+    "docs/local-report.md",
+    "docs/local-report.zh-CN.md",
+    "docs/review-local-report-v1.json",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "LR-TRACE-BIND",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "local-report-session-vs-read-trace-result",
+      "reason": "The pinned trace is re-read and hash-checked, then its sole completed result is bound to the Session read by tool identity, call id, status, effect disposition, total bytes and truncation state before source content is admitted."
+    },
+    {
+      "id": "LR-READ-WORKSPACE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "local-report-record-vs-policy-workspace",
+      "reason": "The pinned task record workspace_root must now exactly equal the authorized read policy workspace_root before the completed path is labeled or forwarded."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "pocketchat/task_sources.py",
+    "pocketchat/task_exec.py",
+    "tests/test_local_report.py",
+    "examples/local-report-demo.py",
+    "docs/local-report.md",
+    "docs/local-report.zh-CN.md",
+    "docs/review-local-report-v1.json",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md"
+  ],
+  "slice": "PC-LOCAL-REPORT-1",
+  "base_commit": "83f7020886141929be9c275ec7ea09f90f300e1b",
+  "authority": {
+    "kind": "agent-delegated",
+    "decision": "maintainer standing routine-development delegation 2026-11-09"
+  },
+  "contract": {
+    "objective": "Complete one local-material to source-grounded text report, versioned revision and exact-boundary recovery path through the existing authorized TaskSpec/TaskPlan CLI and runtime; forward only authenticated completed read snapshots, not a second research runtime.",
+    "scope": {
+      "repository_id": "pocketchat",
+      "baseline_commit": "83f7020886141929be9c275ec7ea09f90f300e1b",
+      "branch": "task/pocketchat-local-report",
+      "paths": [
+        "pocketchat/task_sources.py",
+        "pocketchat/task_exec.py",
+        "tests/test_local_report.py",
+        "examples/local-report-demo.py",
+        "docs/local-report.md",
+        "docs/local-report.zh-CN.md",
+        "docs/review-local-report-v1.json",
+        "README.md",
+        "README.zh-CN.md",
+        "CHANGELOG.md"
+      ]
+    },
+    "acceptance": "Real-file tests first reproduce the missing source-content handoff. The same authorized task CLI then reads two allowlisted sources, forwards exact content/path/digests only from declared completed read dependencies, creates a report with checked fixture citations, and produces a versioned revision without changing its predecessor. Exact-boundary resume uses authenticated historical read snapshots without replaying completed reads/writes; malformed, altered, ungranted or truncated source evidence fails before a dependent provider/write. Focused tests, fresh-context deep technical review, exact candidate CI and main blob readback bind delivery.",
+    "unverified_scope": "Real provider reasoning/factual quality, remote research and complex document parsing, human terminal UX, cross-platform local execution and formal tag/Release/package publication are not run or authorized. Offline fixture evidence verifies local orchestration and artifact provenance only.",
+    "dependencies": [
+      "PC-FILE-CHAT-1",
+      "PC-REPORT-RECOVERY-1"
+    ]
+  },
+  "design": [
+    "Reuse the existing single-agent task and file path, not a separate report runtime.",
+    "Only pinned observed read data enters the dependent write prompt; source text is untrusted data, not authority.",
+    "Versioned create-only output files preserve revision history."
+  ],
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27.0 arm64, Python 3.9.6, real temporary files, offline provider adapter",
+      "command": "python3 -m unittest tests.test_local_report tests.test_task_exec tests.test_task_state tests.test_plan_recovery tests.test_task_cli_resume -v",
+      "result": "Historical checkpoint run: 61 tests passed, exit 0; it predates the two later cross-binding regressions and is retained only as earlier evidence."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest <two cross-binding regressions> -v before the fix",
+      "result": "Two assertion failures, exit 1; trace truncation concealment and conflicting record workspace reproduced for the expected missing-refusal reason."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest <two cross-binding regressions> -v after the fix",
+      "result": "2 tests passed, exit 0; both reproduced evidence substitutions are now refused."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_local_report tests.test_task_exec tests.test_task_state tests.test_plan_recovery tests.test_task_cli_resume -v",
+      "result": "63 tests passed, exit 0 on the fixed working tree, including ordinary, nested-workspace and exact-resume positive paths."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B examples/local-report-demo.py --output <new temporary evidence directory>",
+      "result": "Standalone offline real-file CLI fixture: all six checks passed, exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff check --select E9,F pocketchat/task_sources.py tests/test_local_report.py; git diff --check; python3 -m json.tool docs/review-local-report-v1.json",
+      "result": "ruff 0.17.3, diff check and JSON parse each exited 0."
+    }
+  ],
+  "review_rounds": [
+    {
+      "round": 1,
+      "reviewer": "fresh-context agent (maintainer delegation 2026-11-09)",
+      "decision": "BLOCK",
+      "coverage": "Full ten changed paths, required recovery/Session/tool call sites and four provided original logs. No independent execution.",
+      "findings": [
+        {
+          "id": "LR-TRACE-BIND",
+          "severity": "major",
+          "status": "open",
+          "fingerprint": "local-report-session-vs-read-trace-result",
+          "reason": "Session source result is not cross-bound to the pinned read trace tool.call.completed call ID/result_bytes/result_truncated."
+        },
+        {
+          "id": "LR-READ-WORKSPACE",
+          "severity": "major",
+          "status": "open",
+          "fingerprint": "local-report-record-vs-policy-workspace",
+          "reason": "Task record workspace_root is not compared with the authorized read policy before labeling source provenance."
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "reviewer": "independent fresh-context agent (maintainer delegation 2026-11-09)",
+      "decision": "APPROVE",
+      "coverage": "New fix diff in pocketchat/task_sources.py, both regressions, and the recovery/Session/read-tool/result-projection boundaries needed to judge the two findings; reviewer also ran the two negative and three positive focused cases plus diff check.",
+      "findings": [
+        {
+          "id": "LR-TRACE-BIND",
+          "severity": "major",
+          "status": "fixed",
+          "fingerprint": "local-report-session-vs-read-trace-result",
+          "reason": "The pinned trace is re-read and hash-checked, then its sole completed result is bound to the Session read by tool identity, call id, status, effect disposition, total bytes and truncation state before source content is admitted."
+        },
+        {
+          "id": "LR-READ-WORKSPACE",
+          "severity": "major",
+          "status": "fixed",
+          "fingerprint": "local-report-record-vs-policy-workspace",
+          "reason": "The pinned task record workspace_root must now exactly equal the authorized read policy workspace_root before the completed path is labeled or forwarded."
+        }
+      ],
+      "new_findings": [],
+      "limitations": "Review did not run the full suite, build/package, real provider, network, manual terminal UX or cross-platform runtime. Author-run focused verification and exact candidate CI remain separate evidence."
+    }
+  ],
+  "unverified": "Full local suite, build/wheel/install, real provider reasoning or factual quality, remote research and complex document parsing, human terminal UX, cross-platform local execution, exact-head CI, product-main integration and formal tag/Release/package publication were not run at this checkpoint. Offline fixture evidence verifies local orchestration and artifact provenance only.",
+  "gate_result": "local technical review passed with no open blocking finding; exact candidate CI and product-main readback remain pending",
+  "checkpoint": {
+    "complete": true,
+    "ready_for_integration": true,
+    "next_action": "Commit the reviewed candidate, push the exact task head through the routine delivery entry, require exact-head CI, merge the PR and re-read product main before settling the fleet card."
+  }
+}
