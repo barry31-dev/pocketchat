@@ -333,6 +333,20 @@
       "status": "fixed",
       "fingerprint": "file-work:terminal:all-commands-trusted",
       "reason": "The service trusted gate now precedes bare status and change listing; direct tests prove neither untrusted command reveals paths or creates the store."
+    },
+    {
+      "id": "CHAT-CLOSEOUT-WORKER-EXIT-REVIEW",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:cancel:worker-exit-skips-grant-invalidation",
+      "reason": "A red threaded regression preserved the prior proposal when interruption occurred outside Session.run. The cancelled worker now invalidates file work and releases its Session writer before clearing its handle/busy slot; green regression proves the old confirmation is refused."
+    },
+    {
+      "id": "CHAT-CLOSEOUT-TERMINAL-EVIDENCE",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-work:fixture:run-finished-terminal-name",
+      "reason": "A red fixture assertion found completed terminals missing from evidence. The fixture now maps stable run.finished to completed; the affected golden/cancellation tests pass."
     }
   ],
   "independent_review_status": "three bounded full rounds completed; final post-round-3 new-diff-only closure approved; no open findings and no full-package acceptance claim.",
@@ -400,6 +414,12 @@
       "status": "verified",
       "command": "PYTHONPATH=tests:. python3.13 -B -m unittest test_file_work test_file_work_cli test_file_work_tools test_file_work_e2e test_agent -v",
       "result": "138 tests passed, exit 0, CPython 3.13.9/macOS; includes existing real-terminal smoke, not a manual file-work usability claim."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "PYTHONPATH=tests:. python3.13 -B -m unittest <worker-exit stale-review and fixture completed-status regressions> -v",
+      "result": "2 red assertion failures; after cleanup/status fixes 6 affected cancellation/golden tests passed, exit 0. No repeat full focused run."
     }
   ],
   "closeout_unverified_at_commit": [
@@ -407,5 +427,16 @@
     "Real-provider and manual file-work terminal usability not run.",
     "Not a formal release or Stage B activation."
   ],
-  "previous_checkpoint_delivery_status": "reviewed trusted-terminal checkpoint; cancellation acceptance, golden fixture, development wheel and full PC-FILE-CHAT-1 completion remain pending"
+  "previous_checkpoint_delivery_status": "reviewed trusted-terminal checkpoint; cancellation acceptance, golden fixture, development wheel and full PC-FILE-CHAT-1 completion remain pending",
+  "closeout_review_history": [
+    {
+      "scope": "Full new cancellation/golden-fixture diff against 0495bd5; prior transaction/terminal rounds remain unchanged",
+      "status": "interrupted before final conclusion",
+      "observed_findings": [
+        "Cancelled worker can clear its handle before caller invalidation outside Session.run",
+        "Fixture must consume the real run.finished terminal name"
+      ],
+      "limitations": "Review stream disconnected; not a completed approval. Next review resumes only the two new fixes plus retained actual coverage."
+    }
+  ]
 }

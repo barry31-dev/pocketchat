@@ -187,8 +187,10 @@ def golden_path(workspace: Path, *, baseline='non-git', wrong_output=False, sour
               work.state()['write_paths'] == [])
         evidence['run_ids'].append(c._session.run_id)
         events = [json.loads(line) for line in c._session.trace_path.read_text().splitlines()]
-        evidence['terminal_statuses'].extend(e['type'].split('.')[-1] for e in events
-                                           if e['type'] in ('run.completed', 'run.cancelled', 'run.failed'))
+        terminal_names = {'run.finished': 'completed', 'run.cancelled': 'cancelled',
+                          'run.failed': 'failed'}
+        evidence['terminal_statuses'].extend(terminal_names[e['type']] for e in events
+                                           if e['type'] in terminal_names)
         c.close()
         restarted = controller()
         command(restarted, '/files')

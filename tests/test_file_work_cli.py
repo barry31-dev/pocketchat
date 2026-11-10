@@ -53,6 +53,37 @@ class FileTerminalTests(unittest.TestCase):
                           tool_call_id='call-one', max_bytes=1)
         return self.work.state()['pending']['change']['change_id']
 
+    def test_worker_exit_cancellation_revokes_review_outside_session_run(self):
+        import threading
+        self.grants()
+        identifier = self.propose()
+        preview = self.command('/apply ' + identifier)
+        started, finish = threading.Event(), threading.Event()
+        controller = AgentTUI(AgentState('local', 'm', 'main'), {}, {})
+        controller._session = mock.Mock(file_work=self.work)
+        def before_run(text):
+            started.set()
+            finish.wait(3)
+            raise KeyboardInterrupt
+        controller._send_once = before_run
+        def finish_worker():
+            finish.set()
+            controller._worker.join(3)
+        controller._interrupt_worker = finish_worker
+        controller.start_send('cancel outside Session.run')
+        self.assertTrue(started.wait(1))
+        try:
+            controller.cancel_send()
+            self.assertIsNone(self.work.state()['pending'])
+            self.assertEqual([], self.work.state()['write_paths'])
+            with self.assertRaises(FileWorkError):
+                self.confirm(preview)
+            controller._session._release_session_writer.assert_called_once()
+        finally:
+            finish.set()
+            controller.close()
+        self.assertEqual('before\n', (self.root / 'facts.txt').read_text())
+
     def test_cancel_pending_review_invalidates_digest_without_applying(self):
         self.grants()
         identifier = self.propose()

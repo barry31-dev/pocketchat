@@ -395,6 +395,10 @@ class AgentTUI:
                     # A cancelled but still-live request owns the Session until
                     # it exits. Only this worker can release its busy slot.
                     if self._worker is threading.current_thread():
+                        if self._session is not None:
+                            if self._session.file_work is not None:
+                                self._session.file_work._invalidate()
+                            self._session._release_session_writer()
                         self.busy = False
                         self._worker = None
                         self.streaming_content = ""

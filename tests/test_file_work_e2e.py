@@ -37,6 +37,7 @@ class FileWorkGoldenTests(unittest.TestCase):
         self.assertGreaterEqual(len(evidence['changes']), 4)
         self.assertEqual('offline-stub', evidence['provider_authority'])
         self.assertIn('cancelled', evidence['terminal_statuses'])
+        self.assertIn('completed', evidence['terminal_statuses'])
         self.assertIn('undone', [row['state'] for row in evidence['changes']])
 
     def test_wrong_output_fails_acceptance_not_a_false_pass(self):
