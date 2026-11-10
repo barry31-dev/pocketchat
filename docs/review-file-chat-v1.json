@@ -347,6 +347,13 @@
       "status": "fixed",
       "fingerprint": "file-work:fixture:run-finished-terminal-name",
       "reason": "A red fixture assertion found completed terminals missing from evidence. The fixture now maps stable run.finished to completed; the affected golden/cancellation tests pass."
+    },
+    {
+      "id": "CHAT-CLOSEOUT-CI-CANCEL-WAIT",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-work:test:cancel-join-boundary-timing",
+      "reason": "Remote failure reproduced the old immediate-slot assertion at the bounded interrupt deadline. Await actual worker exit before asserting released ownership; the event-controlled test still verifies retention while live."
     }
   ],
   "independent_review_status": "three bounded full rounds completed; final post-round-3 new-diff-only closure approved; no open findings and no full-package acceptance claim.",
@@ -420,6 +427,12 @@
       "status": "verified",
       "command": "PYTHONPATH=tests:. python3.13 -B -m unittest <worker-exit stale-review and fixture completed-status regressions> -v",
       "result": "2 red assertion failures; after cleanup/status fixes 6 affected cancellation/golden tests passed, exit 0. No repeat full focused run."
+    },
+    {
+      "source_type": "remote CI and local run (V)",
+      "status": "verified defect and focused fix",
+      "command": "CI run 42802200228 Ubuntu Python 3.9/macOS Python 3.13; two affected local unittest cases",
+      "result": "Each remote job ran 1615 tests and failed only the prior cancellation test immediate busy=False assertion. Its sleeping worker may survive the 2s bounded interrupt, so the test now waits for actual worker exit before the released-slot assertion. Both local cases passed, exit 0. Runtime/package code unchanged by this test-only correction."
     }
   ],
   "closeout_unverified_at_commit": [

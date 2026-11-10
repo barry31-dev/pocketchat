@@ -577,7 +577,13 @@ class AgentCommandTests(unittest.TestCase):
         tui.start_send("hello")
         self.assertTrue(started.wait(1))
         self.assertTrue(tui.busy)
+        worker = tui._worker
         tui.cancel_send()
+        # A blocked provider may outlive the bounded interrupt. Wait for the
+        # actual worker exit before asserting its slot is released; the held-
+        # worker test above separately proves ownership remains until then.
+        worker.join(3)
+        self.assertFalse(worker.is_alive())
         self.assertFalse(tui.busy)
         self.assertEqual(tui.transcript, [("you", "hello")])
 
