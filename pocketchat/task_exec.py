@@ -365,7 +365,7 @@ def _write_execution_report(execution: ExecutionPlan, root: Path,
     return path
 
 
-def _task_state_prompt(step, results, execution) -> str:
+def _task_state_prompt(step, results, execution, root) -> str:
     """Add bounded evidence from completed dependencies to one step prompt.
 
     The projector is deliberately given a report-shaped view assembled from the
@@ -409,8 +409,15 @@ def _task_state_prompt(step, results, execution) -> str:
             + list(step.policy.write_allow_paths))
     except TaskStateError as exc:
         raise TaskExecutionError(str(exc)) from exc
-    return step.prompt + "\nDependency evidence:\n" + json.dumps(
+    prompt = step.prompt + "\nDependency evidence:\n" + json.dumps(
         state, ensure_ascii=False, sort_keys=True)
+    from .task_sources import append_source_prompt
+    from .task_recovery import TaskRecoveryError
+    try:
+        return append_source_prompt(
+            prompt, root=root, step=step, execution=execution, results=results)
+    except TaskRecoveryError as exc:
+        raise TaskExecutionError(str(exc)) from exc
 
 
 def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
@@ -566,7 +573,7 @@ def execute_plan(execution: ExecutionPlan, *, run_task, workspace, config,
             result = run_task(
                 policy=step.policy, workspace=root, config=config,
                 trace_path=path, session_path=session_path,
-                prompts=[_task_state_prompt(step, results, execution)],
+                prompts=[_task_state_prompt(step, results, execution, root)],
                 acceptance=None,
                 task_budget=task_budget)
             results.append({"step_id": step.id, "action": step.action,

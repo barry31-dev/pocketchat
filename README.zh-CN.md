@@ -61,6 +61,10 @@ Task Run 后可选确定性产物验收：执行 `completed` 与验收 `passed` 
 python3 examples/task-acceptance/demo.py
 ```
 
+## 未发布源码：本地报告与修订
+
+此已复审源码候选让原有授权 task CLI 将完成读取快照交给报告步骤，并把 Session 结果绑定到固定读取 trace、把 task 工作区绑定到授权 policy；随后可创建独立修订版，并在接续时不重放已完成读写。运行 `python3 examples/local-report-demo.py` 可走离线真实文件 CLI fixture。权限、来源追溯、拒绝路径与真实 provider 未验证边界见 [本地报告说明](docs/local-report.zh-CN.md)；准确候选 CI 与产品 main 回读仍待完成，新增源码不代表正式发布。
+
 ## 环境要求
 
 Python 3.9 或更高。运行时没有第三方依赖。

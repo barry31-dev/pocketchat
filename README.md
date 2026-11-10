@@ -79,6 +79,10 @@ published v1.1.0 artifact. See [task-acceptance.md](docs/task-acceptance.md) for
 python3 examples/task-acceptance/demo.py
 ```
 
+## Unreleased: local reports and revisions
+
+This reviewed source candidate lets the existing authorized task CLI forward completed read snapshots to a dependent report step, with Session results bound to the pinned read trace and task workspace bound to the authorized policy, then create a separate revised artifact and resume without replaying completed reads or writes. Run `python3 examples/local-report-demo.py` for the offline real-file CLI fixture. See [local-report.md](docs/local-report.md) for grants, snapshot provenance, refusal paths and the real-provider verification boundary. Exact-head CI and product-main readback remain pending; this source addition is not a formal release.
+
 ## Requirements
 
 Python 3.9 or newer. No third-party packages at runtime.
