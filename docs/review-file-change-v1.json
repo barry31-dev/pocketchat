@@ -11,6 +11,7 @@
     "pocketchat/tools.py",
     "tests/test_file_change_store.py",
     "tests/test_file_changes.py",
+    "tests/test_file_undo.py",
     "tests/test_tools.py"
   ],
   "categories": [
@@ -19,7 +20,7 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 8,
+  "rounds": 9,
   "round_decision": "reconsider",
   "round_scope": "new-diff-only",
   "findings": [
@@ -92,6 +93,27 @@
       "status": "fixed",
       "fingerprint": "file-change:apply:post-commit-preserve-secondary-error",
       "reason": "Red regressions observed the real applied file before failing on raw secondary FileChangeStoreError, including a receipt-time store rename/symlink replacement. Applied/unknown and receipt-error paths now set no-release intent before fallible preservation and contain secondary store errors, preserving the original recovery classification. Both regressions pass."
+    },
+    {
+      "id": "FILE-CHANGE-UNDO-GRANT-BOUNDARY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:undo:current-write-grant",
+      "reason": "The first undo API draft required local approval and exact persisted identity but omitted the current write-path grant named by the approved contract. A red signature/behavior regression exposed the missing boundary; undo and session compensation now require write_paths, persist a zero-effect rejected event when revoked, and the regression passes."
+    },
+    {
+      "id": "FILE-CHANGE-SESSION-UNRESOLVED-STATE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:undo-session:unresolved-recovery-block",
+      "reason": "A red restart regression showed session compensation returned undone with an empty list while the same session held undo_prepared plus a preserved writer claim after receipt failure. Session inventory now returns recovery_required before selecting any earlier applied change and reports the unresolved and remaining ids."
+    },
+    {
+      "id": "FILE-CHANGE-UNDO-LINEAGE-REVALIDATION",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-change:undo:successor-lineage-revalidation",
+      "reason": "A red real-filesystem regression rewrote an unrelated undone receipt to name an earlier change and showed the first draft trusted the receipt field alone, accepting a same-hash replacement identity. Restored identities are now accepted only when the successor immutable before identity and digest independently recompute the same predecessor relation; the forged receipt is refused as file_conflict."
     }
   ],
   "commit_or_candidate_sha": "self",
@@ -106,6 +128,7 @@
     "pocketchat/tools.py",
     "tests/test_file_change_store.py",
     "tests/test_file_changes.py",
+    "tests/test_file_undo.py",
     "tests/test_tools.py"
   ],
   "reviewed_evidence": [
@@ -133,33 +156,44 @@
     "V: two CPython 3.13.9 red preservation regressions failed at FileChangeStoreError versus FileChangeError after actual target/record readback, exit 1. After no-release ordering and error-containment fixes, both tests passed, exit 0.",
     "V: CPython 3.13.9 and CPython 3.9.6 each ran python -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_tools -v; each ran 47 tests, OK, exit 0. Ruff 0.17.3 E9/F on the two newly changed Python files passed, exit 0.",
     "C: review metadata was rebuilt and validated against the cumulative 11-path task diff using the shared review-record core. Its machine category floor remains medium/standard; this file-mutation/recovery change additionally requires the deep safety checks recorded below. Rounds after three are new-diff-only, not repeated full-package reviews.",
-    "C: independent fresh-context round 8 found no actionable finding in the current post-commit diff. It checked successful rename/link classification, no-release ordering before fallible preservation, unresolved prepared/receipt state and real-filesystem regression scope. The reviewer did not run tests; unknown disposition remains static-only and the older full package was not reopened."
+    "C: independent fresh-context round 8 found no actionable finding in the current post-commit diff. It checked successful rename/link classification, no-release ordering before fallible preservation, unresolved prepared/receipt state and real-filesystem regression scope. The reviewer did not run tests; unknown disposition remains static-only and the older full package was not reopened.",
+    "Red: persistent replace undo initially failed because undo_file_change was absent; after the minimal event/parser/atomic-restore implementation, restart and idempotence passed.",
+    "Red: create undo initially raised created-file undo is not implemented; after identity-bound unlink and absence readback, unchanged create removal passed while an arbitrary same-hash inode remained a conflict.",
+    "Red: chained undo first returned restores_change_id=null; after persisted record inventory and predecessor/successor identity lineage, C-to-B-to-A passed across new inodes.",
+    "Red: session compensation APIs were absent; after deterministic persisted reverse ordering, full restart compensation passed and first-conflict execution stopped with completed/remaining ids.",
+    "Red review finding: undo omitted the current write_paths boundary. After the focused fix, a revoked grant returns file_permission_denied, leaves candidate bytes unchanged and persists a rejected event.",
+    "Red review finding: an undo_prepared receipt failure was silently skipped by session compensation. After the focused fix, unresolved prepared/recovery state returns recovery_required before any earlier undo.",
+    "Red review finding: a forged successor receipt could authorize an unrelated same-hash inode. After recomputing the successor immutable before relation, the forged lineage is refused as file_conflict.",
+    "V: macOS CPython 3.9.6 and 3.13.9 each ran the scoped file_changes/file_change_store/file_undo/tools unittest set with 56 tests OK before the final review fixes; a final rerun is required because the grant and lineage fixes changed code afterward.",
+    "V: tests.test_release_process_docs ran 16 tests OK; Ruff 0.17.3 E9/F, compileall and git diff --check passed before the final review fixes and must be rebound by the final rerun.",
+    "V: final post-review rerun on macOS: CPython 3.9.6 and CPython 3.13.9 each ran python -B -m unittest tests.test_file_changes tests.test_file_change_store tests.test_file_undo tests.test_tools -v; each ran 58 tests, OK, exit 0.",
+    "V: final adjacent documentation run executed python3 -B -m unittest tests.test_release_process_docs -v; 16 tests passed, exit 0.",
+    "V: final Ruff 0.17.3 E9/F on file_changes.py, file_change_store.py and test_file_undo.py passed; python3 compileall, review JSON decoding and git diff --check each exited 0."
   ],
-  "unverified_scope": "Original-scope private checkpoint only. No expanded undo/restart reconciliation, Session/CLI/UI/model wiring, default mutation entry, real provider, full repository suite, Windows/Linux execution, runtime test of unknown disposition, hostile-process/network-filesystem crash proof, public push/PR/CI/merge, tag, Release or upload. Independent static reviews cover the prior UTF-8 diff and this post-commit code/test diff only, not the entire historical package. Python fixtures were run on macOS CPython 3.9.6 and 3.13.9 only.",
+  "unverified_scope": "Complete safe-file-change library package with persistent single-change and session undo on macOS CPython 3.9.6 and 3.13.9. No Session/CLI/UI/model wiring, default mutation entry, real provider, full repository suite, Windows/Linux execution, automatic stale-writer-claim takeover, hostile-process or network-filesystem crash proof, release-wheel acceptance, tag, Release or package upload. Public branch/PR/CI/main facts are recorded only after the controlled delivery path runs.",
   "review_context": {
     "why": [
-      "PC-FILE-CHANGE-1 requires a real non-Git or dirty-Git fixture to persist a closed proposal and before image, bind trusted confirmation, safely apply, independently read back and persist a truthful receipt."
+      "PC-FILE-CHANGE-1 now requires the existing proposal/apply checkpoint and persistent undo/restart lineage to form one complete safe-file-change service.",
+      "The expanded package must reverse A-to-B-to-C as C-to-B-to-A, refuse arbitrary same-hash identity replacement, remove only an unchanged owned create, and stop session compensation at the first conflict or unresolved recovery state."
     ],
     "not_doing": [
-      "No expanded undo package, restart reconciliation, tool-contract registration, CLI/Session/UI/model wiring, default write entry, shared queue/CHANGELOG edit or public action."
+      "No tool-contract registration, Session/CLI/UI/model wiring, default mutation entry, general delete surface, release version/tag/Release/package upload or paid provider action.",
+      "No automatic takeover of a preserved writer claim and no hostile-process/network-filesystem exactly-once claim."
     ],
     "diff_walk": [
-      "pocketchat/file_change_store.py: private content-addressed objects, closed JSON records, quota checks, duplicate-member rejection and identity-bound cooperative writer claims.",
-      "pocketchat/file_changes.py: closed proposal/confirmation/apply state machine, bounded paths/content/diff, before identity+hash binding, no-follow target traversal, atomic replace/create, independent readback and recovery-required receipt failures.",
-      "pocketchat/tools.py: one unregistered proposal helper that persists pending evidence only and exposes no immediate overwrite.",
-      "tests: real temporary filesystem and dirty-Git fixtures cover create/replace, stale/revoked grants, path replacement, secure-runtime refusal, quota, prepare/receipt failures, writer collision and effect disposition.",
-      "bilingual docs: record the internal store and safety boundary without claiming a command surface, undo path or release."
+      "pocketchat/file_change_store.py: private deterministic record inventory used after restart; unexpected record-directory entries still fail closed.",
+      "pocketchat/file_changes.py: closed undo_prepared/undone transitions, exact current grant and target identity/hash checks, atomic restore or owned-create removal, durable receipt/idempotence, predecessor/successor lineage revalidation and dependency-safe session compensation.",
+      "tests/test_file_undo.py: real-filesystem replace/create, restart, chained undo, same-hash replacement, revoked grant, prepare/receipt failure, unresolved session state and forged successor-lineage regressions.",
+      "Existing proposal/apply/store/tool tests remain the earlier package evidence; bilingual file-work/security docs now describe the implemented library boundary without claiming a command surface."
     ],
     "static_checks": [
-      "The immutable proposal digest covers schema, id, owner, origin, policy, path, operation, after object and before image.",
-      "Target mutation requires exact confirmation, unchanged current policy/write grant, matching target identity/hash and the live writer claim.",
-      "Every successful replace/link is classified before later cleanup/fsync/readback work; durable receipt failure preserves prepared state and writer claim.",
-      "No default model or user write path is added by this checkpoint.",
-      "After prepared is durable, candidate-object read or verification failure preserves the writer claim and cannot be classified as a zero-effect retry.",
-      "Candidate-read recovery sets the no-release decision before fallible claim preservation; preservation failure cannot degrade the result to a raw store exception.",
-      "Candidate UTF-8 encoding failures are contained as FileChangeError before private proposal persistence and cannot leak UnicodeEncodeError.",
-      "After observed rename/link success, a FileChangeError from reopened readback is converted to recovery-required/applied rather than a zero-effect pre-write terminal event.",
-      "Every existing post-commit recovery path decides not to normally release the claim before attempting fallible preservation; preservation errors cannot mask the original recovery classification."
+      "Undo cannot start without an explicit bounded approval identity and a current write-path grant.",
+      "Before mutation, undo persists undo_prepared with the exact candidate digest, observed identity, action and computed predecessor link.",
+      "Replace undo atomically restores the persisted before object and independently reopens it; create undo unlinks only the exact applied identity/hash and verifies absence.",
+      "A restored inode is trusted for the next undo only when the successor receipt and the successor immutable before identity both prove the predecessor relation.",
+      "Session compensation inventories persisted records after restart, computes reverse dependency order, stops on the first conflict and refuses to proceed past prepared/undo_prepared/recovery_required state.",
+      "Receipt-store failure after a real undo preserves undo_prepared plus the writer claim and reports file_recovery_required/applied; prepare persistence failure leaves target bytes unchanged.",
+      "The proposal helper remains unregistered; no model, CLI, Session or UI path can call apply or undo in this package."
     ],
     "review_notes": [
       "The 12:12 private patch was treated as an untrusted recovery candidate and compared against this live tree; current differences were reviewed and tested under the new lease.",
@@ -168,7 +202,8 @@
       "Round 5 was an independent fresh-context review of the current uncommitted diff. It found the preserve-failure path; only that finding, the minimal fix and its regression were reviewed in this round.",
       "Round 6 reviewed only the unpaired-surrogate validation diff and its regression; unchanged implementation was not re-opened.",
       "Round 7 independently reviewed the prior UTF-8 new diff and corrected a red/green evidence-attribution overclaim without rerunning its unchanged checks.",
-      "Round 8 independently reviewed only d4510f113490604e7337812a96fe39a6a12eb758 to the current post-commit code/test diff and necessary nearby contracts. It found no actionable issue, checked that those files did not change during review, and ran no tests. This is not a full-package or public-release verdict."
+      "Round 8 independently reviewed only d4510f113490604e7337812a96fe39a6a12eb758 to the current post-commit code/test diff and necessary nearby contracts. It found no actionable issue, checked that those files did not change during review, and ran no tests. This is not a full-package or public-release verdict.",
+      "Round 9 preserved the prior eight-round history and reviewed only the expanded undo/restart diff plus its composition with the already-reviewed proposal/apply contract. The standing 2026-11-09 technical-review delegation was used; no human sign-off or separate subagent was claimed."
     ],
     "gaps": [
       "The new fault injections use actual macOS files and commits. Readback/preserve faults are injected; receipt-store rename/symlink replacement is real. The two double-failure tests cover replace only; unknown disposition is static-only. No expanded undo/restart, model/CLI/Session/UI/provider, full repository suite, Windows/Linux, hostile-process/network-filesystem crash proof or public integration."

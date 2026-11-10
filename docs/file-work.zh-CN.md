@@ -68,12 +68,12 @@ operation 只允许 create/replace。proposal digest 不含自身、approval 和
 支持的系统上使用私有文件/目录权限。隐藏不等于 Git 忽略，文档必须提醒用户不要公开这些记录。
 不自动清理仍可撤销的记录。
 
-当前原范围检查点位于 `pocketchat.file_changes`、
-`pocketchat.file_change_store` 与尚未注册的
-`tools.execute_propose_file_change` helper：保存封闭提案、before/candidate
-对象、可信确认、prepared 边界和已回读的 apply 回执。它没有注册进
-`tool_contracts`、CLI、Session 或 UI；undo、重启 reconcile 与默认修改入口
-仍属于后续包内工作。
+文件变更服务位于 `pocketchat.file_changes`、`pocketchat.file_change_store`
+与尚未注册的 `tools.execute_propose_file_change` helper：保存封闭提案、
+before/candidate 对象、可信确认、prepared/apply 回执及 identity-bound undo 回执。
+重启后重新打开 workspace store，即可撤销已成功修改或计算 dependency-safe session
+补偿顺序；内存缓存不具权威性。它仍未注册进 `tool_contracts`、CLI、Session 或 UI，
+因此本包没有开放默认模型/用户修改命令。
 
 边界：UTF-8，单原文件/候选文件沿用 16 KiB；完整 diff 64 KiB，元数据记录 64 KiB，
 每 workspace 修改存储 16 MiB，每 turn 一个 pending。按编码后字节计数，包含事件和对象文件。
@@ -99,7 +99,7 @@ conflict、recovery_required。文件记录是事实源，session/trace 只引�
 返回 `file_recovery_required`、`effect_disposition=applied`，不能记成写前 conflict 或 no-op。
 保留现有 before-image/记录证据并跳过正常 claim release；即使 claim 核验/保留再次失败，
 这一恢复分类与不释放决定也不能被覆盖。存储不可用不证明回执已持久化或 claim 当前所有权，
-更不授权重放、自动恢复或 undo。
+更不授权重放或自动接管旧 claim。成功 undo 必须带显式有界批准标识，并匹配精确的持久 lineage。
 
 hash 预检加原子替换**不是通用跨进程 CAS**。明确合作单写者/本地文件系统边界；
 可观察的外部编辑/路径替换必须拒绝且 outside 文件不变，不承诺恶意进程、网络盘或任意崩溃 exactly-once。
@@ -109,9 +109,9 @@ applied 需要目标回读等于候选及回执持久化。显示 operation/path
 
 undo 是受限补偿：当前目标身份/hash 仍匹配那次 after 且当前授权允许，才恢复 before bytes；
 冲突保留用户新内容。新建文件只可移除自己排他创建且未被修改/替换的那一个，不提供任意删除工具。
-两次修改 A→B→C 按 C→B→A 撤销。原子恢复可能生成新 inode：undo 回执须绑定被恢复的前一修改
+两次修改 A→B→C 按 C→B→A 撤销。原子恢复可能生成新 inode：undo 回执绑定被恢复的前一修改
 及新观察身份，下一次 undo 只接受这条已验证补偿关系，不能依赖旧 inode，也不接受任意同 hash 替换。
-重复 undo 不重放。session 批次先列逆序清单，首个冲突停止，
+重复 undo 返回同一份持久回执而不重放。库从持久 session 记录计算确定性的逆序，首个冲突停止，
 报告已撤销和未撤销项，不宣称原子回滚。
 
 checkpoint/rewind 不改业务文件，文件 undo 不抹聊天/trace。重启从持久记录回查。

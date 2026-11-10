@@ -446,6 +446,61 @@ def _parse_receipt(value: Any, change: Dict[str, Any]) -> Dict[str, Any]:
     return receipt
 
 
+def _parse_optional_change_id(value: Any, what: str) -> Optional[str]:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not _CHANGE_ID.fullmatch(value):
+        raise FileChangeError("%s must be a change id or null" % what)
+    return value
+
+
+def _parse_undo_prepared(value: Any, change: Dict[str, Any],
+                         applied_receipt: Dict[str, Any]) -> Dict[str, Any]:
+    event = _closed(value, (
+        "type", "sequence", "approval_id", "expected_sha256",
+        "expected_file_identity", "undo_action", "restores_change_id"),
+        what="undo prepared event")
+    _text(event["approval_id"], "undo_prepared.approval_id", maximum=128)
+    if event["expected_sha256"] != change["after"]["sha256"]:
+        raise FileChangeError("undo prepared event has the wrong expected digest")
+    _parse_identity(event["expected_file_identity"],
+                    "undo_prepared.expected_file_identity")
+    if event["undo_action"] != applied_receipt["undo_action"]:
+        raise FileChangeError("undo prepared event has the wrong undo action")
+    predecessor = _parse_optional_change_id(
+        event["restores_change_id"], "undo_prepared.restores_change_id")
+    if predecessor == change["change_id"]:
+        raise FileChangeError("undo cannot restore its own change id")
+    return event
+
+
+def _parse_undo_receipt(value: Any, change: Dict[str, Any],
+                        prepared: Dict[str, Any]) -> Dict[str, Any]:
+    receipt = _closed(value, (
+        "status", "change_id", "operation", "path", "approval_id",
+        "undo_action", "undone_sha256", "restored_sha256",
+        "restores_change_id", "restored_file_identity"),
+        what="file change undo receipt")
+    expected_restored = (change["before"]["sha256"]
+                         if change["operation"] == "replace" else None)
+    if (receipt["status"] != "undone"
+            or receipt["change_id"] != change["change_id"]
+            or receipt["operation"] != change["operation"]
+            or receipt["path"] != change["path"]
+            or receipt["approval_id"] != prepared["approval_id"]
+            or receipt["undo_action"] != prepared["undo_action"]
+            or receipt["undone_sha256"] != change["after"]["sha256"]
+            or receipt["restored_sha256"] != expected_restored
+            or receipt["restores_change_id"] != prepared["restores_change_id"]):
+        raise FileChangeError("file change undo receipt does not match its record")
+    if change["operation"] == "replace":
+        _parse_identity(receipt["restored_file_identity"],
+                        "undo_receipt.restored_file_identity")
+    elif receipt["restored_file_identity"] is not None:
+        raise FileChangeError("created-file undo must not report a restored identity")
+    return receipt
+
+
 def _parse_events(events: Any, change: Dict[str, Any]) -> None:
     if not isinstance(events, list) or not events:
         raise FileChangeError("file change events must be a non-empty list")
@@ -454,7 +509,9 @@ def _parse_events(events: Any, change: Dict[str, Any]) -> None:
         "proposed": {"confirmed", "rejected"},
         "confirmed": {"prepared", "rejected", "conflict", "failed"},
         "prepared": {"applied", "conflict", "failed", "recovery_required"},
-        "applied": set(),
+        "applied": {"undo_prepared", "rejected", "conflict", "failed"},
+        "undo_prepared": {"undone", "conflict", "failed", "recovery_required"},
+        "undone": set(),
         "rejected": set(),
         "conflict": set(),
         "failed": set(),
@@ -462,6 +519,8 @@ def _parse_events(events: Any, change: Dict[str, Any]) -> None:
     }
     previous = None
     confirmed = None
+    applied_receipt = None
+    undo_prepared = None
     for index, event in enumerate(events, 1):
         if not isinstance(event, dict):
             raise FileChangeError("file change event must be an object")
@@ -491,7 +550,17 @@ def _parse_events(events: Any, change: Dict[str, Any]) -> None:
         elif event_type == "applied":
             _closed(event, ("type", "sequence", "receipt"),
                     what="applied event")
-            _parse_receipt(event["receipt"], change)
+            applied_receipt = _parse_receipt(event["receipt"], change)
+        elif event_type == "undo_prepared":
+            if applied_receipt is None:
+                raise FileChangeError("undo preparation requires an applied receipt")
+            undo_prepared = _parse_undo_prepared(event, change, applied_receipt)
+        elif event_type == "undone":
+            _closed(event, ("type", "sequence", "receipt"),
+                    what="undone event")
+            if undo_prepared is None:
+                raise FileChangeError("undone event requires undo preparation")
+            _parse_undo_receipt(event["receipt"], change, undo_prepared)
         else:
             _closed(event, ("type", "sequence", "error_type", "reason",
                             "effect_disposition"), what="terminal file change event")
@@ -856,3 +925,413 @@ def apply_file_change(root: Path, store: FileChangeStore, change_id: str, *,
     finally:
         if not preserve_claim:
             claim.release()
+
+
+def _persisted_changes(store: FileChangeStore) -> list[Dict[str, Any]]:
+    changes = []
+    try:
+        change_ids = store.list_change_ids()
+    except FileChangeStoreError as exc:
+        _raise_store_error(exc)
+    for identifier in change_ids:
+        try:
+            changes.append(parse_file_change(store.load_record(identifier)))
+        except FileChangeStoreError as exc:
+            _raise_store_error(exc)
+    return changes
+
+
+def _same_lineage(left: Dict[str, Any], right: Dict[str, Any]) -> bool:
+    return (left["path"] == right["path"]
+            and left["owner"]["workspace_sha256"]
+            == right["owner"]["workspace_sha256"]
+            and left["owner"]["session_id"] == right["owner"]["session_id"])
+
+
+def _undo_predecessor(change: Dict[str, Any],
+                      changes: Iterable[Dict[str, Any]]) -> Optional[str]:
+    if change["operation"] != "replace":
+        return None
+    matches = []
+    for candidate in changes:
+        if candidate["change_id"] == change["change_id"]:
+            continue
+        if not _same_lineage(candidate, change):
+            continue
+        try:
+            receipt = _applied_receipt(candidate)
+        except FileChangeError:
+            continue
+        if (candidate["after"]["sha256"] == change["before"]["sha256"]
+                and receipt["file_identity"]
+                == change["before"]["file_identity"]):
+            matches.append(candidate["change_id"])
+    if len(matches) > 1:
+        raise FileChangeError("undo predecessor lineage is ambiguous",
+                              error_type="file_conflict")
+    return matches[0] if matches else None
+
+
+def _verified_restored_identity(
+        change: Dict[str, Any],
+        changes: Iterable[Dict[str, Any]]) -> Optional[Dict[str, int]]:
+    all_changes = list(changes)
+    matches = []
+    for candidate in all_changes:
+        if candidate["change_id"] == change["change_id"]:
+            continue
+        if not _same_lineage(candidate, change):
+            continue
+        last = candidate["events"][-1]
+        if last["type"] != "undone":
+            continue
+        receipt = last["receipt"]
+        if _undo_predecessor(candidate, all_changes) != change["change_id"]:
+            continue
+        if (receipt["restores_change_id"] == change["change_id"]
+                and receipt["restored_sha256"] == change["after"]["sha256"]
+                and receipt["restored_file_identity"] is not None):
+            matches.append(receipt["restored_file_identity"])
+    if len(matches) > 1:
+        raise FileChangeError("undo successor lineage is ambiguous",
+                              error_type="file_conflict")
+    return matches[0] if matches else None
+
+
+def _applied_receipt(change: Dict[str, Any]) -> Dict[str, Any]:
+    for event in reversed(change["events"]):
+        if event["type"] == "applied":
+            return event["receipt"]
+    raise FileChangeError("file change has no applied receipt")
+
+
+def _atomic_restore(root: Path, change: Dict[str, Any], before: bytes,
+                    expected_identity: Dict[str, int]) -> tuple[bytes, Dict[str, int]]:
+    temporary = ".pocketchat-undo-%s.tmp" % uuid4().hex
+    created_temporary = False
+    replaced = False
+    with _open_parent(root, change["path"]) as (parent_fd, name):
+        current, identity = _read_target_at(parent_fd, name, allow_missing=False)
+        if (current is None or identity != expected_identity
+                or _sha256(current) != change["after"]["sha256"]):
+            raise FileChangeError("target changed after apply",
+                                  error_type="file_conflict")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        descriptor = None
+        try:
+            descriptor = os.open(temporary, flags, 0o600, dir_fd=parent_fd)
+            created_temporary = True
+            _write_all(descriptor, before)
+            os.fchmod(descriptor, stat.S_IMODE(expected_identity["mode"]))
+            os.fsync(descriptor)
+            os.close(descriptor)
+            descriptor = None
+            latest, latest_identity = _read_target_at(
+                parent_fd, name, allow_missing=False)
+            if (latest is None or latest_identity != expected_identity
+                    or _sha256(latest) != change["after"]["sha256"]):
+                raise FileChangeError("target changed during undo preparation",
+                                      error_type="file_conflict")
+            os.rename(temporary, name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+            replaced = True
+            created_temporary = False
+            os.fsync(parent_fd)
+            observed, restored_identity = _read_target_at(
+                parent_fd, name, allow_missing=False)
+            if observed != before or restored_identity is None:
+                raise FileChangeError(
+                    "restored file failed independent readback",
+                    error_type="file_recovery_required",
+                    effect_disposition="applied")
+            return observed, restored_identity
+        except FileChangeError as exc:
+            if replaced:
+                raise FileChangeError(
+                    "file was restored but independent readback could not be verified",
+                    error_type="file_recovery_required",
+                    effect_disposition="applied") from exc
+            raise
+        except OSError as exc:
+            raise FileChangeError(
+                "file undo could not be applied: %s" % exc,
+                error_type=("file_recovery_required" if replaced else "file_conflict"),
+                effect_disposition=("applied" if replaced else "none")) from exc
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+            if created_temporary:
+                try:
+                    os.unlink(temporary, dir_fd=parent_fd)
+                except OSError:
+                    pass
+
+
+def _atomic_remove_created(root: Path, change: Dict[str, Any],
+                           expected_identity: Dict[str, int]) -> None:
+    removed = False
+    with _open_parent(root, change["path"]) as (parent_fd, name):
+        current, identity = _read_target_at(parent_fd, name, allow_missing=False)
+        if (current is None or identity != expected_identity
+                or _sha256(current) != change["after"]["sha256"]):
+            raise FileChangeError("created target changed after apply",
+                                  error_type="file_conflict")
+        try:
+            latest, latest_identity = _read_target_at(
+                parent_fd, name, allow_missing=False)
+            if (latest is None or latest_identity != expected_identity
+                    or _sha256(latest) != change["after"]["sha256"]):
+                raise FileChangeError("created target changed during undo preparation",
+                                      error_type="file_conflict")
+            os.unlink(name, dir_fd=parent_fd)
+            removed = True
+            os.fsync(parent_fd)
+            observed, observed_identity = _read_target_at(
+                parent_fd, name, allow_missing=True)
+            if observed is not None or observed_identity is not None:
+                raise FileChangeError(
+                    "created-file removal failed independent readback",
+                    error_type="file_recovery_required",
+                    effect_disposition="applied")
+        except FileChangeError as exc:
+            if removed:
+                raise FileChangeError(
+                    "created file was removed but readback could not be verified",
+                    error_type="file_recovery_required",
+                    effect_disposition="applied") from exc
+            raise
+        except OSError as exc:
+            raise FileChangeError(
+                "created-file undo could not be applied: %s" % exc,
+                error_type=("file_recovery_required" if removed else "file_conflict"),
+                effect_disposition=("applied" if removed else "none")) from exc
+
+
+def undo_file_change(root: Path, store: FileChangeStore, change_id: str, *,
+                     approval_id: str,
+                     write_paths: Iterable[str]) -> Dict[str, Any]:
+    """Undo one applied file change after an explicit local approval."""
+    _require_store_workspace(root, store)
+    _text(approval_id, "approval_id", maximum=128)
+    try:
+        change = parse_file_change(store.load_record(change_id))
+    except FileChangeStoreError as exc:
+        _raise_store_error(exc)
+    if change["events"][-1]["type"] == "undone":
+        return change["events"][-1]["receipt"]
+    if change["events"][-1]["type"] != "applied":
+        raise FileChangeError("file change is not undoable")
+    try:
+        claim = store.acquire_writer(change_id, owner="undo:%s" % approval_id)
+    except FileChangeStoreError as exc:
+        _raise_store_error(exc)
+    preserve_claim = False
+    try:
+        try:
+            change = parse_file_change(store.load_record(change_id))
+        except FileChangeStoreError as exc:
+            _raise_store_error(exc)
+        if change["events"][-1]["type"] == "undone":
+            return change["events"][-1]["receipt"]
+        if change["events"][-1]["type"] != "applied":
+            raise FileChangeError("file change is not undoable")
+        if not _allowed(change["path"], write_paths):
+            _persist_terminal(
+                store, change, event_type="rejected",
+                error_type="file_permission_denied",
+                reason="undo_write_grant_revoked")
+            raise FileChangeError(
+                "write grant no longer includes the undo target",
+                error_type="file_permission_denied")
+        applied = _applied_receipt(change)
+        changes = _persisted_changes(store)
+        predecessor = _undo_predecessor(change, changes)
+        expected_identity = (_verified_restored_identity(change, changes)
+                             or applied["file_identity"])
+        try:
+            current, identity = _read_target(root, change["path"], allow_missing=False)
+        except FileChangeError as exc:
+            _persist_terminal(
+                store, change, event_type="conflict",
+                error_type=exc.error_type, reason="undo_target_unavailable",
+                effect_disposition=exc.effect_disposition)
+            raise
+        if (current is None or identity != expected_identity
+                or _sha256(current) != change["after"]["sha256"]):
+            _persist_terminal(
+                store, change, event_type="conflict",
+                error_type="file_conflict", reason="undo_target_changed")
+            raise FileChangeError("target changed after apply",
+                                  error_type="file_conflict")
+        before = None
+        if change["operation"] == "replace":
+            try:
+                before = store.read_object(
+                    change["before"]["object"], change["before"]["sha256"])
+            except FileChangeStoreError as exc:
+                _raise_store_error(exc)
+        prepared = {
+            "type": "undo_prepared",
+            "sequence": len(change["events"]) + 1,
+            "approval_id": approval_id,
+            "expected_sha256": change["after"]["sha256"],
+            "expected_file_identity": identity,
+            "undo_action": applied["undo_action"],
+            "restores_change_id": predecessor,
+        }
+        change["events"].append(prepared)
+        parse_file_change(change)
+        try:
+            store.update_record(change)
+        except FileChangeStoreError as exc:
+            _raise_store_error(exc)
+        try:
+            if change["operation"] == "replace":
+                restored, restored_identity = _atomic_restore(
+                    root, change, before, identity)
+                restored_sha256 = _sha256(restored)
+            else:
+                _atomic_remove_created(root, change, identity)
+                restored_identity = None
+                restored_sha256 = None
+        except FileChangeError as exc:
+            if exc.effect_disposition in {"applied", "unknown"}:
+                preserve_claim = True
+                try:
+                    claim.preserve()
+                except FileChangeStoreError:
+                    pass
+            else:
+                _persist_terminal(
+                    store, change,
+                    event_type=("conflict" if exc.error_type == "file_conflict"
+                                else "failed"),
+                    error_type=exc.error_type, reason="undo_failed",
+                    effect_disposition=exc.effect_disposition)
+            raise
+        receipt = {
+            "status": "undone",
+            "change_id": change_id,
+            "operation": change["operation"],
+            "path": change["path"],
+            "approval_id": approval_id,
+            "undo_action": applied["undo_action"],
+            "undone_sha256": change["after"]["sha256"],
+            "restored_sha256": restored_sha256,
+            "restores_change_id": predecessor,
+            "restored_file_identity": restored_identity,
+        }
+        change["events"].append({
+            "type": "undone",
+            "sequence": len(change["events"]) + 1,
+            "receipt": receipt,
+        })
+        parse_file_change(change)
+        try:
+            store.update_record(change)
+        except FileChangeStoreError as exc:
+            preserve_claim = True
+            try:
+                claim.preserve()
+            except FileChangeStoreError:
+                pass
+            raise FileChangeError(
+                "file was undone but its durable receipt could not be saved",
+                error_type="file_recovery_required",
+                effect_disposition="applied") from exc
+        return receipt
+    finally:
+        if not preserve_claim:
+            claim.release()
+
+
+def _session_undo_order(changes: Iterable[Dict[str, Any]],
+                        session_id: str) -> list[str]:
+    active = {
+        change["change_id"]: change
+        for change in changes
+        if (change["owner"]["session_id"] == session_id
+            and change["events"][-1]["type"] == "applied")
+    }
+    order = []
+    while active:
+        predecessor_ids = set()
+        for change in active.values():
+            predecessor = _undo_predecessor(change, active.values())
+            if predecessor in active:
+                predecessor_ids.add(predecessor)
+        tips = [change for identifier, change in active.items()
+                if identifier not in predecessor_ids]
+        if not tips:
+            raise FileChangeError("file-change undo lineage contains a cycle",
+                                  error_type="file_conflict")
+        chosen = sorted(
+            tips, key=lambda item: (item["path"], item["change_id"]),
+            reverse=True)[0]
+        order.append(chosen["change_id"])
+        del active[chosen["change_id"]]
+    return order
+
+
+def undo_session_file_changes(root: Path, store: FileChangeStore,
+                              session_id: str, *,
+                              approval_id: str,
+                              write_paths: Iterable[str]) -> Dict[str, Any]:
+    """Undo persisted session changes in dependency-safe reverse order."""
+    _require_store_workspace(root, store)
+    _text(session_id, "session_id")
+    _text(approval_id, "approval_id", maximum=128)
+    changes = _persisted_changes(store)
+    unresolved = sorted(
+        change["change_id"] for change in changes
+        if (change["owner"]["session_id"] == session_id
+            and change["events"][-1]["type"] in {
+                "prepared", "undo_prepared", "recovery_required"}))
+    if unresolved:
+        try:
+            pending = _session_undo_order(changes, session_id)
+        except FileChangeError:
+            pending = []
+        return {
+            "status": "recovery_required",
+            "undone": [],
+            "failed_change_id": unresolved[0],
+            "error_type": "file_recovery_required",
+            "remaining_change_ids": unresolved + [
+                identifier for identifier in pending
+                if identifier not in unresolved],
+        }
+    try:
+        order = _session_undo_order(changes, session_id)
+    except FileChangeError as exc:
+        return {
+            "status": "conflict",
+            "undone": [],
+            "failed_change_id": None,
+            "error_type": exc.error_type,
+            "remaining_change_ids": [],
+        }
+    undone = []
+    for index, identifier in enumerate(order):
+        try:
+            receipt = undo_file_change(
+                root, store, identifier, approval_id=approval_id,
+                write_paths=write_paths)
+        except FileChangeError as exc:
+            return {
+                "status": ("conflict" if exc.error_type == "file_conflict"
+                           else "recovery_required" if
+                           exc.error_type == "file_recovery_required"
+                           else "failed"),
+                "undone": undone,
+                "failed_change_id": identifier,
+                "error_type": exc.error_type,
+                "remaining_change_ids": order[index:],
+            }
+        undone.append(receipt)
+    return {
+        "status": "undone",
+        "undone": undone,
+        "failed_change_id": None,
+        "error_type": None,
+        "remaining_change_ids": [],
+    }

@@ -431,6 +431,25 @@ class FileChangeStore:
             except OSError as exc:
                 raise FileChangeStoreError("cannot update change record: %s" % exc)
 
+    def list_change_ids(self) -> list[str]:
+        """List every persisted change record identity in deterministic order."""
+        with self._layout() as (_, _, records_fd):
+            try:
+                names = sorted(os.listdir(records_fd))
+            except OSError as exc:
+                raise FileChangeStoreError(
+                    "cannot list private change records: %s" % exc) from exc
+            identifiers = []
+            for name in names:
+                if not name.endswith(".json"):
+                    raise FileChangeStoreError(
+                        "private change record directory contains an unknown entry")
+                identifier = name[:-5]
+                _change_id(identifier)
+                _stat_regular(records_fd, name)
+                identifiers.append(identifier)
+            return identifiers
+
     def load_record(self, change_id: str) -> Dict[str, Any]:
         name = self._record_name(change_id)
         with self._layout() as (_, _, records_fd):

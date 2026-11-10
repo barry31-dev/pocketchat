@@ -58,11 +58,13 @@
 使用原子替换，替换已有文件必须显式 `--overwrite`；不提供删除、shell、执行或网络
 操作。
 
-文件变更检查点新增内部、未注册的提案 helper，以及分离的确认/apply 原语。提案只写私有的
-content-addressed 证据并返回完整有界 diff，不修改目标；apply 必须同时满足精确的
-proposal/policy 确认、当前写授权、未变化的目标 identity/hash 与独占 writer claim，
-并通过 no-follow descriptor-relative I/O 写入后独立回读。它没有进入模型 tool contract、
-CLI、Session 或 UI，也不提供通用 overwrite、delete 或 undo 工具。
+文件变更服务新增内部、未注册的提案 helper，以及分离的确认、apply 与 identity-bound undo 原语。
+提案只写私有 content-addressed 证据并返回完整有界 diff，不修改目标；apply 必须同时满足精确的
+proposal/policy 确认、当前写授权、未变化的目标 identity/hash 与独占 writer claim。undo 必须带
+显式本地批准、持久 applied receipt，并匹配原 file identity 或已验证的后继补偿 identity；新建文件
+只有在自有 identity/hash 未变化时才删除。所有修改都使用 no-follow descriptor-relative I/O 并独立回读，
+持久 session 补偿在首个冲突停止。这些原语没有进入模型 tool contract、CLI、Session 或 UI，
+也不提供通用 overwrite、delete 或 undo 工具。
 
 模型自动 tool call 默认关闭。profile 只提供它显式启用的本地工具（`read_file`、
 create-only `write_file` 或只读 `memory_search`），路径来自显式 allowlist，
