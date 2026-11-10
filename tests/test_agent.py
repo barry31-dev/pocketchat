@@ -182,6 +182,7 @@ class AgentCommandTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("PocketChat agent.", result.stdout)
+        self.assertIn("Trusted terminal file controls", result.stdout)
 
     def test_tui_controller_offers_profiles_and_commands(self):
         from pocketchat.tui import AgentTUI
@@ -195,7 +196,8 @@ class AgentCommandTests(unittest.TestCase):
         self.assertEqual(tui.profile_names(), ["hosted", "local"])
         self.assertEqual(tui.command_names(),
                          ["/context", "/exit", "/model", "/reasoning",
-                          "/session", "/status"])
+                          "/session", "/status", "/files", "/diff",
+                          "/apply", "/changes", "/undo", "/confirm"])
         self.assertEqual(tui.matching_commands("/mo"), ["/model"])
 
     def test_tui_controller_model_picker_changes_the_next_profile(self):

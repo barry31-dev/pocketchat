@@ -266,18 +266,25 @@ class Session:
         self._context_projection: Optional[Dict[str, Any]] = None
         self._projection_sidecar = ""
         self._memory_recall: Optional[Dict[str, Any]] = None
-        self.file_work = file_work
+        self.file_work = None
         if file_work is not None:
-            try:
-                file_work.bind(
-                    config, self.run_id, host_identity=object(),
-                    conversation_id=(self.session_file.conversation_id
-                                     if self.session_file else None),
-                    branch=(self.session_file.branch_id or "main"
-                            if self.session_file else "main"))
-            except FileWorkError as exc:
-                self._release_session_writer()
-                raise ConfigError(str(exc)) from exc
+            self.attach_file_work(file_work)
+
+    def attach_file_work(self, file_work) -> None:
+        """Attach once from an idle host terminal without transferring grants."""
+        if self.file_work is not None:
+            raise ConfigError('file work is already attached to this Session')
+        try:
+            file_work.bind(
+                self.config, self.run_id, host_identity=object(),
+                conversation_id=(self.session_file.conversation_id
+                                 if self.session_file else None),
+                branch=(self.session_file.branch_id or "main"
+                        if self.session_file else "main"))
+        except FileWorkError as exc:
+            self._release_session_writer()
+            raise ConfigError(str(exc)) from exc
+        self.file_work = file_work
 
     def config_summary(self) -> Dict[str, Any]:
         """The run configuration as the recorder sees it.

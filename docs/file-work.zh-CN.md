@@ -1,7 +1,7 @@
 # 聊天与文件工作：首个闭环设计
 
-> 提案/确认/apply 与持久撤销已作为库级原语实现，Session 的可选 read/propose 检查点也已接入。
-> **可信终端 apply/undo、开发 wheel 验收与发布凭证仍待完成。**
+> 提案/确认/apply 与持久撤销已作为库级原语实现；Session 的可选 read/propose 与可信的
+> 全屏/line 终端确认检查点也已接入。取消验收、可复用黄金路径、开发 wheel 验收与发布凭证仍待完成。
 > 依据用户 2026-11-05 的首个聊天/读写闭环要求。
 > 批准记录与顺序见 [slice queue](slice-queue.md)，发布事实只见 [release ledger](release-ledger.md)。
 > [English](file-work.md)
@@ -19,39 +19,45 @@ run/chat/task、profile grants 和 create-only write_file 保持原义。不做 
 支持普通本地文件夹与 dirty Git 文本。原 task overwrite 的干净 Git 基线限制保持；
 新模式以用户提案时的真实 bytes 为撤销基线，不恢复 Git HEAD。
 
-## 2. 待实施交互
+## 2. 当前可信终端检查点
 
-下列命令**尚未实现**：
+当前检查点只在 stdin 与 stdout 都是真实 TTY 时开放下列命令。全屏 UI 与 line fallback
+共用活动 `Session` 所有的同一个 `FileWork`：
 
 ```text
-pocketchat
 /files
 /files read a.txt
+/confirm <grant-digest>
 /files write a.txt report.md
-请整理 a.txt，补充结论，再生成 report.md。
-# 每次显示一个完整有界 diff；此时尚未写入。
-/apply <change-id>
+/confirm <grant-digest>
+总结 a.txt 并提出修改。
+/diff                         # 或 /apply [change-id]
+/confirm <apply-digest>
 /changes
-/undo
-/undo --session
+/undo <change-id>
+/confirm <undo-digest>
 /files revoke a.txt
 ```
 
-TUI 与 line fallback 共用同一服务。启动展示当前 workspace/profile；`/files` 只显示状态，
-用户的 read/write 命令才激活会话/工作区绑定的精确路径授权。文件名出现在聊天中不是授权，
-选中文件不包含整个目录。修改已有文件须同时获读/写授权，新建不隐含其他文件的读取权。
+- `/files read|write` 先展示所选 provider 告知和精确路径；第二次 `/confirm` 绑定告知、
+  路径集、当前 profile 与授权代数后才激活授权。聊天里提到文件名不等于授权。
+- 授权后的 turn 只提供 `read_file` 与 `propose_file_change`。模型不能授权、确认、apply、
+  undo，也不能调用立即 `write_file`；模型 run completed 可与 pending 提案并存，不代表字节已应用。
+- `/diff` 与 `/apply [change-id]` 都只展示完整 pending unified diff，不立即写入。C0/C1 与 Unicode
+  format 控制符会转义，全屏渲染保留 diff 行空白。只有另行展示、绑定 digest 的 `/confirm` 才调用
+  交易核心。apply 成功返回核心 readback receipt；若 apply 被拒，已确认的内存 pending 会被消费，
+  持久记录继续作为事实源。
+- `/changes` 只列同一 workspace、conversation 与 branch 的持久变更。`/undo <change-id>`
+  要求重新取得该精确路径的 write grant，从持久 before/after 对象展示完整补偿 diff，并把确认
+  绑定到已应用 receipt 后才调用核心 undo。
+- 每条文件控制命令都重新取得现有 session writer。并发 owner、在飞 reply、授权/profile/session
+  变化、过期提案或错误 digest 都拒绝动作；撤权会使已展示确认失效。
+- pipe/非 TTY 输入不能执行任何文件控制命令（包括 `/files`），并在创建 Session、trace 或 change
+  store 前拒绝。重启不恢复授权或批准；可信终端无需路径 grant 即可列出该 conversation 的持久变更
+  元数据，但 undo 仍要求目标路径的 fresh exact write grant。
 
-授权前说明：用于回答的选中文本会发给所选 provider，本地记录不代表离线推理。
-既有 profile grants 先展示为可导入项，不静默批准。撤权使相关提案失效；切 workspace/profile
-使待确认批准失效；切 session 不导入另一会话的授权。重启展示保存的授权，写权限须显式重新启用。
-不改全局 profile 配置。
-
-新模式对模型只开放获准 read_file 与 `propose_file_change(path, content)`，隐藏立即写入的
-write_file。模型不能 apply/undo/自批/扩权，旧工具 schema 不变。每 turn 最多一个待确认提案，
-多个文件逐个预览与确认，不宣称多文件事务。
-
-`/apply` 只批准刚看到的具体提案；undo 也先预览再确认。一般 stdin 不是可信批准通道，
-无交互确认时保持 pending；既有管道命令保持原行为。
+目录/glob 授权、session-wide undo、取消验收、可复用黄金 fixture 与开发 wheel 验证仍不属于本检查点。
+整包需等这些必需路径接线并复审后才完成，本检查点不代表发布。
 
 ## 3. 记录与结果
 
@@ -97,8 +103,9 @@ request-policy binding 失效；即使目标变成目录仍可撤权。工作区
 provider/profile/model 改变后，拒绝沿用旧授权，不向新目的地再发起该绑定的请求。
 重启新服务不自动激活授权/批准；已存提案只是证据，不是重启授权。
 
-`PC-FILE-CHAT-1` 整包仍未完成：两个可信终端入口、apply/undo 确认、取消与开发 wheel 黄金路径
-还需接续。本检查点未开放默认修改入口，模型 run 完成仍不代表文件已修改。
+可信终端检查点已把该服务接到两个现有终端控制器；apply/readback 与持久单变更 undo 只有在
+另一次 digest-bound 确认后才执行。`PC-FILE-CHAT-1` 整包仍未完成：取消验收与可复用的开发 wheel
+黄金路径还需接续；模型 run 完成仍不代表文件已修改。
 
 边界：UTF-8，单原文件/候选文件沿用 16 KiB；完整 diff 64 KiB，元数据记录 64 KiB，
 每 workspace 修改存储 16 MiB，每 turn 一个 pending。按编码后字节计数，包含事件和对象文件。

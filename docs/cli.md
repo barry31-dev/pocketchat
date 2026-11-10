@@ -39,7 +39,25 @@ Slash commands:
 | `/reasoning LEVEL` | set `minimal`, `low`, `medium` or `high` |
 | `/context N` | set the character budget for the next run |
 | `/status` | show the current profile, model, session, reasoning and budget |
+| `/files` | show current exact grants and the pending change id |
+| `/files read|write PATH...` | show provider disclosure and exact paths; activate only after the displayed `/confirm` |
+| `/files revoke PATH...` | remove exact grants and invalidate a displayed confirmation |
+| `/diff` / `/apply [CHANGE_ID]` | show the complete pending diff without applying it and issue a digest-bound confirmation |
+| `/changes` | list persisted change metadata owned by this workspace, conversation and branch |
+| `/undo CHANGE_ID` | require a fresh exact write grant, then show the persisted compensating diff and confirmation |
+| `/confirm DIGEST` | execute only the exact currently displayed grant, apply or undo action |
 | `/exit` / `/quit` / `/bye` | leave the agent |
+
+File-control commands require both stdin and stdout to be TTYs. Piped input sees
+the line shell banner but every file command is refused before a Session, trace or
+file-change store is created. The model is offered only granted `read_file` and
+`propose_file_change`; it cannot grant, confirm, apply, undo or use immediate
+`write_file`. Apply success consumes the target's write grant, so undo needs a fresh
+disclosed write grant. Profile/session/grant changes, a stale SessionFile view, an
+in-flight reply or a foreign writer refuse confirmation. Cancellation acceptance,
+the reusable golden fixture and development-wheel validation remain pending; these
+commands are a reviewed internal checkpoint, not the completed package or release.
+See [file-work.md](file-work.md) for the transaction and evidence contract.
 
 The reasoning level is recorded in `run.started` for every run. It is placed
 in the request body only when the selected profile has

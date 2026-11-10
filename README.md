@@ -267,8 +267,20 @@ Each plain message is its own run with its own terminal trace event; the
 session file carries the conversation between runs. `reasoning` is always
 recorded in the run configuration. It is sent to an OpenAI-compatible endpoint
 only when that profile declares `reasoning_effort_supported: true`, because
-compatible endpoints do not agree on that extension. The first release has no
-tools, skills, memory or file access in this surface.
+compatible endpoints do not agree on that extension. Other configured agent
+capabilities are unchanged by this checkpoint. The current trusted-terminal
+checkpoint adds opt-in, exact-path file controls: `/files` shows current grants
+and the pending change id; `/files read|write PATH...` shows the provider disclosure
+and proposed exact grant; `/diff` or `/apply` shows the complete pending diff;
+`/confirm` performs the exact displayed action; `/changes` lists this conversation's
+persisted change
+metadata, and `/undo CHANGE_ID` previews one persisted compensation. The model can
+only read granted paths and propose changes; it cannot grant, confirm, apply or undo.
+File controls require both stdin and stdout to be TTYs. Piped input is refused before
+creating a session, trace or file-change store. A successful apply consumes that
+path's write grant, so undo requires a fresh disclosed write grant. Cancellation
+acceptance, the reusable golden fixture and development-wheel validation are still
+pending; this checkpoint is not the completed file-work package or a release.
 
 ## Compare
 

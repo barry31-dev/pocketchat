@@ -20,12 +20,17 @@ from typing import Any, Dict, List, Optional
 from .agent import AgentCommandError, AgentState, apply_command
 from .config import ConfigError, profile_config
 from .cost import estimate_cost
+from .file_work import FileWork, FileWorkError
+from .file_changes import FileChangeError
+from .file_change_store import FileChangeStoreError
 from .session import Session, new_run_id
 from .session_writer import SessionWriterBusy, acquire_session_writer
-from .sessions import resolve_session_path
+from .sessions import SessionFileError, resolve_session_path
 
 
-COMMANDS = ("/context", "/exit", "/model", "/reasoning", "/session", "/status")
+FILE_COMMANDS = ("/files", "/diff", "/apply", "/changes", "/undo", "/confirm")
+COMMANDS = ("/context", "/exit", "/model", "/reasoning", "/session", "/status",
+            "/files", "/diff", "/apply", "/changes", "/undo", "/confirm")
 
 
 def empty_status_facts() -> Dict[str, Any]:
@@ -117,6 +122,8 @@ class AgentTUI:
     transcript: List[tuple] = field(default_factory=list)
     config: Optional[Dict[str, Any]] = None
     verbose: bool = False
+    trusted_input: bool = False
+    file_mode: bool = False
     workspace: Path = field(default_factory=Path.cwd)
     _picker: Optional[str] = None
     _picker_items: List[str] = field(default_factory=list)
@@ -262,7 +269,7 @@ class AgentTUI:
             return self.run_command(stripped)
         return self._send_once(stripped, record=True)
 
-    def _send_once(self, stripped: str, *, record: bool = False) -> str:
+    def _prepare_session(self) -> str:
         if self.config is None:
             return "agent: configuration is not loaded"
         try:
@@ -294,6 +301,14 @@ class AgentTUI:
             self._session_name = self.state.session
         else:
             self._session.config = selected
+        if self.file_mode and self._session.file_work is None:
+            self._session.attach_file_work(FileWork(self.workspace))
+        return ""
+
+    def _send_once(self, stripped: str, *, record: bool = False) -> str:
+        error = self._prepare_session()
+        if error:
+            return error
         try:
             self._ensure_session_writer(self._session)
         except SessionWriterBusy as exc:
@@ -326,16 +341,25 @@ class AgentTUI:
         return reply
 
     def _ensure_session_writer(self, session: Session) -> None:
-        """Acquire one fresh writer claim immediately before a run."""
-        if session._session_writer is not None or session.session_file is None:
+        """Acquire one fresh claim and reject a stale SessionFile view."""
+        if session.session_file is None:
+            return
+        if session._session_writer is not None:
+            try:
+                session.session_file._verify_file_state()
+            except SessionFileError as exc:
+                raise SessionWriterBusy(str(exc)) from exc
             return
         writer = acquire_session_writer(
             session.session_file.path, owner=session.run_id)
         try:
             writer.bind_session_file(session.session_file.path)
-        except SessionWriterBusy:
+            session.session_file._verify_file_state()
+        except (SessionWriterBusy, SessionFileError) as exc:
             writer.release()
-            raise
+            if isinstance(exc, SessionWriterBusy):
+                raise
+            raise SessionWriterBusy(str(exc)) from exc
         session._session_writer = writer
 
     def start_send(self, text: str) -> None:
@@ -346,7 +370,9 @@ class AgentTUI:
         if stripped.startswith("/"):
             reply = self.run_command(stripped)
             if reply and reply != "model picker":
-                self.transcript.append(("agent", reply))
+                command = stripped.split()[0]
+                self.transcript.append(
+                    ("file" if command in FILE_COMMANDS else "agent", reply))
             return
         with self._lock:
             self.transcript.append(("you", stripped))
@@ -408,13 +434,44 @@ class AgentTUI:
     def close(self) -> None:
         """Finish the current turn as cancelled before the renderer exits."""
         self.cancel_send()
+        if self._session is not None:
+            self._session._release_session_writer()
 
     def run_command(self, line: str) -> str:
+        if self.busy or (self._worker is not None and self._worker.is_alive()):
+            return "agent: a reply is already running"
+        command = line.strip().split()[0] if line.strip() else ""
+        if command in FILE_COMMANDS:
+            if not self.trusted_input:
+                return "agent: file authorization requires trusted interactive terminal input"
+            self.file_mode = True
+            try:
+                error = self._prepare_session()
+                if error:
+                    return error
+                if self._session.session_file is None:
+                    return "agent: session persistence unavailable; file controls are disabled"
+                try:
+                    self._ensure_session_writer(self._session)
+                except SessionWriterBusy as exc:
+                    return "agent: session writer unavailable: %s" % exc
+                return self._session.file_work.terminal_command(
+                    line, config=self._session.config, trusted=self.trusted_input)
+            except (ConfigError, FileWorkError, FileChangeError, FileChangeStoreError, OSError) as exc:
+                return "agent: %s: %s" % (getattr(exc, 'error_type', type(exc).__name__), exc)
+            finally:
+                if self._session is not None:
+                    self._session._release_session_writer()
         if line.strip() == "/model":
             self.open_model_picker()
             return "model picker"
         try:
+            previous = (self.state.profile, self.state.session)
             response = apply_command(self.state, line, self.profiles, self.models)
+            if previous != (self.state.profile, self.state.session) and self._session is not None:
+                if self._session.file_work is not None:
+                    self._session.file_work._invalidate()
+                self._session._release_session_writer()
         except AgentCommandError as exc:
             return "agent: %s" % exc
         return response or ""
@@ -534,6 +591,12 @@ COMMAND_HELP = (
     ("/context", "Set context budget"),
     ("/status", "Show current state"),
     ("/exit", "Exit PocketChat"),
+    ("/files", "Review or change exact file grants"),
+    ("/diff", "Review the complete pending file diff"),
+    ("/apply", "Review and confirm the pending file change"),
+    ("/changes", "List this conversation's file changes"),
+    ("/undo", "Review and confirm one persisted undo"),
+    ("/confirm", "Confirm the exact displayed file action"),
 )
 
 
@@ -635,7 +698,8 @@ def _message_rows(tui: AgentTUI, width: int) -> List[str]:
             rows.extend(_wrap(text, max(8, width - 2), prefix=" ❯ "))
             rows.append("")
             continue
-        for index, line in enumerate(_plain_markdown(text)):
+        rendered = text.split("\n") if role == "file" else _plain_markdown(text)
+        for index, line in enumerate(rendered):
             if index == 0:
                 rows.extend(_wrap(line, max(8, width - 3), prefix=" ┊ "))
             elif line:
@@ -786,6 +850,7 @@ def run_tui(state, profiles, models, *, config=None, workspace=None,
         models=models,
         config=config,
         verbose=verbose,
+        trusted_input=bool(__import__("sys").stdin.isatty() and __import__("sys").stdout.isatty()),
         workspace=Path(workspace) if workspace is not None else Path.cwd(),
     )
     return run_curses(controller)

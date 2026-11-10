@@ -1,8 +1,9 @@
 # Chat and file work: first closed-loop design
 
 > Proposal/confirmation/apply and persistent undo exist as library primitives.
-> The opt-in Session read/propose checkpoint also exists, but trusted terminal
-> apply/undo, development-wheel acceptance and release evidence remain pending.
+> The opt-in Session read/propose checkpoint and trusted full-screen/line terminal
+> confirmation checkpoint now exist. Cancellation acceptance, the reusable golden
+> path, development-wheel acceptance and release evidence remain pending.
 > The user requested the first usable chat-and-file-work loop on 2026-11-05.
 > Approval reachability and scheduling live in [the slice queue](slice-queue.md).
 > Publication status stays in [the release ledger](release-ledger.md).
@@ -27,46 +28,56 @@ overwrite still requires its own clean Git baseline: do not remove that guard
 to make a different workflow work. A user's bytes at proposal time, not Git HEAD,
 are the undo baseline.
 
-## 2. Planned user contract
+## 2. Current trusted terminal checkpoint
 
-These commands are **not available yet**:
+The current checkpoint exposes the following commands only through a terminal
+whose stdin and stdout are both TTYs. The full-screen UI and the line fallback
+use the same `FileWork` instance owned by the active `Session`:
 
 ```text
-pocketchat
 /files
 /files read a.txt
+/confirm <grant-digest>
 /files write a.txt report.md
-Summarize a.txt, update its conclusion, then create report.md.
-# One complete bounded diff is presented; nothing has been applied.
-/apply <change-id>
+/confirm <grant-digest>
+Summarize a.txt and propose the change.
+/diff                         # or /apply [change-id]
+/confirm <apply-digest>
 /changes
-/undo
-/undo --session
+/undo <change-id>
+/confirm <undo-digest>
 /files revoke a.txt
 ```
 
-- The existing full-screen and line interfaces share one file-work service.
-  Startup names the current workspace and profile. Selecting a file does not
-  select its directory. Mentioning a filename in a prompt does not grant access.
-- `/files` only shows state. Explicit read/write commands create session-scoped,
-  workspace-bound grants. Replacing an existing file needs both read and write
-  grants; create-only does not silently grant reading other files.
-- Before grants become active, disclose that selected text used for an answer is
-  sent to the selected provider. Local evidence is not a promise of offline inference.
-- Existing profile grants are displayed as importable, not silently approved.
-  Revocation invalidates matching pending proposals. Workspace/profile changes
-  invalidate pending approvals; session switching never imports another session's
-  permissions. On restart, show saved grants and require explicit reactivation
-  of write access. Do not modify global profile configuration.
-- In this mode, advertise only authorized `read_file` and the new
-  `propose_file_change(path, content)`. Hide immediate `write_file`. The model
-  cannot apply, undo, approve itself or expand grants. Old tools retain their schemas.
-- At most one pending proposal per model turn. Further files require another
-  proposal/confirmation. Two files in a request are not one atomic transaction.
-- `/apply` confirms the exact presented proposal. `/undo` and session-wide undo
-  preview their compensating effects and require user confirmation. A general
-  stdin stream is not a trusted approval channel; without interactive approval,
-  file work remains pending. Existing piped commands keep their previous behavior.
+- `/files read|write` first displays the selected provider disclosure and exact
+  paths. A second `/confirm` bound to that disclosure, path set, current profile
+  and grant generation activates the grant. A filename in chat never grants it.
+- Granted turns advertise only `read_file` and `propose_file_change`. The model
+  cannot grant, confirm, apply, undo or call immediate `write_file`. A completed
+  model run can coexist with a pending proposal and never means bytes were applied.
+- `/diff` and `/apply [change-id]` both display the complete pending unified diff
+  without applying it. C0/C1 and Unicode format controls are escaped, and the
+  full-screen renderer preserves diff-line whitespace. Only the separately displayed,
+  digest-bound `/confirm` can call the transaction core. Successful apply returns
+  the core readback receipt; a refused apply consumes the already confirmed
+  in-memory proposal and leaves the durable record authoritative.
+- `/changes` lists persisted changes owned by the same workspace, conversation
+  and branch. `/undo <change-id>` requires a fresh exact write grant, reads the
+  persisted before/after objects, displays the complete compensating diff and
+  binds confirmation to the applied receipt before invoking the core undo.
+- Every file-control command reacquires the existing session writer. A concurrent
+  owner, an in-flight reply, grant/profile/session change, stale proposal or wrong
+  digest refuses the action. Revocation invalidates the displayed confirmation.
+- Piped/non-TTY input cannot run any file-control command, including `/files`; it
+  is rejected before creating a Session, trace or change store. Restarted services
+  restore no grants or approvals. A trusted terminal may list the conversation's
+  persisted change metadata without a path grant; undo still requires a fresh exact
+  write grant for the target.
+
+Directory/glob grants, session-wide undo, cancellation acceptance, the reusable
+golden fixture and development-wheel validation are still outside this checkpoint.
+The complete package remains pending until those required paths are integrated and
+reviewed; no release is implied.
 
 ## 3. Proposal, persistence and result contract
 
@@ -144,10 +155,11 @@ new destination does not receive another request from this file-work binding.
 Restarted services have no implicitly active grants or pending approvals. The
 stored proposal remains evidence, not restart authorization.
 
-The complete `PC-FILE-CHAT-1` package remains unfinished: both trusted terminal
-paths, apply/undo confirmation, cancellation and development-wheel golden-path
-validation must still be integrated. No default mutation entry is exposed by
-this checkpoint, and a completed model run still does not imply changed files.
+The trusted-terminal checkpoint attaches this service to both existing terminal
+controllers and exposes apply/readback plus persisted single-change undo only after
+separate digest-bound confirmation. The complete `PC-FILE-CHAT-1` package remains
+unfinished: cancellation acceptance and the reusable development-wheel golden path
+must still be integrated. A completed model run still does not imply changed files.
 
 Bounds: UTF-8 text only, at most the existing 16 KiB per input/candidate file;
 64 KiB per rendered diff, 64 KiB per metadata record, 16 MiB per workspace change

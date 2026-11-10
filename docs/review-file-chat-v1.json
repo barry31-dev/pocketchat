@@ -1,10 +1,10 @@
 {
   "schema_version": "pocketchat-file-chat-review.v1",
   "slice": "PC-FILE-CHAT-1",
-  "base_commit": "677fcd0514afa1e936104721d5c458591e69ec75",
-  "checkpoint": "Session read/propose integration only",
+  "base_commit": "834e21607e6034e5dcb79988d73beab71ee794dc",
+  "checkpoint": "Trusted terminal grants, complete diff, apply/readback and persisted single-change undo",
   "authority": "maintainer standing routine-development delegation, 2026-11-09",
-  "goal": "Connect a host-owned, explicitly disclosed file-work service to Session without exposing model mutation or inheriting profile grants.",
+  "goal": "Connect both existing trusted terminal paths to the same Session-owned FileWork service without exposing model mutation, pipe authorization, stale-session confirmation or implicit undo permission.",
   "alternatives": [
     {
       "approach": "Reuse immediate write_file",
@@ -20,34 +20,37 @@
     }
   ],
   "plan": [
-    "Observe red owner-module and real Session protocol tests for disclosure, exact grants, one pending proposal, no immediate write and revocation/profile mismatch.",
-    "Implement bounded FileWork facade; declare propose-only chat contract separately from the stable legacy task-tool inventory.",
-    "Connect opt-in Session dispatch and provider offers; keep legacy/default sessions unchanged and record paired bounded proposal references.",
-    "Verify only affected owner/protocol/compatibility layers; review the new checkpoint diff and land through routine delivery."
+    "Observe red terminal/service tests for provider disclosure, exact grants, non-TTY refusal, complete diff, digest-bound confirmation, apply readback and persisted undo.",
+    "Attach FileWork lazily to the active Session; route full-screen and line controls through one controller while keeping ordinary agent commands compatible.",
+    "Reacquire and validate the original SessionFile writer snapshot for every file command; consume confirmed pending state and the applied path write grant at the correct boundaries.",
+    "Preserve terminal diff whitespace, escape C0/C1 and Unicode format controls, and document the exact public command/security surface in both languages.",
+    "Run only affected tests and lint, complete three bounded fresh-context rounds, then close the final post-round-3 new diff without reopening the historical transaction core."
   ],
-  "done_when": "This checkpoint allows explicitly granted read and durable proposal-only tool calls in a Session; original bytes remain unchanged and no apply/undo tool is offered. Full package acceptance remains pending until trusted terminal apply/undo and development-wheel evidence.",
+  "done_when": "This checkpoint supports trusted-TTY disclosure and exact grants, model read/propose, complete diff review, digest-bound apply/readback and persisted single-change undo with a fresh write grant. Piped input, stale SessionFile views, foreign writers, profile/session/grant changes and visual control spoofing fail closed. Full package acceptance remains pending cancellation integration, the reusable golden fixture and development-wheel validation.",
   "write_scope": [
-    "pocketchat/file_work.py",
-    "pocketchat/session.py",
-    "pocketchat/provider.py",
-    "pocketchat/tool_contracts.py",
-    "tests/test_file_work.py",
-    "tests/test_file_work_tools.py",
-    "tests/test_tool_contracts.py",
+    "README.md",
+    "README.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
     "docs/file-work.md",
     "docs/file-work.zh-CN.md",
     "docs/review-file-chat-v1.json",
-    "docs/formats.md",
-    "docs/formats.zh-CN.md"
+    "pocketchat/cli.py",
+    "pocketchat/file_work.py",
+    "pocketchat/session.py",
+    "pocketchat/tui.py",
+    "tests/test_agent.py",
+    "tests/test_file_work_cli.py"
   ],
-  "risk": "high: file permissions and provider boundary; independent new-diff-only technical review required",
+  "risk": "medium path tier, security-sensitive file permission and terminal confirmation boundary",
   "review_rounds": [
     {
       "round": 1,
       "scope": "new chat checkpoint only; not the historical file-transaction core",
       "status": "incomplete",
       "reason": "stream disconnected before completion",
-      "next": "Reuse the recorded coverage; independently review the two new descriptor/effect fixes and confirm the final recommendation without rerunning the old file core."
+      "next": "Reuse the recorded coverage; independently review the two new descriptor/effect fixes and confirm the final recommendation without rerunning the old file core.",
+      "checkpoint": "session-read-propose"
     },
     {
       "round": 1,
@@ -55,7 +58,8 @@
       "status": "request_changes",
       "finding": "CHAT-FATAL-STORE-ERROR",
       "reviewed_candidate": "9f629a7da01f459e00100cc75415e6fbf43609e9",
-      "coverage": "Independent reviewer read all checkpoint code/tests/docs and relevant error/pairing/security/rollback contracts; reused existing evidence without rerunning tests."
+      "coverage": "Independent reviewer read all checkpoint code/tests/docs and relevant error/pairing/security/rollback contracts; reused existing evidence without rerunning tests.",
+      "checkpoint": "session-read-propose"
     },
     {
       "round": 2,
@@ -64,7 +68,50 @@
       "reviewer": "independent fresh-context agent",
       "authority": "maintainer standing routine-development delegation, 2026-11-09",
       "binding": "9f629a7da01f459e00100cc75415e6fbf43609e9 plus current SHA-256 code blobs",
-      "result": "APPROVE; direct and wrapped underlying storage/I/O errors stop the run; no new findings; earlier four findings remain closed."
+      "result": "APPROVE; direct and wrapped underlying storage/I/O errors stop the run; no new findings; earlier four findings remain closed.",
+      "checkpoint": "session-read-propose"
+    },
+    {
+      "checkpoint": "trusted-terminal",
+      "round": 1,
+      "scope": "complete new terminal checkpoint diff and required session/file-change call boundaries",
+      "status": "request_changes",
+      "findings": [
+        "PC-FILE-CHAT-SESSION-SNAPSHOT",
+        "PC-FILE-CHAT-FRESH-UNDO-GRANT",
+        "PC-FILE-CHAT-BIDI-REVIEW",
+        "PC-FILE-CHAT-CHANGES-DOC",
+        "PC-FILE-CHAT-LINE-DISCOVERY"
+      ],
+      "result": "REQUEST_CHANGES; three major and two minor findings recorded."
+    },
+    {
+      "checkpoint": "trusted-terminal",
+      "round": 2,
+      "scope": "R1-R5 correction plus final public documentation surface",
+      "status": "request_changes",
+      "finding": "PC-FILE-CHAT-PUBLIC-DOC-SURFACE",
+      "result": "R1-R5 closed; public README and CLI manuals still contradicted the file-control surface."
+    },
+    {
+      "checkpoint": "trusted-terminal",
+      "round": 3,
+      "scope": "complete candidate consistency after public documentation correction",
+      "status": "request_changes",
+      "findings": [
+        "PC-FILE-CHAT-SERVICE-TRUST-GATE",
+        "PC-FILE-CHAT-PUBLIC-DOC-SURFACE"
+      ],
+      "result": "All earlier code findings closed; direct service status trust gate and two README details required correction."
+    },
+    {
+      "checkpoint": "trusted-terminal",
+      "round": "post-3-new-diff-only",
+      "scope": "service trusted-gate regression and the two corrected README paragraphs only",
+      "status": "approved",
+      "reviewer": "independent fresh-context agent",
+      "authority": "maintainer standing routine-development delegation, 2026-11-09",
+      "result": "NEW-DIFF APPROVE; final two findings closed and no new blocker or major finding in the added diff."
     }
   ],
   "verification": [
@@ -103,39 +150,95 @@
       "result": "green",
       "exit": 0,
       "scope": "Changed error dispatcher and regression only. python3 -m ruff was unavailable; used the existing CLI without installing dependencies."
+    },
+    {
+      "command": "python3 -m unittest tests.test_file_work_cli -v",
+      "python": "3.9.6",
+      "tests": 15,
+      "result": "green",
+      "exit": 0,
+      "scope": "Trusted service and controller disclosure/grant/apply/undo, pipe refusal, session snapshot, bidi and TUI rendering regressions after final new-diff closure."
+    },
+    {
+      "command": "python3 -m unittest tests.test_agent -v",
+      "python": "3.9.6",
+      "tests": 94,
+      "result": "green",
+      "exit": 0,
+      "scope": "Existing line/TUI commands, rendering, cancellation and session compatibility after terminal integration; not package cancellation acceptance."
+    },
+    {
+      "command": "python3 -m unittest tests.test_file_work -v",
+      "python": "3.9.6",
+      "tests": 13,
+      "result": "green",
+      "exit": 0,
+      "scope": "Existing FileWork grant/provider/workspace security compatibility."
+    },
+    {
+      "command": "python3 -m unittest discover -s tests -p 'test_file_work_tools.py' -v; python3 -m unittest discover -s tests -p 'test_session.py' -v",
+      "python": "3.9.6",
+      "tests": 18,
+      "result": "green",
+      "exit": 0,
+      "scope": "Existing FileWork Session protocol and persisted tool-context compatibility; corrected discovery invocation after a module-path import error, without rerunning earlier green groups."
+    },
+    {
+      "command": "ruff check --select E9,F pocketchat/cli.py pocketchat/file_work.py pocketchat/session.py pocketchat/tui.py tests/test_agent.py tests/test_file_work_cli.py; git diff --check",
+      "tool": "ruff 0.17.3",
+      "result": "green",
+      "exit": 0
     }
   ],
   "not_run": [
-    "Full-screen/line terminal integration, apply/undo through terminals, cancellation integration, real provider, development-wheel golden path, Windows runtime and formal release."
+    "Full unittest suite, build, wheel installation and cross-platform CI were not run locally for this checkpoint.",
+    "Real curses/PTY manual interaction, Windows/Linux runtime and a real provider were not run.",
+    "Cancellation acceptance, reusable golden fixture, development-wheel validation and formal release remain pending."
   ],
-  "rollback": "Revert this opt-in checkpoint; default CLI/model behavior is unchanged.",
+  "rollback": "Revert this trusted-terminal checkpoint; the integrated transaction core and earlier Session read/propose checkpoint remain intact.",
   "red_evidence": [
     "The new facade and Session keyword/contract were absent before implementation.",
     "A directory-replaced grant could not be revoked; a same-inode workspace symlink was not rejected by the facade; config_summary advertised legacy writes in file mode.",
     "Same-run-id different Session could import facade grants, and stored owners did not use actual persisted conversation/branch.",
-    "A proposal trace emitted pending outside the stable effect enum."
+    "A proposal trace emitted pending outside the stable effect enum.",
+    "Terminal service and controller commands were absent before implementation; six initial terminal tests failed as expected.",
+    "Persisted undo initially read the wrong object key; its focused test failed before the correction.",
+    "Untrusted change listing and later bare status initially crossed the service trust gate; direct service tests observed each refusal gap red.",
+    "A confirmed apply conflict left stale in-memory pending state; the regression observed the stuck proposal before correction.",
+    "Full-screen rendering stripped diff line whitespace and the command palette omitted file controls; focused UI regressions observed both failures.",
+    "File commands initially failed to reacquire or validate the SessionFile writer snapshot; active-writer, external-append and persistence-loss tests observed the gaps.",
+    "Same-session undo initially reused the pre-apply write grant; the regression required a fresh post-apply grant.",
+    "Terminal review initially preserved Unicode bidi format controls; the focused diff test observed raw U+202E/U+2066 before escaping.",
+    "Legacy TUI command-order tests caught the first palette ordering regression before the original command order was restored.",
+    "Public README and CLI documentation initially denied or imprecisely described the trusted file-control surface; bounded review rounds kept those findings open until corrected."
   ],
   "code_blob_sha256": {
-    "pocketchat/file_work.py": "e3e8bff10f11c66d8a4745105bcd5a354f6b33cd1763e1993d821fdbed758f54",
-    "pocketchat/session.py": "e54b790a9a6aa5b8b6e0a9a2546a12e2b77a8d1a6e378049c84acc05caa235c9",
+    "pocketchat/file_work.py": "4c224bfee724dfe4efbca140f3b09b86760c3e338f83becc7b47f835de3f2853",
+    "pocketchat/session.py": "f12e06f9f90341dd2daa0c9228c1d7d7437b4886dbb88c0da23f8f8e7b8bed5a",
     "pocketchat/provider.py": "da1327db447fec4a47b456080b05a8dea1f0e8987d7d53d3f7df686e56098862",
     "pocketchat/tool_contracts.py": "2ac657fa45d49ad8df387ce7cbb8892bdd0619fe2020d6e2286dd6b605da0724",
+    "pocketchat/cli.py": "91aab2392f093c5d782ed44c0d59c1918117f738c751614aaf09dd6a62fe9476",
+    "pocketchat/tui.py": "626b8a2ebfcbe718a4f7fbfd0b60cc0bba33b01caad564091e864cdf2574ef81",
     "tests/test_file_work.py": "3190364cf43300c49f9e45d26b575ffa2051ded67fe95e1d7419903d7be745da",
-    "tests/test_file_work_tools.py": "ee4d4ce3e58761b1668453983f9119acd09bbdb68e2fc0a8e32767620785ba1d"
+    "tests/test_file_work_tools.py": "ee4d4ce3e58761b1668453983f9119acd09bbdb68e2fc0a8e32767620785ba1d",
+    "tests/test_agent.py": "ef3c60ec461369be0ae9a7a5d6cc12ae2d8430f14c362cadb58875d6017c18c3",
+    "tests/test_file_work_cli.py": "8d51c4174364000a7e33d312ad1353823b38b227ebbd856b5b1060df6fa92416"
   },
   "schema": "pocketchat-review-record.v1",
   "paths": [
+    "README.md",
+    "README.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
     "docs/file-work.md",
     "docs/file-work.zh-CN.md",
-    "docs/formats.md",
-    "docs/formats.zh-CN.md",
     "docs/review-file-chat-v1.json",
+    "pocketchat/cli.py",
     "pocketchat/file_work.py",
-    "pocketchat/provider.py",
     "pocketchat/session.py",
-    "pocketchat/tool_contracts.py",
-    "tests/test_file_work.py",
-    "tests/test_file_work_tools.py"
+    "pocketchat/tui.py",
+    "tests/test_agent.py",
+    "tests/test_file_work_cli.py"
   ],
   "categories": [
     "docs",
@@ -143,9 +246,9 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 2,
-  "round_decision": "review",
-  "round_scope": "full",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
   "findings": [
     {
       "id": "CHAT-GRANT-SESSION-BINDING",
@@ -181,9 +284,58 @@
       "status": "fixed",
       "fingerprint": "file-work:session:store-io-error-treated-as-guard-refusal",
       "reason": "Three red Session subcases showed record/object persistence or raw I/O failures continued to a completed model run. The dispatcher now raises SessionError for direct or preserved underlying storage/I/O exceptions before bounded guard refusals; focused regression proves one provider request, failed terminal status, no pending proposal and unchanged target."
+    },
+    {
+      "id": "PC-FILE-CHAT-SESSION-SNAPSHOT",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:terminal:session-writer-snapshot",
+      "reason": "Each file command now reacquires the session writer and verifies the original SessionFile identity and size; missing persistence refuses before file control."
+    },
+    {
+      "id": "PC-FILE-CHAT-FRESH-UNDO-GRANT",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:terminal:undo-fresh-write-grant",
+      "reason": "A verified apply consumes only the target write grant and advances policy generation, so undo requires a newly disclosed exact write grant."
+    },
+    {
+      "id": "PC-FILE-CHAT-BIDI-REVIEW",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:terminal:unicode-format-spoofing",
+      "reason": "Terminal rendering escapes C0/C1 and every Unicode Cf format control while preserving the complete underlying proposal binding."
+    },
+    {
+      "id": "PC-FILE-CHAT-CHANGES-DOC",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-work:docs:changes-grant-contract",
+      "reason": "Both file-work documents now distinguish trusted metadata listing from the fresh exact write grant required for undo."
+    },
+    {
+      "id": "PC-FILE-CHAT-LINE-DISCOVERY",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "file-work:line:command-discovery",
+      "reason": "The line banner names trusted file controls and the full-screen palette appends them without changing the legacy default command order."
+    },
+    {
+      "id": "PC-FILE-CHAT-PUBLIC-DOC-SURFACE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:public-docs:agent-surface",
+      "reason": "English and Chinese READMEs plus CLI manuals now describe status versus disclosure, TTY/pipe boundaries, model limits, fresh undo grants and remaining package gaps without denying other configured capabilities."
+    },
+    {
+      "id": "PC-FILE-CHAT-SERVICE-TRUST-GATE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "file-work:terminal:all-commands-trusted",
+      "reason": "The service trusted gate now precedes bare status and change listing; direct tests prove neither untrusted command reveals paths or creates the store."
     }
   ],
-  "independent_review_status": "approved: complete checkpoint coverage retained, final new error-classification delta independently approved; no full-package acceptance claim.",
-  "security_review_depth": "deep: explicit file permission, provider disclosure, storage-failure and rollback review completed for this opt-in Session checkpoint; transaction-core history unchanged.",
-  "delivery_status": "reviewed opt-in checkpoint; full chat-and-file package remains incomplete"
+  "independent_review_status": "three bounded full rounds completed; final post-round-3 new-diff-only closure approved; no open findings and no full-package acceptance claim.",
+  "security_review_depth": "deep terminal review covered provider disclosure, exact grants, pipe refusal, SessionFile identity/size, writer concurrency, pending consumption, fresh undo grants, complete diff rendering and Unicode control spoofing; historical transaction-core review remains unchanged.",
+  "delivery_status": "reviewed trusted-terminal checkpoint; cancellation acceptance, golden fixture, development wheel and full PC-FILE-CHAT-1 completion remain pending"
 }
