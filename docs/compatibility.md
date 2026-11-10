@@ -125,3 +125,16 @@ disabled tools stay absent, valid calls keep their documented arguments, and
 unknown arguments return a bounded `invalid_arguments` failure before I/O.
 Trace `tools[]` still reports all three names with an availability flag and a
 per-contract schema hash. See [security.md](security.md).
+
+
+## Version 1.2 candidate boundary
+
+The candidate file-work interface is additive and opt-in. It keeps the stable
+CLI/JSON exit envelopes and the existing `read_file`/create-only `write_file`
+tool contracts; a model is not granted immediate apply, undo, confirmation or
+grant expansion. The new file-work facade offers only explicitly granted reads
+and proposals. Trusted terminal confirmation and a fresh exact undo grant remain
+required. `/files cancel` invalidates unconfirmed actions without rewriting applied
+receipts. Secure descriptor-dependent operations refuse unsupported runtimes;
+ordinary chat remains available. Exact candidate verification and the separate
+real-provider/manual artifact requirements are described in [release-1.2.md](release-1.2.md).

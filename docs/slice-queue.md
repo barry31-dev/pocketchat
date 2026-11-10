@@ -564,7 +564,8 @@ No full product suite is required for this documentation-only regrouping.
 
 #### `PC-FILE-CHANGE-1` — safe changes and persistent undo
 
-- **State**: `queued` (approved bounded package; not readiness, implementation or a lease).
+- **State**: `delivered` (safe file-change and persistent-undo source integrated; release artifact acceptance is separate).
+- **Integration evidence**: [PR #45](https://github.com/barry31-dev/pocketchat/pull/45), merge `677fcd0514afa1e936104721d5c458591e69ec75`, is an ancestor of the completed file-chat development integration. Historical transaction review evidence is retained; this row does not claim a release or replace it with the later fixture.
 - **Branch**: `task/pocketchat-file-change`.
 - **Depends on**: `PC-FILE-PLAN-1`.
 - **Write scope**:
@@ -591,7 +592,8 @@ No full product suite is required for this documentation-only regrouping.
 
 #### `PC-FILE-CHAT-1` — usable chat loop and development acceptance
 
-- **State**: `queued` (approved bounded package; not readiness, implementation or a lease).
+- **State**: `delivered` (offline development package integrated; real-provider/manual release acceptance is separate).
+- **Integration evidence**: [PR #49](https://github.com/barry31-dev/pocketchat/pull/49), merged as `8ad2a9f7e22847e94dd68e81837edf3967389712`. Cancellation, real-file golden fixture and installed-development-wheel evidence are recorded in the PR and [validation guide](file-work-validation.md); secure-runtime skips are not execution claims.
 - **Branch**: `task/pocketchat-file-chat`.
 - **Depends on**: `PC-FILE-CHANGE-1`.
 - **Write scope**:
@@ -637,8 +639,10 @@ No full product suite is required for this documentation-only regrouping.
 
 #### `PC-FILE-RELEASE-1` — frozen artifact and publication
 
+The routine preparation contract is [review-file-release-v1.json](review-file-release-v1.json). The task branch prepares version/package/evidence; this does not remove the original real-provider/manual acceptance or exact external-action requirements below.
+
 - **State**: `queued` (approved bounded package; not readiness, implementation or a lease).
-- **Branch**: `release/1.2.0`.
+- **Branch**: `task/pocketchat-file-release` (serialized routine preparation; any formal frozen tag/Release remains separately authorized).
 - **Depends on**: `PC-FILE-CHAT-1`.
 - **Write scope**:
   - `pocketchat/__init__.py`

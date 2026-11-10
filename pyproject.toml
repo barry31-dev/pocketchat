@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pocketchat"
-version = "1.1.0"
+version = "1.2.0"
 description = "A small single-user CLI chat agent whose trace is a first-class output."
 readme = "README.md"
 requires-python = ">=3.9"

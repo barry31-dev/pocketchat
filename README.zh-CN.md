@@ -1,5 +1,9 @@
 # pocketchat
 
+v1.2 源码候选准备与精确产物验收见[发布候选说明](docs/release-1.2.zh-CN.md)。
+发布事实只看[发布台账](docs/release-ledger.md)；源码和离线 fixture 成功不认证真实
+provider 或人工文件终端验收。
+
 `pocketchat` 是一个很小的单用户命令行对话 agent。它**不是**通用 agent：没有代码执行、
 shell 或无边界工具面；可选的本地工具都显式 allowlist 并限制在 workspace。它与你配置的
 模型保持多轮对话，并写下这段对话的 trace，供别的工具事后核查。
