@@ -201,7 +201,10 @@ def _changed_files(workspace: Path, record):
     for step in getattr(record, "steps", []) if record is not None else []:
         if (step.get("kind") == "tool" and step.get("tool") == "write_file"
                 and step.get("state") == "completed" and step.get("detail")):
-            path = step["detail"]
+            # Tool paths are relative to the policy root; report paths are
+            # relative to the caller workspace, as recovery expects.
+            path = (Path(getattr(record, "workspace_root", "."))
+                    / step["detail"]).as_posix()
             if path not in paths:
                 paths.append(path)
     changes = []

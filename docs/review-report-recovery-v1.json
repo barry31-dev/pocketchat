@@ -1,0 +1,96 @@
+{
+  "schema_version": "pocketchat-report-recovery-review.v1",
+  "slice": "PC-REPORT-RECOVERY-1",
+  "base_commit": "834e21607e6034e5dcb79988d73beab71ee794dc",
+  "authority": "Agent technical decision under the maintainer standing routine-development delegation of 2026-11-09.",
+  "contract": {
+    "goal": "Recover an existing task boundary after a report was created in its authorized workspace subdirectory, without replaying completed writes.",
+    "not_doing": [
+      "Terminal file-work wiring",
+      "A new task or report runtime",
+      "Automatic overwrite or revision authority",
+      "A complete Stage A or Stage B claim",
+      "Real provider calls, tags, releases or package uploads"
+    ],
+    "write_scope": [
+      "pocketchat/task_exec.py",
+      "tests/test_task_exec.py",
+      "tests/test_plan_recovery.py",
+      "docs/task-recovery.md",
+      "docs/review-report-recovery-v1.json"
+    ],
+    "done_when": "Focused real-filesystem tests bind the nested output path/hash, resume only pending steps, ignore root-level same-name files and refuse externally changed nested outputs; scoped review and exact-candidate CI/main readback complete routine delivery.",
+    "evidence": "This record and tests/test_plan_recovery.py; exact integration evidence is read back separately.",
+    "budget_stop": "One bounded recovery defect; do not touch the active terminal slice. At most three review rounds; expand only for a new finding in the changed path.",
+    "rollback": "Revert this isolated change via an ordinary reviewed commit; never rewrite prior task reports or shared Git history."
+  },
+  "design": {
+    "alternatives": [
+      "Use the record workspace_root to translate tool-relative paths to caller-workspace evidence paths (selected).",
+      "Change all tools to emit absolute paths (rejected: changes existing record contracts).",
+      "Relocate execution reports into subdirectories (rejected: breaks stable report lookup)."
+    ],
+    "selected": "Translate the completed tool path once at the existing evidence collector. Preserve current report schema, root-workspace behavior and strict resume verification.",
+    "root_cause": "Task tools record paths relative to the narrowed TaskPolicy workspace_root, but _changed_files interpreted them relative to the caller workspace. Recovery already expects workspace_root/path."
+  },
+  "plan": [
+    "Add red nested-root evidence, same-name collision and tamper-refusal regressions.",
+    "Join the recorded workspace root before existing evidence resolution; keep the rest of the collector unchanged.",
+    "Run focused execution/recovery tests and lint, document exact evidence coordinates, review only this diff, then controlled branch/PR/CI/main integration."
+  ],
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27.0, CPython 3.13.9, real temporary files, stub provider adapter",
+      "command": "python3.13 -B -m unittest <three named nested-workspace regressions> -v",
+      "result": "Before the fix: 3 assertion failures, exit 1. Missing nested evidence and root same-name misbinding reproduced."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.13 -B -m unittest tests.test_plan_recovery tests.test_task_exec tests.test_task_cli_resume -v",
+      "result": "45 tests passed, exit 0. Covers nested output resume and cumulative/no-op continuation, root-workspace behavior, evidence tamper refusal and existing CLI resume."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.13 -B -m unittest tests.test_plan_recovery.PlanRecoveryTests.test_nested_workspace_report_resumes_without_repeating_completed_write -v",
+      "result": "1 test passed, exit 0; rerun only because cumulative-report selection was simplified after the 45-test run."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.13 -m ruff check --select E9,F pocketchat/task_exec.py tests/test_plan_recovery.py",
+      "result": "Ruff 0.17.3: all checks passed, exit 0; matches the repository CI rule selection."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Compare unrestricted Ruff JSON diagnostics on original and changed files",
+      "result": "Original files have 74 existing lint findings. One added test-only RUF015 warning was fixed with next(); broad pre-existing style modernization is outside this change."
+    }
+  ],
+  "review_rounds": [
+    {
+      "round": 1,
+      "reviewer": "Independent fresh-context agent under maintainer technical-review delegation",
+      "source_type": "current code/tests/schema (C)",
+      "verification": "static review only; tests not rerun by reviewer",
+      "scope": "Entire PC-REPORT-RECOVERY-1 diff, final next() cleanup and adjacent execution/recovery/record call sites",
+      "findings": [],
+      "conclusion": "No actionable defect introduced by the reviewed diff. Path coordinates agree with recovery; default root and missing-attribute fallback retain behavior. Tests cover evidence identity, no replay, cumulative no-op, decoy isolation and tamper refusal.",
+      "limitations": [
+        "Not a full-package security audit",
+        "No runtime/CI/provider/Stage A or B acceptance by reviewer"
+      ]
+    }
+  ],
+  "unverified": [
+    "No real provider or terminal UI exercised.",
+    "No Stage A/B end-to-end acceptance, report-revision feature or release claim.",
+    "Full repository suite, clean wheel install and remote CI not run locally; remote checks must be read for the final candidate.",
+    "Existing collector filesystem-race limitations are not broadened into hostile concurrent-writer guarantees.",
+    "No historical report is repaired or rewritten."
+  ]
+}
