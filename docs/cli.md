@@ -568,6 +568,7 @@ and `--dry-run` previews deterministic v2 retrieval, exclusions and the bounded
 context message without writing or injecting anything:
 
 ```bash
+pocketchat memory propose "Prefer reviewed patches" --workspace-id workspace-1 --by operator --category project_decision --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory migrate --workspace-id workspace-1 --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory accept <memory-id> --by operator --verification not_required --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory retire <memory-id> --store .pocketchat/memory.v2.jsonl --json
@@ -575,15 +576,22 @@ pocketchat memory forget <memory-id> --store .pocketchat/memory.v2.jsonl --json
 pocketchat memory recall "query" --workspace-id workspace-1 --store .pocketchat/memory.v2.jsonl --dry-run --json
 ```
 
-`migrate` creates a new bounded v2 file and leaves the v1 source unchanged.
-Legacy records remain unverified candidates. `accept` requires an explicit
-approver and may only mark a `legacy_explicit` or `user_explicit` preference
-as `not_required`; it does not invent a source. `retire` records a lifecycle
-timestamp, and `--superseded-by` must name another record in the same store.
-`forget` physically removes the selected record from the active v2 store; it
-does not retain a hidden copy of the content. The command does not erase
-content that may already exist in historical traces, sessions or request
-snapshots, and it does not promise secure erasure from backups or storage media.
+`propose` creates or appends one explicit `user_explicit` candidate without
+reading or rewriting v1 and without accepting or verifying the content. The
+candidate binds its exact text digest, workspace identity, revision and
+`memory:propose:<memory-id>` event reference. Initial publication is exclusive,
+and existing corrupt, duplicate, unsafe or non-regular stores are refused
+without replacement. `migrate` creates a new bounded v2 file and leaves the v1
+source unchanged. Legacy records remain unverified candidates. `accept`
+requires an explicit approver and may only mark a `legacy_explicit` or
+`user_explicit` preference as `not_required`; it does not invent a source.
+`retire` records a lifecycle timestamp, and `--superseded-by` must name another
+record in the same store. `forget` physically removes the selected record from
+the active v2 store; it does not retain a hidden copy of the content. The
+command does not erase content that may already exist in historical traces,
+sessions or request snapshots, and it does not promise secure erasure from
+backups or storage media. See [project-continuity.md](project-continuity.md) for
+the explicit propose/accept/recall/revoke workflow and offline evidence fixture.
 
 ## Delegation
 

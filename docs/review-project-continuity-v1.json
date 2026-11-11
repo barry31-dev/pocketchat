@@ -1,0 +1,259 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/memory_migration.py",
+    "pocketchat/cli.py",
+    "tests/test_memory_propose.py",
+    "examples/project-continuity-demo.py",
+    "tests/test_project_continuity_demo.py",
+    "docs/project-continuity.md",
+    "docs/project-continuity.zh-CN.md",
+    "docs/cli.md",
+    "docs/review-project-continuity-v1.json",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "PC-PCONT-CORE-01",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "project-continuity:store:first-create-overwrites-concurrent-migration",
+      "reason": "The initial proposal path now publishes its validated temporary file with an atomic no-replace link when the store was absent. The saved interleaving regression observes a successful v1 migration before proposal publication and verifies that proposal refuses while the migrated bytes survive unchanged."
+    },
+    {
+      "id": "PC-PCONT-CORE-02",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "project-continuity:store:fifo-read-blocks-before-type-check",
+      "reason": "Descriptor reads now include O_NONBLOCK and reject every non-regular fstat result before reading. The real FIFO subprocess regression returns the typed CLI refusal within its two-second bound instead of waiting for a writer."
+    },
+    {
+      "id": "PC-PCONT-CORE-03",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "project-continuity:store:duplicate-memory-id-rewritten",
+      "reason": "Whole-store parsing now rejects a repeated memory_id before a mutation callback can append or write. The regression preserves the duplicate store byte-for-byte."
+    },
+    {
+      "id": "PC-PCONT-CORE-04",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "project-continuity:store:metadata-surrogate-escapes-typed-boundary",
+      "reason": "Final record UTF-8 serialization now converts invalid Unicode metadata into MemoryMigrationError. The guarded-store regression verifies the CLI-facing mutation leaves the malformed bytes unchanged."
+    },
+    {
+      "id": "PC-PCONT-CORE-05",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "project-continuity:identity:workspace-padding-never-recalls",
+      "reason": "Proposal normalizes the workspace identity once before binding both workspace_id and source scope, matching the existing recall comparison. The padded-id regression observes project-a in both fields."
+    },
+    {
+      "id": "PC-PCONT-R2-01",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "project-continuity:store:content-surrogate-escapes-typed-boundary",
+      "reason": "The interrupted full-diff reviewer reproduced a second invalid-Unicode path: content hashing raised UnicodeEncodeError before final serialization. parse_v2_record now translates that root cause to MemoryMigrationError, and the new red/green case preserves the malformed store unchanged."
+    },
+    {
+      "id": "PC-PCONT-R2-02",
+      "severity": "minor",
+      "status": "deferred",
+      "fingerprint": "project-continuity:docs:formats-operation-list-omits-propose",
+      "reason": "docs/formats.md still lists the earlier v2 mutation commands without propose. The exact approved execution scope excludes that format-owner page, so this candidate corrects the in-scope CLI manual and dedicated bilingual workflow without silently widening the lease. A docs-only maintenance follow-up must update the format index before claiming every adjacent memory document is current."
+    },
+    {
+      "id": "PC-PCONT-R3-01",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "project-continuity:migration:visible-empty-target-dual-success-data-loss",
+      "reason": "The fixed-SHA reviewer demonstrated that migration exposed an empty final target before writing, allowing proposal replacement while both commands reported success. Migration now stages the target as owner-write-only, writes and fsyncs the complete payload, then makes it readable; every v2 read/proposal refuses an unreadable regular target as incomplete. A real cross-process regression pauses migration at the visible target and proves proposal refuses until migration publishes the intact legacy record; the opposite interleave remains protected by proposal no-replace publication."
+    },
+    {
+      "id": "PC-PCONT-ND-01",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "project-continuity:migration:final-mode-bypasses-restrictive-umask",
+      "reason": "The post-cap new-diff review demonstrated that fchmod(0644) would widen a store created under umask 077 from the previous 0600 result to world-readable 0644. Completed migration publication now becomes owner-only 0600, matching proposal-store privacy, and a real permissions regression verifies the final mode plus readable record."
+    }
+  ],
+  "schema_version": 1,
+  "slice": "PC-PROJECT-CONTINUITY-1",
+  "base_commit": "da2f414c0aeb81a70a343e0cd4603a55201c8941",
+  "authority": "Maintainer routine planning/development delegation recorded in the product contributor rules sections 3.1 and 6; approved bounded project-continuity outcome.",
+  "contract": {
+    "goal": "Create a v2 project-memory candidate through an explicit CLI command, accept it separately, reopen a Session with opt-in recall, identify the supplied source/version, and stop recalling it after retirement.",
+    "not_doing": [
+      "No Skill/hook/plugin platform, automatic memory capture or model approval",
+      "No general tool permissions, network provider invocation or dependency installation",
+      "No new v2 schema, store implementation, vector retrieval or secure-deletion promise",
+      "No formal tag, Release or package upload"
+    ],
+    "done_when": [
+      "New memory propose initializes/appends one bounded candidate through the existing guarded v2 mutation, preserves v1 and other v2 records, and never auto-accepts or verifies content",
+      "The same CLI-created record is explicitly accepted, recalled in a fresh Session and identified by original source and revision; retired/unaccepted/expired/foreign-workspace records do not appear in new recall requests",
+      "Focused real-file regressions reject malformed metadata, overflow, corrupt stores and symlink/lock targets without mutating the store",
+      "One runnable offline project-continuity demo saves exact request/trace evidence and distinguishes remembered context from a repeated-constraints baseline",
+      "Fresh-context review, controlled push, precise-head CI and merged-main readback are complete"
+    ],
+    "write_scope": [
+      "pocketchat/memory_migration.py",
+      "pocketchat/cli.py",
+      "tests/test_memory_propose.py",
+      "examples/project-continuity-demo.py",
+      "tests/test_project_continuity_demo.py",
+      "docs/project-continuity.md",
+      "docs/project-continuity.zh-CN.md",
+      "docs/cli.md",
+      "docs/review-project-continuity-v1.json",
+      "README.md",
+      "README.zh-CN.md",
+      "CHANGELOG.md"
+    ],
+    "evidence_location": "This product review record, the task tests, and the offline fixture output.",
+    "budget_stop": "One complete user result; preserve the original task checkpoint if interrupted. Formal publication remains outside this slice.",
+    "rollback_next": "Before public integration discard only this task branch; after integration use an ordinary reviewed revert, not shared-history rewrite. Existing memory add/search/accept/retire and recall-disabled behavior remain unchanged.",
+    "authority": "Maintainer routine planning/development delegation recorded in the product contributor rules sections 3.1 and 6; approved bounded project-continuity outcome.",
+    "stage_basis": {
+      "product_main": "da2f414c0aeb81a70a343e0cd4603a55201c8941",
+      "settled_dependencies": [
+        "PC-FILE-CHAT-1",
+        "PC-LOCAL-REPORT-1",
+        "PC-CODE-REPAIR-1"
+      ],
+      "selection_reason": "The existing v2 CLI can migrate, accept, retire and recall but cannot directly add a new candidate to a v2 store. A subsequent confirmed project constraint otherwise requires manual store editing or another migration."
+    },
+    "source_refs": [
+      "product memory_migration.py guarded v2 mutation and parse_v2_record",
+      "product Session._memory_recall_projection and memory_retrieval.py admission-before-ranking",
+      "approved project-continuity contract in this review record"
+    ]
+  },
+  "design": {
+    "selected": "Explicit memory propose creates user_explicit/unverified/candidate records; acceptance remains a separate trusted operator action. Reuse parse_v2_record and _mutate_v2_store, then existing Session recall per fresh request.",
+    "alternatives": [
+      {
+        "approach": "Repeat whole-store v1 migration",
+        "rejected": "Cannot append a new project constraint to an existing v2 store and adds unrelated migration work."
+      },
+      {
+        "approach": "Manual v2 JSONL edits",
+        "rejected": "Exposes record digests, revision/admission fields and guarded writes to user error."
+      }
+    ],
+    "source_refs": [
+      "product memory_migration.py guarded v2 mutation and parse_v2_record",
+      "product Session._memory_recall_projection and memory_retrieval.py admission-before-ranking",
+      "approved project-continuity contract in this review record"
+    ]
+  },
+  "plan": [
+    {
+      "step": "Red first",
+      "files": [
+        "tests/test_memory_propose.py"
+      ],
+      "command": "python3.13 -B -m unittest tests.test_memory_propose -v",
+      "assertions": "CLI returns a candidate, never changes legacy bytes, append preserves previous records, unsafe targets and corrupt stores fail before replacement."
+    },
+    {
+      "step": "Minimal production change",
+      "files": [
+        "pocketchat/memory_migration.py",
+        "pocketchat/cli.py"
+      ],
+      "implementation": "propose_v2_record validates a user_explicit/unverified/candidate record before filesystem mutation; _mutate_v2_store appends it under the existing no-follow descriptor/lock and bounded store writer. CLI accepts explicit workspace/category/tags/expiry/author, prints the same JSON record shape, and cannot set admission or verification."
+    },
+    {
+      "step": "Complete continuity path",
+      "files": [
+        "examples/project-continuity-demo.py",
+        "tests/test_project_continuity_demo.py"
+      ],
+      "implementation": "Drive real CLI propose/accept/retire and reopened Session calls with a deterministic offline adapter; assert admitted source/revision, foreign/expired/candidate exclusions, no stale recall after retirement, and bounded request evidence. Persist raw requests and trace artifacts, not provider-quality claims."
+    },
+    {
+      "step": "Review and deliver",
+      "implementation": "Read the exact diff/call sites, run only affected tests and required lint; obtain one independent full-diff review, then new-diff-only fixes within the existing three-round limit; controlled task push/PR, exact-head required CI and main readback."
+    }
+  ],
+  "verification": {
+    "status": "passed_local",
+    "python_3_13": "105 tests passed",
+    "python_3_9": "105 tests passed",
+    "document_guards": "23 tests passed",
+    "offline_fixture": "8 assertions passed",
+    "static_checks": "Ruff E9/F, compileall on Python 3.13 and 3.9, git diff --check passed"
+  },
+  "review_rounds": [
+    {
+      "round": 1,
+      "scope": "core implementation",
+      "result": "five findings; three major and two minor, all fixed by saved red/green regressions"
+    },
+    {
+      "round": 2,
+      "scope": "complete uncommitted diff",
+      "result": "review transport did not return a final verdict; one major invalid-content Unicode finding was reproduced and fixed; adjacent formats index gap recorded as deferred minor"
+    },
+    {
+      "round": 3,
+      "scope": "pre-integration full candidate tree",
+      "result": "one P2 data-loss finding; reproduced with a cross-process red regression and fixed by two-phase migration publication; new-diff review remains before delivery"
+    }
+  ],
+  "unverified": [
+    "Real-provider relevance/quality and user task-success improvements",
+    "Arbitrary projects, secure deletion of traces or already-sent content",
+    "Formal release, package upload and future platform stability"
+  ],
+  "changed_paths": [
+    "pocketchat/memory_migration.py",
+    "pocketchat/cli.py",
+    "tests/test_memory_propose.py",
+    "examples/project-continuity-demo.py",
+    "tests/test_project_continuity_demo.py",
+    "docs/project-continuity.md",
+    "docs/project-continuity.zh-CN.md",
+    "docs/cli.md",
+    "docs/review-project-continuity-v1.json",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md"
+  ],
+  "commit_or_candidate_sha": "self",
+  "reviewed_evidence": [
+    "C: origin/main da2f414c0aeb81a70a343e0cd4603a55201c8941 is the declared baseline; the final diff is confined to the 12 task paths and the standing routine-development authority permits ordinary push/PR/CI/main integration.",
+    "V: the saved first implementation observed red before code; round-one review added four failing store regressions covering concurrent migration, duplicate identities/invalid Unicode, workspace normalization and bounded FIFO refusal.",
+    "V: this continuation replayed those four regressions red (4 failures, 1 error) and then green after the no-replace/nonblocking/unique-id/UTF-8/workspace fixes.",
+    "V: project-continuity demo tests first failed because the fixture was absent, then passed after the offline propose/accept/new-Session/foreign/expiry/retirement workflow and exact request/trace evidence were implemented.",
+    "V: CPython 3.13.9 and macOS system CPython 3.9.6 each passed 105 affected memory/CLI/demo tests on the final local tree.",
+    "V: the standalone offline fixture passed all eight assertions; only the accepted same-workspace Session carried the source-, revision- and digest-bound recall message, while unaccepted, foreign, expired and retired cases did not.",
+    "V: 23 release-process/package-independence document guards passed; Ruff 0.17.3 E9/F, Python 3.13 and 3.9 compileall, and git diff --check passed.",
+    "F: the first fresh-context automated review ran read-only for about 32 minutes without a final verdict and was interrupted. Its diagnostic transcript is retained outside the product tree; one actionable content-surrogate finding was independently reproduced red and fixed green. This transport limit is not represented as a clean review verdict.",
+    "R: fresh-context review of the pre-integration full candidate tree returned one P2 migration/proposal interleaving finding. The reviewer provided an in-memory reproduction in which both operations reported success while the migrated record disappeared.",
+    "V: a new real cross-process red regression reproduced the migration-first visible-empty-target window. After the staged unreadable/write/fsync/readable publication fix, both interleaving regressions and the existing descriptor cleanup failures passed; final CPython 3.13.9 and 3.9.6 affected suites each passed 105 tests.",
+    "R: the post-cap new-diff review found one P2 permission regression: unconditional fchmod(0644) overrode umask 077 and widened migrated memory from 0600 to 0644.",
+    "V: a real umask 077 regression failed at mode 0644, then passed at owner-only 0600. Final CPython 3.13.9 and 3.9.6 affected suites each passed 105 tests; Ruff E9/F, dual compileall and git diff --check passed.",
+    "C: final publication preparation removes internal orchestration labels from this public review record without changing the implementation, tests, findings, verification results or unverified scope."
+  ],
+  "unverified_scope": "Exact-head required GitHub CI and merged-main readback are pending. Real-provider relevance/answer quality, arbitrary projects, cross-platform manual operation, secure deletion of traces or already-sent content, tag, Release and package publication are not run or authorized. docs/formats.md needs the recorded docs-only follow-up because it is outside this task write scope.",
+  "new_diff_reviews": [
+    {
+      "after_round": 3,
+      "scope": "two-phase migration publication fix only",
+      "result": "one P2 permission-regression finding; red/green owner-only mode test fixed it; final new diff re-read with no remaining open major/blocker"
+    }
+  ]
+}

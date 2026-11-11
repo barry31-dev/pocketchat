@@ -65,6 +65,10 @@ python3 examples/task-acceptance/demo.py
 
 此已复审源码候选让原有授权 task CLI 将完成读取快照交给报告步骤，并把 Session 结果绑定到固定读取 trace、把 task 工作区绑定到授权 policy；随后可创建独立修订版，并在接续时不重放已完成读写。运行 `python3 examples/local-report-demo.py` 可走离线真实文件 CLI fixture。权限、来源追溯、拒绝路径与真实 provider 未验证边界见 [本地报告说明](docs/local-report.zh-CN.md)；准确候选 CI 与产品 main 回读仍待完成，新增源码不代表正式发布。
 
+## 未发布源码：显式项目连续性
+
+当前源码候选新增 `memory propose`：它只创建一条有界、未验证的 v2 候选，不改旧存储，也不授予 recall。操作人必须再单独接受准确记录；随后，显式配置的 profile 才能把与来源、revision 和摘要绑定的摘录投影到后续 Session。未接受、已退休、已过期和异工作区记录都不会进入新请求。运行 `python3 examples/project-continuity-demo.py` 可查看离线请求/trace fixture；权限、证据与删除边界见[项目连续性说明](docs/project-continuity.zh-CN.md)。这不增加自动采集、模型审批、provider 核验、同步或正式发布。
+
 ## 环境要求
 
 Python 3.9 或更高。运行时没有第三方依赖。

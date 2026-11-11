@@ -172,7 +172,12 @@ def parse_v2_record(payload: Any) -> Dict[str, Any]:
     if result["category"] not in CATEGORIES:
         raise MemoryMigrationError("category is unsupported")
     content = _text(payload.get("content"), "content")
-    if _sha(payload.get("content_sha256"), "content_sha256") != _checksum(content):
+    try:
+        content_digest = _checksum(content)
+    except UnicodeError as exc:
+        raise MemoryMigrationError(
+            "memory content must be valid UTF-8") from exc
+    if _sha(payload.get("content_sha256"), "content_sha256") != content_digest:
         raise MemoryMigrationError("content_sha256 does not match content")
     result["content"] = content
     for field in ("created", "updated"):
@@ -279,8 +284,12 @@ def parse_v2_record(payload: Any) -> Dict[str, Any]:
         if "superseded_by" in result or "retired_at" in result:
             raise MemoryMigrationError(
                 "conflicted memory cannot carry retirement metadata")
-    encoded = (json.dumps(result, ensure_ascii=False, sort_keys=True)
-               + "\n").encode("utf-8")
+    try:
+        encoded = (json.dumps(result, ensure_ascii=False, sort_keys=True)
+                   + "\n").encode("utf-8")
+    except UnicodeError as exc:
+        raise MemoryMigrationError(
+            "memory v2 record text must be valid UTF-8") from exc
     if len(encoded) > MAX_LINE_BYTES:
         raise MemoryMigrationError("memory v2 record exceeds the line budget")
     return result
@@ -434,6 +443,7 @@ def _store_payload(records: Iterable[Dict[str, Any]]) -> bytes:
 
 def _parse_store_text(text: str) -> List[Dict[str, Any]]:
     records = []
+    memory_ids = set()
     for number, line in enumerate(text.split("\n"), 1):
         if not line:
             continue
@@ -445,7 +455,12 @@ def _parse_store_text(text: str) -> List[Dict[str, Any]]:
         except ValueError as exc:
             raise MemoryMigrationError(
                 f"v2 memory store line {number} is invalid JSON: {exc}")
-        records.append(parse_v2_record(record))
+        parsed = parse_v2_record(record)
+        if parsed["memory_id"] in memory_ids:
+            raise MemoryMigrationError(
+                f"v2 memory store repeats memory_id {parsed['memory_id']}")
+        memory_ids.add(parsed["memory_id"])
+        records.append(parsed)
     return records
 
 
@@ -463,11 +478,12 @@ def _require_parent_current(parent: Path, parent_descriptor: int) -> None:
             "symlinks")
 
 
-def _read_store_from_parent(name: str, parent_descriptor: int
-                            ) -> List[Dict[str, Any]]:
+def _read_store_from_parent(name: str, parent_descriptor: int, *,
+                            allow_missing: bool = False) -> List[Dict[str, Any]]:
     if not hasattr(os, "O_NOFOLLOW"):
         raise MemoryMigrationError("v2 store requires no-follow file support")
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | os.O_NOFOLLOW
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0) | os.O_NOFOLLOW
+             | getattr(os, "O_NONBLOCK", 0))
     descriptor = None
     try:
         try:
@@ -476,6 +492,9 @@ def _read_store_from_parent(name: str, parent_descriptor: int
             if not stat.S_ISREG(info.st_mode):
                 raise MemoryMigrationError(
                     "v2 memory store must be a regular file")
+            if not info.st_mode & stat.S_IRUSR:
+                raise MemoryMigrationError(
+                    "v2 memory store publication is incomplete")
             if info.st_size > MAX_STORE_BYTES:
                 raise MemoryMigrationError(
                     f"v2 memory store exceeds {MAX_STORE_BYTES} bytes")
@@ -494,6 +513,10 @@ def _read_store_from_parent(name: str, parent_descriptor: int
             text = raw.decode("utf-8")
         except MemoryMigrationError:
             raise
+        except FileNotFoundError as exc:
+            if allow_missing:
+                return []
+            raise MemoryMigrationError(f"cannot read v2 memory store: {exc}") from exc
         except (OSError, UnicodeError) as exc:
             raise MemoryMigrationError(f"cannot read v2 memory store: {exc}")
     finally:
@@ -523,7 +546,8 @@ def read_v2_store(root: Path, store: Path) -> List[Dict[str, Any]]:
 
 def _write_store_from_parent(name: str, parent_descriptor: int,
                              payload: bytes,
-                             parent_path: Optional[Path] = None) -> None:
+                             parent_path: Optional[Path] = None, *,
+                             require_absent: bool = False) -> None:
     if parent_path is not None:
         _require_parent_current(parent_path, parent_descriptor)
     temporary_name = None
@@ -546,9 +570,19 @@ def _write_store_from_parent(name: str, parent_descriptor: int,
                 os.close(descriptor)
         if parent_path is not None:
             _require_parent_current(parent_path, parent_descriptor)
-        os.replace(temporary_name, name,
-                   src_dir_fd=parent_descriptor,
-                   dst_dir_fd=parent_descriptor)
+        if require_absent:
+            os.link(temporary_name, name,
+                    src_dir_fd=parent_descriptor,
+                    dst_dir_fd=parent_descriptor,
+                    follow_symlinks=False)
+            try:
+                os.unlink(temporary_name, dir_fd=parent_descriptor)
+            except OSError:
+                pass
+        else:
+            os.replace(temporary_name, name,
+                       src_dir_fd=parent_descriptor,
+                       dst_dir_fd=parent_descriptor)
         temporary_name = None
     except OSError as exc:
         raise MemoryMigrationError(f"cannot write v2 memory store: {exc}")
@@ -574,7 +608,8 @@ def _write_store(root: Path, store: Path,
         os.close(parent_descriptor)
 
 
-def _mutate_v2_store(root: Path, store: Path, change) -> Any:
+def _mutate_v2_store(root: Path, store: Path, change, *,
+                     allow_missing: bool = False) -> Any:
     """Run one read-modify-write through one no-follow parent descriptor."""
     target = _resolve_store(root, store)
     parent_descriptor = _open_target_parent(
@@ -607,12 +642,31 @@ def _mutate_v2_store(root: Path, store: Path, change) -> Any:
                 os.close(descriptor)
         _lock_nonblocking(lock_file)
         locked = True
-        records = _read_store_from_parent(target.name, parent_descriptor)
+        target_missing = False
+        if allow_missing:
+            try:
+                target_info = os.stat(
+                    target.name, dir_fd=parent_descriptor,
+                    follow_symlinks=False)
+            except FileNotFoundError:
+                target_missing = True
+            else:
+                if not stat.S_ISREG(target_info.st_mode):
+                    raise MemoryMigrationError(
+                        "v2 memory store must be a regular file")
+                if not target_info.st_mode & stat.S_IRUSR:
+                    raise MemoryMigrationError(
+                        "v2 memory store publication is incomplete")
+        records = (_read_store_from_parent(target.name, parent_descriptor,
+                                           allow_missing=True)
+                   if allow_missing else
+                   _read_store_from_parent(target.name, parent_descriptor))
 
         def write(validated_records):
             _write_store_from_parent(
                 target.name, parent_descriptor,
-                _store_payload(validated_records), parent_path=target.parent)
+                _store_payload(validated_records), parent_path=target.parent,
+                require_absent=target_missing)
 
         return change(records, write)
     except MemoryMigrationError:
@@ -632,6 +686,59 @@ def _mutate_v2_store(root: Path, store: Path, change) -> Any:
 def _new_timestamp() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat(
         timespec="milliseconds").replace("+00:00", "Z")
+
+
+def propose_v2_record(root: Path, store: Path, content: str, *,
+                      workspace_id: str, proposed_by: str,
+                      category: str = "user_preference",
+                      tags: Optional[List[str]] = None,
+                      expires_at: Optional[str] = None,
+                      sensitive: bool = False) -> Dict[str, Any]:
+    """Append one explicitly authored, unverified candidate to a v2 store.
+
+    The source event identifies the submitted text, not independent fact
+    verification. Acceptance is a separate operator action. Validate the whole
+    new line before creating a store or acquiring its guarded mutation lock.
+    """
+    author = _text(proposed_by, "proposed_by").strip()
+    workspace = _text(workspace_id, "workspace_id").strip()
+    text = _text(content, "content")
+    try:
+        digest = _checksum(text)
+    except UnicodeError as exc:
+        raise MemoryMigrationError("content must be valid UTF-8") from exc
+    memory_id = "mem_" + uuid4().hex
+    timestamp = _new_timestamp()
+    record = {
+        "schema_version": V2_SCHEMA_VERSION,
+        "memory_id": memory_id, "revision": 1,
+        "workspace_id": workspace, "category": category,
+        "content": text, "content_sha256": digest,
+        "created": timestamp, "updated": timestamp,
+        "source_kind": "user_explicit",
+        "source_refs": [{"kind": "event", "ref": "memory:propose:" + memory_id,
+                         "sha256": digest, "scope": workspace}],
+        "verification_status": "unverified", "admission_status": "candidate",
+        "accepted_by": "", "updated_by": author,
+        "supersedes": [], "tags": [] if tags is None else tags,
+        "sensitive": sensitive,
+    }
+    if expires_at is not None:
+        record["expires_at"] = expires_at
+    try:
+        candidate = parse_v2_record(record)
+        _store_payload([candidate])
+    except UnicodeError as exc:
+        raise MemoryMigrationError("memory text and metadata must be valid UTF-8") from exc
+
+    def change(records, write):
+        if any(item["memory_id"] == memory_id for item in records):
+            raise MemoryMigrationError("new memory id already exists")
+        records.append(candidate)
+        write(records)
+        return candidate
+
+    return _mutate_v2_store(root, store, change, allow_missing=True)
 
 
 def accept_v2_record(root: Path, store: Path, memory_id: str,
@@ -780,7 +887,7 @@ def migrate_v1_to_v2(root: Path, *, workspace_id: str, out: Path,
     try:
         descriptor = os.open(
             target.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-            0o644, dir_fd=parent_descriptor)
+            0o200, dir_fd=parent_descriptor)
     except OSError as exc:
         os.close(parent_descriptor)
         raise MemoryMigrationError(f"cannot create v2 memory store: {exc}")
@@ -793,6 +900,7 @@ def migrate_v1_to_v2(root: Path, *, workspace_id: str, out: Path,
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
+            os.fchmod(handle.fileno(), 0o600)
     except OSError as exc:
         try:
             os.unlink(target.name, dir_fd=parent_descriptor)
