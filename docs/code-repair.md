@@ -59,6 +59,10 @@ release, a provider-quality claim or permission to publish a package.
    fingerprint. Source and command text are untrusted data, not instructions.
 4. The complete request must fit the task context budget and normal provider
    admission. Configured credential content is refused before payload creation.
+   The saved request bytes are committed before the provider call and checked
+   again before any edit/retry and before the receipt is finalized; a changed,
+   replaced or unreadable request is refused rather than relabeled as original
+   repair evidence.
    The returned closed action may change one granted, observed path only. Apply
    uses the **original request-time snapshot**: a concurrent edit is refused,
    even if somebody commits that edit while the provider is responding.
@@ -82,9 +86,17 @@ separate, unverified boundaries. See [task-command.md](task-command.md),
 
 ### Current local verification boundary
 
-The first local run used the selected Command Line Tools toolchain and failed
-to resolve `XCTest` before test execution; the one permitted retry also failed.
-That run is **not** a successful Swift acceptance. Rebind an existing full
-testing toolchain and SDK explicitly in the operator command template before
-claiming the real Swift path. No global developer selection is changed by this
-fixture, and no missing component is installed automatically.
+On 2026-11-11, the initial local Command Line Tools run could not resolve
+`XCTest` before execution. Supplying only the full SDK still failed. The
+successful operator template explicitly declared the installed full Xcode
+Swift toolchain, SDK and `DEVELOPER_DIR` through an `/usr/bin/env` argv wrapper;
+the command runner does not inherit the parent environment wholesale.
+
+That run used Apple Swift 6.4 on macOS 27 arm64, with one serial build job. The
+first XCTest assertion failed (exit 1), and the identical template passed
+one XCTest after the guarded edit (exit 0). All seven fixture evidence checks
+passed, including exact source/diff binding and no-replay resume. The repair
+provider was deterministic and offline: real-model diagnosis was not tested.
+The global developer selection remained Command Line Tools; nothing was
+installed. The default fixture still requires an already usable local testing
+toolchain and does not silently repair a host configuration.

@@ -1,4 +1,61 @@
 {
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/task_model_repair.py",
+    "tests/test_task_model_repair.py",
+    "tests/test_code_repair_demo.py",
+    "examples/code-repair-demo.py",
+    "docs/code-repair.md",
+    "docs/code-repair.zh-CN.md",
+    "docs/review-code-repair-v1.json",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "pocketchat/task_exec.py",
+    "pocketchat/task_recovery.py",
+    "tests/test_plan_recovery.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "PC-CODE-REPAIR-R1-001",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "code-repair:recovery:non-object-command-evidence-untyped-exception",
+      "reason": "A real report with string/list/integer command evidence previously escaped the typed recovery boundary through AttributeError. Command evidence is now rejected before the optional evidence_hashes branch, and the red/green regression covers both present and absent evidence_hashes without replay."
+    },
+    {
+      "id": "PC-CODE-REPAIR-R1-002",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "code-repair:request:provider-time-snapshot-mutation-late-hash",
+      "reason": "The repair request is now hashed immediately after the runtime writes it, rechecked before any edit/retry, and rechecked when receipt evidence is finalized. A red provider-time corruption case now refuses before source mutation or command replay."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "pocketchat/task_model_repair.py",
+    "tests/test_task_model_repair.py",
+    "tests/test_code_repair_demo.py",
+    "examples/code-repair-demo.py",
+    "docs/code-repair.md",
+    "docs/code-repair.zh-CN.md",
+    "docs/review-code-repair-v1.json",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "pocketchat/task_exec.py",
+    "pocketchat/task_recovery.py",
+    "tests/test_plan_recovery.py"
+  ],
   "schema_version": 1,
   "slice": "PC-CODE-REPAIR-1",
   "base_commit": "ac73e67bc99cda15c027e473b48faabbab0ce398",
@@ -29,7 +86,8 @@
     "done_when": "Two red source-binding regressions turn green; focused real-file tests cover approved repair, same-failure stop, invalid action, stale source and context/credential refusal; one real Swift Package CLI fixture records failed and successful test commands, the exact edit and diff and no-replay resume; fresh-context scoped review, exact-head CI and main readback complete routine delivery.",
     "evidence": "This task review record, the focused tests, and examples/code-repair-demo.py evidence.json and original command/repair/report artifacts.",
     "budget_stop": "One bounded slice; no new slice after 75 minutes, checkpoint after 100 minutes. At most three scoped review rounds. Only new concerns justify repeated checks.",
-    "rollback": "Ordinary revert of this change; keep create-only evidence and never rewrite shared Git history."
+    "rollback": "Ordinary revert of this change; keep create-only evidence and never rewrite shared Git history.",
+    "plan_refinement": "The confirmed malformed-command-evidence finding is handled by an eager typed parser refusal plus an actual no-replay regression; no command, permission or source scope is broadened."
   },
   "design": {
     "alternatives": [
@@ -74,12 +132,92 @@
       "command": "python3.13 -B examples/code-repair-demo.py --output <new private evidence directory>",
       "result": "Exit 1: the selected Command Line Tools could not resolve XCTest before any test assertion; the bounded retry also exited 1. No successful real Swift acceptance claimed. Selected swift reports Apple Swift 6.4, arm64 macOS 27.0. Swap remained 1120.81 MiB before/after; free memory moved 50% to 44%; no OOM observed.",
       "log_sha256": "bdd83853a16f0a6c19d5aedf0c54f9811855b2fa0b22fbe268f51bf233ab02cd"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27 arm64, CPython 3.13.9, Apple Swift 6.4; SDK 27.0; one serial build job",
+      "command": "Existing demonstrate(root, template=...) fixture API using an explicitly declared /usr/bin/env DEVELOPER_DIR=<installed Xcode developer directory> <full Xcode swift> test --jobs 1 --sdk <installed full SDK> template",
+      "result": "Actual XCTest assertion failed with exit 1, then the same declared template passed one XCTest with exit 0. All seven evidence checks passed; one deterministic offline repair provider call; exact edit/diff and no-replay resume. Global developer selection unchanged. Real-provider quality not tested.",
+      "evidence_sha256": "69db6d40f878fee983c91d3f195a61b5ef9789b4ee635a8413c0a8cbf8246fb8",
+      "log_sha256": "69db6d40f878fee983c91d3f195a61b5ef9789b4ee635a8413c0a8cbf8246fb8"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27 arm64, CPython 3.13.9",
+      "command": "python3.13 -B -m unittest tests.test_plan_recovery.PlanRecoveryTests.test_non_object_command_evidence_refuses_without_replaying tests.test_plan_recovery.PlanRecoveryTests.test_invalid_report_status_order_identity_and_issues_are_refused tests.test_plan_recovery.PlanRecoveryTests.test_resume_completes_remaining_steps_without_repeating_side_effects -v",
+      "result": "3 targeted tests passed. The expanded string/list/integer cases first raised AttributeError when evidence_hashes was absent; eager command-evidence validation now refuses all six present/absent-hash subcases through TaskRecoveryError before replay. The two adjacent recovery regressions also passed; no full suite was repeated.",
+      "red_log_sha256": "e15edfa9af7dec2347ac9be3c2929a5a493197e59d47235eb4362e71754c9afa",
+      "green_log_sha256": "41dfe4e90707aac3020e38378d92cb08bace2ff03a8071d27957182609d1992b"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff 0.17.3 check --select E9,F <all seven changed Python paths>",
+      "result": "All changed Python files passed the repository-required E9/F profile on the final local candidate.",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27 arm64, CPython 3.13.9",
+      "command": "python3.13 -B -m unittest tests.test_task_model_repair.AttemptTests.test_provider_time_request_corruption_refuses_before_edit_or_retry tests.test_task_model_repair.AttemptTests.test_receipt_binds_request_snapshot_bytes tests.test_code_repair_demo -v",
+      "result": "The focused corruption case first failed because no ModelRepairError was raised. After retaining the pre-provider request commitment, the corruption case, request-byte receipt binding and both portable fixture cases passed (4 tests total); no source edit or retry occurred on corruption.",
+      "red_log_sha256": "cda1f73d347cb34acbdb2fe0ef9836a53d326f17b5b1008ee86d4e2ae897d461",
+      "green_log_sha256": "806ffead36dce07ee6a818c95c2646c2d477185d874ae9a7b8ed9f4449f9fccc"
     }
   ],
-  "review_rounds": [],
-  "unverified": [
-    "Real-provider diagnosis quality; arbitrary user projects and commands; remote/network side effects; OS-level sandbox; other-platform manual Swift execution; formal publication."
+  "review_rounds": [
+    {
+      "round": 1,
+      "reviewer": "independent fresh-context agent (maintainer delegation 2026-11-09)",
+      "decision": "BLOCK",
+      "coverage": "Full original twelve-path candidate plus the requested CLI error-boundary and request/receipt/source cross-binding supplement. Static review inspected the candidate and the first parser-fix diff; it did not execute tests.",
+      "findings": [
+        {
+          "id": "PC-CODE-REPAIR-R1-001",
+          "severity": "minor",
+          "status": "open",
+          "fingerprint": "code-repair:recovery:non-object-command-evidence-untyped-exception",
+          "reason": "Non-object command evidence could raise AttributeError; the first guard fixed only reports that retained evidence_hashes and left the same malformed-input class open when hashes were absent."
+        },
+        {
+          "id": "PC-CODE-REPAIR-R1-002",
+          "severity": "major",
+          "status": "open",
+          "fingerprint": "code-repair:request:provider-time-snapshot-mutation-late-hash",
+          "reason": "The request file was hashed only after provider work and retry, so provider-time replacement could be authenticated as the original request."
+        }
+      ],
+      "limitations": "The reviewer did not run Python tests, the Swift fixture, provider/network work, Git delivery or publication actions."
+    },
+    {
+      "round": 2,
+      "reviewer": "fresh continuation agent (maintainer delegation 2026-11-09)",
+      "decision": "APPROVE",
+      "coverage": "Reviewed the seven-path correction diff, request-hash timing, typed parser boundary, both reviewer-directed negative regressions, documentation claims and preserved Swift evidence. Ran the final three parser/recovery cases and inspected the retained request-corruption red/green logs.",
+      "findings": [
+        {
+          "id": "PC-CODE-REPAIR-R1-001",
+          "severity": "minor",
+          "status": "fixed",
+          "fingerprint": "code-repair:recovery:non-object-command-evidence-untyped-exception",
+          "reason": "A real report with string/list/integer command evidence previously escaped the typed recovery boundary through AttributeError. Command evidence is now rejected before the optional evidence_hashes branch, and the red/green regression covers both present and absent evidence_hashes without replay."
+        },
+        {
+          "id": "PC-CODE-REPAIR-R1-002",
+          "severity": "major",
+          "status": "fixed",
+          "fingerprint": "code-repair:request:provider-time-snapshot-mutation-late-hash",
+          "reason": "The repair request is now hashed immediately after the runtime writes it, rechecked before any edit/retry, and rechecked when receipt evidence is finalized. A red provider-time corruption case now refuses before source mutation or command replay."
+        }
+      ],
+      "new_findings": [],
+      "limitations": "The final parser move followed the prior independent reviewer prescription and was author-run in this continuation. Full local suite, build/wheel/install, real provider, manual terminal UX, cross-platform execution, exact-head CI and product-main readback remain separate evidence."
+    }
   ],
+  "unverified": "Full local suite, build/wheel/install, real provider reasoning quality, arbitrary projects, human terminal UX, cross-platform execution, exact-head CI, product-main integration and formal tag/Release/package publication were not run at this checkpoint.",
   "scope_amendment": {
     "at": 1794342039.347064,
     "added_paths": [
@@ -92,9 +230,9 @@
     "original_contract_sha256": "176bbef210dbbaf7ade4b1996aad46732811da9f58ee01881f1f511fae5d2082"
   },
   "checkpoint": {
-    "state": "private_candidate_pending_swift_acceptance_and_independent_review",
-    "completed": false,
-    "next_action": "Use the existing full Xcode Swift testing toolchain and SDK explicitly in the declared fixture command, without changing global settings or installing dependencies; inspect the preserved review and complete only missing coverage/fixes, then controlled push/PR/exact CI/main readback.",
-    "unverified": "Independent core and added-fixture review unfinished; successful Swift run, full product suite/build/wheel/install, exact candidate CI and public integration not done. No real provider, tag, Release or upload."
-  }
+    "complete": true,
+    "ready_for_integration": true,
+    "next_action": "Commit the reviewed candidate, push the exact task head through the routine delivery entry, require exact-head CI, merge the PR and re-read product main before settling the fleet card."
+  },
+  "gate_result": "Local technical review has no open blocking finding; exact candidate CI and product-main readback remain pending."
 }

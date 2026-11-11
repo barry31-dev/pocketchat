@@ -733,11 +733,17 @@ def _parse_execution_report(data: Dict[str, Any], name: str) -> Dict[str, Any]:
         if not isinstance(step, dict) or set(step) - step_fields:
             raise TaskExecutionError(
                 "execution report %s has an open or malformed step" % name)
+        command_evidence = step.get("evidence")
+        if (step.get("action") == "run_command" and command_evidence is not None
+                and not isinstance(command_evidence, dict)):
+            raise TaskExecutionError(
+                "execution report %s has invalid command evidence" % name)
         if "evidence_hashes" in step:
             hashes = step["evidence_hashes"]
             hash_fields = {"record", "trace", "session", "archive"}
             if (step.get("action") == "run_command"
-                    and isinstance((step.get("evidence") or {}).get("repair"), dict)):
+                    and isinstance(command_evidence, dict)
+                    and isinstance(command_evidence.get("repair"), dict)):
                 hash_fields.update({"repair", "repair_request", "first_trace", "first_archive"})
             if (not isinstance(hashes, dict)
                     or set(hashes) - hash_fields

@@ -260,6 +260,23 @@ class PlanRecoveryTests(unittest.TestCase):
             path.unlink()
             path.write_bytes(original)
 
+    def test_non_object_command_evidence_refuses_without_replaying(self):
+        report, _, _ = self.boundary(2)
+        original = report.read_bytes()
+        for evidence in ("invalid", ["invalid"], 1):
+            for include_hashes in (True, False):
+                with self.subTest(evidence=evidence, include_hashes=include_hashes):
+                    report.write_bytes(original)
+
+                    def corrupt(payload):
+                        step = payload["steps"][1]
+                        step["evidence"] = evidence
+                        if not include_hashes:
+                            step.pop("evidence_hashes", None)
+
+                    self.rewrite(report, corrupt)
+                    self.refuse(report)
+
     def test_invalid_report_status_order_identity_and_issues_are_refused(self):
         report, _, _ = self.boundary()
         original = report.read_bytes()

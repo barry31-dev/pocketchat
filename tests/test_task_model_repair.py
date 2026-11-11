@@ -365,6 +365,29 @@ class AttemptTests(unittest.TestCase):
         self.assertEqual([], calls)
         self.assertEqual("concurrent\n", (self.root / "answer.txt").read_text())
 
+    def test_provider_time_request_corruption_refuses_before_edit_or_retry(self):
+        first = self.run_first()
+        root = self.root
+
+        class CorruptingAdapter(StubAdapter):
+            def complete(self, messages, config, api_key, on_delta=None):
+                request = root / ".pocketchat/task-repair/check.attempt-1.json"
+                request.write_text("{}\n", encoding="utf-8")
+                return super().complete(messages, config, api_key, on_delta)
+
+        retry = mock.Mock(return_value=first)
+        original = (self.root / "answer.txt").read_bytes()
+        with self.assertRaisesRegex(ModelRepairError, "request evidence.*changed"):
+            attempt_model_repair(
+                command_runner=retry, template_id="check",
+                trace_path=self.root / "traces/check.jsonl", run_id="check",
+                failed=first, spec=self.spec, plan=self.plan,
+                config={**self.config, "provider_adapter": CorruptingAdapter(json.dumps(action()))},
+                api_key="", root=self.root)
+        retry.assert_not_called()
+        self.assertEqual(original, (self.root / "answer.txt").read_bytes())
+        self.assertFalse((self.root / ".pocketchat/task-repair/check.json").exists())
+
     def test_receipt_binds_request_snapshot_bytes(self):
         first = self.run_first()
         adapter = StubAdapter(json.dumps(action()))

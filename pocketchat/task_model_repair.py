@@ -161,6 +161,18 @@ def _snapshot_details(result: OverwriteResult) -> Dict[str, Any]:
     }
 
 
+def _request_snapshot_hash(path: Path, expected: Optional[str] = None) -> str:
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise ModelRepairError("repair request evidence is missing or changed")
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise ModelRepairError("repair request evidence became unreadable") from exc
+    if expected is not None and actual != expected:
+        raise ModelRepairError("repair request evidence changed after preparation")
+    return actual
+
+
 def attempt_model_repair(command_runner, template_id: str, trace_path,
                          run_id: str, *, failed, spec: TaskSpec,
                          plan: TaskPlan, config: Dict[str, Any],
@@ -271,6 +283,8 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
                                    % exc)
     else:
         request_path = None
+    request_hash = (_request_snapshot_hash(request_path)
+                    if request_path is not None else None)
     try:
         response = adapter.complete(messages, config, api_key or "")
     except ProviderError as exc:
@@ -311,6 +325,8 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
     except ValueError as exc:
         raise ModelRepairError("repair response is not valid JSON: %s" % exc)
     action = parse_model_repair_action(payload, overwrite_paths=paths)
+    if request_path is not None:
+        _request_snapshot_hash(request_path, request_hash)
     try:
         snapshot = snapshots.get(action["path"])
         if snapshot is None:
@@ -337,15 +353,9 @@ def attempt_model_repair(command_runner, template_id: str, trace_path,
             "exit_code": getattr(command, "exit_code", None),
             "timed_out": getattr(command, "timed_out", None),
         })
-    requests = ([request_path] if request_path is not None
-                and request_path.is_file() else [])
-    request_hashes = []
-    for request in requests:
-        try:
-            request_hashes.append(hashlib.sha256(request.read_bytes()).hexdigest())
-        except OSError as exc:
-            raise ModelRepairError(
-                "repair request evidence became unreadable: %s" % exc)
+    requests = [request_path] if request_path is not None else []
+    request_hashes = [_request_snapshot_hash(request, request_hash)
+                      for request in requests]
     details: Dict[str, Any] = {
         "schema_version": MODEL_REPAIR_SCHEMA,
         "step_id": run_id,
