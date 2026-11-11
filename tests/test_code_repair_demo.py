@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests import _helpers as hp
+
 
 class CodeRepairDemoTests(unittest.TestCase):
     def example(self):
@@ -17,6 +19,8 @@ class CodeRepairDemoTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "requires secure descriptor-relative reads")
     def test_real_command_repair_diff_acceptance_and_no_replay_resume(self):
         example = self.example()
         template = {

@@ -20,7 +20,9 @@ python3 examples/code-repair-demo.py --output /tmp/pocketchat-code-repair-eviden
 离线 provider 从请求里实际绑定的源码中修复一个已知的半开区间错误。真实 Swift 测试先失败，
 受保护替换后，同一模板仅重跑一次。绿灯证明该夹具的编译/测试和本地编排，
 **不证明真实模型诊断质量或任意代码正确性**。CI 的便携 Python 夹具测试使用另行显式声明的
-小型本地校验器，不能称为 Swift 编译。
+小型本地校验器，不能称为 Swift 编译。正向 acceptance / 无重放恢复夹具仍要求安全的
+descriptor-relative 读取；平台缺少该能力时，运行时明确返回 `unsupported_platform`，
+正向测试按能力跳过，不用弱化 reader 来换取通过。
 
 `evidence.json` 汇总七项检查；源码、测试、`repair.diff`、spec/plan/acceptance、两次命令的
 独立 trace/archive、修复请求/回执、执行报告、`execution.json` 与 `resume.json` 可原件回查。

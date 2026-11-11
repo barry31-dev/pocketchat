@@ -21,7 +21,7 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 2,
+  "rounds": 3,
   "round_decision": "review",
   "round_scope": "full",
   "findings": [
@@ -38,6 +38,20 @@
       "status": "fixed",
       "fingerprint": "code-repair:request:provider-time-snapshot-mutation-late-hash",
       "reason": "The repair request is now hashed immediately after the runtime writes it, rechecked before any edit/retry, and rechecked when receipt evidence is finalized. A red provider-time corruption case now refuses before source mutation or command replay."
+    },
+    {
+      "id": "PC-CODE-REPAIR-CI-001",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "code-repair:windows:secure-descriptor-success-tests-not-scoped",
+      "reason": "Exact-head GitHub Actions run 42937213846 passed release smoke plus both Ubuntu and both macOS jobs, but both Windows jobs correctly refused acceptance/recovery reads with unsupported_platform. The four positive success/resume tests now use the repository capability guard; production fail-closed behavior is unchanged and the bilingual code-repair contract states the boundary."
+    },
+    {
+      "id": "PC-CODE-REPAIR-CI-002",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "code-repair:windows:authorized-source-newline-hardcoded",
+      "reason": "The source-binding test hardcoded LF bytes although Windows text writes produced CRLF. It now compares the prompt with the exact authorized file bytes and byte count, preserving the intended snapshot assertion across platforms."
     }
   ],
   "commit_or_candidate_sha": "self",
@@ -166,6 +180,24 @@
       "result": "The focused corruption case first failed because no ModelRepairError was raised. After retaining the pre-provider request commitment, the corruption case, request-byte receipt binding and both portable fixture cases passed (4 tests total); no source edit or retry occurred on corruption.",
       "red_log_sha256": "cda1f73d347cb34acbdb2fe0ef9836a53d326f17b5b1008ee86d4e2ae897d461",
       "green_log_sha256": "806ffead36dce07ee6a818c95c2646c2d477185d874ae9a7b8ed9f4449f9fccc"
+    },
+    {
+      "source_type": "published CI run (V)",
+      "status": "verified failure",
+      "environment": "GitHub Actions run 42937213846 on candidate 5ad6dec7882d10ce5fb363f6618a48b4cdea27df; Windows latest CPython 3.9/3.13",
+      "command": "repository pocketchat-ci matrix and pocketchat-release-smoke",
+      "result": "Release smoke plus both Ubuntu and both macOS jobs passed. Both Windows jobs failed the same five tests: four success-path acceptance/recovery cases hit the intended unsupported_platform refusal, and one prompt test hardcoded LF instead of the actual authorized CRLF bytes. This run is red evidence for the capability-scoping/test assertion correction, not a product acceptance pass.",
+      "run_url": "https://github.com/barry31-dev/pocketchat/actions/runs/42937213846"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27 arm64, CPython 3.13.9",
+      "command": "python3.13 -B -m unittest <the five Windows-failing code-repair tests> -v; ruff 0.17.3 check --select E9,F tests/test_task_model_repair.py tests/test_code_repair_demo.py; git diff --check",
+      "result": "All five focused tests passed locally after capability-scoping the four secure-read success paths and comparing the prompt with pre-repair authorized bytes; required lint and diff checks passed. Windows behavior still requires the corrected exact-head CI matrix.",
+      "test_log_sha256": "52daa21e6dbed9b8e2fe365631e68c32a414cdc04efcc3e5f9242aac4b01e7a6",
+      "lint_log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "diff_check_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
   "review_rounds": [
@@ -215,9 +247,33 @@
       ],
       "new_findings": [],
       "limitations": "The final parser move followed the prior independent reviewer prescription and was author-run in this continuation. Full local suite, build/wheel/install, real provider, manual terminal UX, cross-platform execution, exact-head CI and product-main readback remain separate evidence."
+    },
+    {
+      "round": 3,
+      "reviewer": "CI-directed continuation review (maintainer delegation 2026-11-09)",
+      "decision": "APPROVE",
+      "coverage": "Reviewed the two exact Windows failure classes from GitHub Actions run 42937213846, matched them to the existing secure descriptor-read capability policy, and inspected the test-only/docs correction. Production code and permission boundaries are unchanged.",
+      "findings": [
+        {
+          "id": "PC-CODE-REPAIR-CI-001",
+          "severity": "major",
+          "status": "fixed",
+          "fingerprint": "code-repair:windows:secure-descriptor-success-tests-not-scoped",
+          "reason": "Exact-head GitHub Actions run 42937213846 passed release smoke plus both Ubuntu and both macOS jobs, but both Windows jobs correctly refused acceptance/recovery reads with unsupported_platform. The four positive success/resume tests now use the repository capability guard; production fail-closed behavior is unchanged and the bilingual code-repair contract states the boundary."
+        },
+        {
+          "id": "PC-CODE-REPAIR-CI-002",
+          "severity": "minor",
+          "status": "fixed",
+          "fingerprint": "code-repair:windows:authorized-source-newline-hardcoded",
+          "reason": "The source-binding test hardcoded LF bytes although Windows text writes produced CRLF. It now compares the prompt with the exact authorized file bytes and byte count, preserving the intended snapshot assertion across platforms."
+        }
+      ],
+      "new_findings": [],
+      "limitations": "Local macOS cannot execute the Windows capability branch. The corrected exact-head GitHub Actions matrix remains the authoritative Windows evidence; full local suite and formal publication remain outside this review."
     }
   ],
-  "unverified": "Full local suite, build/wheel/install, real provider reasoning quality, arbitrary projects, human terminal UX, cross-platform execution, exact-head CI, product-main integration and formal tag/Release/package publication were not run at this checkpoint.",
+  "unverified": "The corrected Windows capability branch has not yet run on exact-head CI. Full local suite, build/wheel/install outside CI, real provider reasoning quality, arbitrary projects, human terminal UX, formal tag/Release/package publication and positive secure recovery on unsupported platforms remain unverified or intentionally refused.",
   "scope_amendment": {
     "at": 1794342039.347064,
     "added_paths": [
@@ -232,7 +288,7 @@
   "checkpoint": {
     "complete": true,
     "ready_for_integration": true,
-    "next_action": "Commit the reviewed candidate, push the exact task head through the routine delivery entry, require exact-head CI, merge the PR and re-read product main before settling the fleet card."
+    "next_action": "Commit and push the test-only Windows capability correction, require a new exact-head seven-job CI pass, merge the PR and re-read product main before settling the fleet card."
   },
-  "gate_result": "Local technical review has no open blocking finding; exact candidate CI and product-main readback remain pending."
+  "gate_result": "Local technical review has no open blocking finding; corrected exact-head CI and product-main readback remain pending."
 }

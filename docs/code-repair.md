@@ -27,7 +27,11 @@ first real Swift test fails, the guarded replacement is applied, and the same
 template runs once more. This verifies the fixture's compilation/test result
 and local orchestration, **not real-model diagnosis quality or arbitrary code
 correctness**. Portable Python tests of the fixture use an explicitly supplied
-small local validator instead; they do not claim Swift compilation.
+small local validator instead; they do not claim Swift compilation. The
+positive acceptance/no-replay fixture still requires secure descriptor-relative
+reads. On a platform without that capability, the runtime refuses with
+`unsupported_platform` and those success-path tests are skipped rather than
+weakening the reader.
 
 The output includes:
 

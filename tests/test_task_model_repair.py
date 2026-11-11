@@ -18,6 +18,7 @@ from pocketchat.task_model_repair import (
 )
 from pocketchat.task_plan import parse_plan, plan_sha256, spec_sha256
 from pocketchat.task_spec import parse_spec
+from tests import _helpers as hp
 from tests.test_task_plan import plan_payload
 from tests.test_task_spec import minimal
 
@@ -141,6 +142,7 @@ class AttemptTests(unittest.TestCase):
 
     def test_repair_prompt_binds_the_actual_authorized_source_snapshot(self):
         first = self.run_first()
+        authorized = (self.root / "answer.txt").read_bytes()
         adapter = StubAdapter(json.dumps(action()))
         result, details = attempt_model_repair(
             command_runner=lambda template_id, trace, run_id: run_command_template(
@@ -154,8 +156,8 @@ class AttemptTests(unittest.TestCase):
         self.assertIn("editable_sources", prompt,
                       "a code repair needs the actual authorized source, not only logs")
         sources = {source["path"]: source for source in prompt["editable_sources"]}
-        self.assertEqual("wrong\n", sources["answer.txt"]["content"])
-        self.assertEqual(6, sources["answer.txt"]["bytes"])
+        self.assertEqual(authorized.decode("utf-8"), sources["answer.txt"]["content"])
+        self.assertEqual(len(authorized), sources["answer.txt"]["bytes"])
         self.assertEqual(details["action"]["original_sha256"],
                          sources["answer.txt"]["sha256"])
         self.assertNotIn("input.txt", sources)
@@ -665,6 +667,8 @@ class ExecutePlanIntegrationTests(unittest.TestCase):
         report = (self.root / results[0]["execution_report"]).resolve()
         return report, __import__("hashlib").sha256(report.read_bytes()).hexdigest(), adapter
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "requires secure descriptor-relative reads")
     def test_repaired_command_resume_has_no_command_or_edit_replay(self):
         report, digest, adapter = self.repaired_boundary()
         files = [p for parent in (self.root / "traces", self.root / ".pocketchat")
@@ -684,6 +688,8 @@ class ExecutePlanIntegrationTests(unittest.TestCase):
         self.assertEqual(before, {str(p): (p.read_bytes(), p.stat().st_mtime_ns)
                                   for p in files})
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "requires secure descriptor-relative reads")
     def test_changed_repaired_source_refuses_before_resume(self):
         report, digest, _ = self.repaired_boundary()
         (self.root / "answer.txt").write_text("later human edit\n", encoding="utf-8")
@@ -697,6 +703,8 @@ class ExecutePlanIntegrationTests(unittest.TestCase):
                 resume_report=report, expected_report_sha256=digest)
         command.assert_not_called()
 
+    @unittest.skipUnless(hp.SECURE_DESCRIPTOR_READS,
+                         "requires secure descriptor-relative reads")
     def test_changed_repair_receipt_refuses_before_resume(self):
         report, digest, _ = self.repaired_boundary()
         (self.root / ".pocketchat/task-repair/check.json").write_text("{}\n")
