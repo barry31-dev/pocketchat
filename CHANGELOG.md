@@ -7,6 +7,8 @@ The versions below describe the public source tree. They do not describe a
 package-index publication.
 
 ## [Unreleased]
+
+- Bind code-repair requests to authorized source snapshots, preserve successful retry and original failure evidence for exact recovery, and add an offline Swift Package repair fixture.
 - Add a completed-read snapshot handoff into dependent task report writes, binding each Session result to the pinned read-trace completion and the task-record workspace to its authorized policy (see `docs/review-local-report-v1.json`). Add an offline real-file CLI report/revision/resume fixture; versioned outputs preserve report history, and unusable source evidence refuses before dependent provider work. This does not add tools, overwrite authority or certify real-provider analysis.
 - Prepare the version 1.2.0 chat-and-file candidate using the existing package/runtime version sources. It includes explicit Session file grants and provider disclosure, proposal-only model tools, trusted complete-diff apply/readback, persistent single-change undo, cancellation ownership and an offline real-file golden fixture. Legacy immediate `write_file` contracts are not widened. Release facts remain in `docs/release-ledger.md`; development-wheel evidence does not certify real-provider/manual acceptance or formal publication.
 - Enable terminal mouse-wheel events in the full-screen agent and map wheel up/down to one-line transcript scrolling. Page keys and non-wheel mouse clicks retain their existing behavior. See `pocketchat/curses_ui.py`.

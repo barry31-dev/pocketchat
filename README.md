@@ -432,3 +432,7 @@ release remains public.
 
 A Chinese README, command for command the same as this file, lives at
 [`README.zh-CN.md`](README.zh-CN.md).
+
+### Source-bound code repair
+
+The existing opt-in task repair now binds actual authorized source snapshots before the provider request and supports exact no-replay recovery after the successful retry. Try the [offline Swift Package fixture](docs/code-repair.md); it performs real local tests but does not certify real-provider diagnosis quality.

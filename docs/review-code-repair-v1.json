@@ -1,0 +1,294 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/task_model_repair.py",
+    "tests/test_task_model_repair.py",
+    "tests/test_code_repair_demo.py",
+    "examples/code-repair-demo.py",
+    "docs/code-repair.md",
+    "docs/code-repair.zh-CN.md",
+    "docs/review-code-repair-v1.json",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "pocketchat/task_exec.py",
+    "pocketchat/task_recovery.py",
+    "tests/test_plan_recovery.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "PC-CODE-REPAIR-R1-001",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "code-repair:recovery:non-object-command-evidence-untyped-exception",
+      "reason": "A real report with string/list/integer command evidence previously escaped the typed recovery boundary through AttributeError. Command evidence is now rejected before the optional evidence_hashes branch, and the red/green regression covers both present and absent evidence_hashes without replay."
+    },
+    {
+      "id": "PC-CODE-REPAIR-R1-002",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "code-repair:request:provider-time-snapshot-mutation-late-hash",
+      "reason": "The repair request is now hashed immediately after the runtime writes it, rechecked before any edit/retry, and rechecked when receipt evidence is finalized. A red provider-time corruption case now refuses before source mutation or command replay."
+    },
+    {
+      "id": "PC-CODE-REPAIR-CI-001",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "code-repair:windows:secure-descriptor-success-tests-not-scoped",
+      "reason": "Exact-head GitHub Actions run 42937213846 passed release smoke plus both Ubuntu and both macOS jobs, but both Windows jobs correctly refused acceptance/recovery reads with unsupported_platform. The four positive success/resume tests now use the repository capability guard; production fail-closed behavior is unchanged and the bilingual code-repair contract states the boundary."
+    },
+    {
+      "id": "PC-CODE-REPAIR-CI-002",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "code-repair:windows:authorized-source-newline-hardcoded",
+      "reason": "The source-binding test hardcoded LF bytes although Windows text writes produced CRLF. It now compares the prompt with the exact authorized file bytes and byte count, preserving the intended snapshot assertion across platforms."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "pocketchat/task_model_repair.py",
+    "tests/test_task_model_repair.py",
+    "tests/test_code_repair_demo.py",
+    "examples/code-repair-demo.py",
+    "docs/code-repair.md",
+    "docs/code-repair.zh-CN.md",
+    "docs/review-code-repair-v1.json",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "pocketchat/task_exec.py",
+    "pocketchat/task_recovery.py",
+    "tests/test_plan_recovery.py"
+  ],
+  "schema_version": 1,
+  "slice": "PC-CODE-REPAIR-1",
+  "base_commit": "ac73e67bc99cda15c027e473b48faabbab0ce398",
+  "authority": "Agent technical decision under the maintainer standing routine-development delegation of 2026-11-09.",
+  "contract": {
+    "goal": "Complete one source-bound bounded code-repair task through the existing authorized task exec CLI: a small Swift Package fails its local tests, one explicitly granted source is repaired, the same template is rerun once, actual source/diff/command evidence is handed off, and exact-boundary resume does not replay the repair or commands.",
+    "not_doing": [
+      "New task runtime, arbitrary shell or command selection",
+      "Installing packages, launching a simulator, network or real provider calls",
+      "Automatic overwrite approval or general planning",
+      "Formal tag, Release or package upload"
+    ],
+    "write_scope": [
+      "pocketchat/task_model_repair.py",
+      "tests/test_task_model_repair.py",
+      "tests/test_code_repair_demo.py",
+      "examples/code-repair-demo.py",
+      "docs/code-repair.md",
+      "docs/code-repair.zh-CN.md",
+      "docs/review-code-repair-v1.json",
+      "README.md",
+      "README.zh-CN.md",
+      "CHANGELOG.md",
+      "pocketchat/task_exec.py",
+      "pocketchat/task_recovery.py",
+      "tests/test_plan_recovery.py"
+    ],
+    "done_when": "Two red source-binding regressions turn green; focused real-file tests cover approved repair, same-failure stop, invalid action, stale source and context/credential refusal; one real Swift Package CLI fixture records failed and successful test commands, the exact edit and diff and no-replay resume; fresh-context scoped review, exact-head CI and main readback complete routine delivery.",
+    "evidence": "This task review record, the focused tests, and examples/code-repair-demo.py evidence.json and original command/repair/report artifacts.",
+    "budget_stop": "One bounded slice; no new slice after 75 minutes, checkpoint after 100 minutes. At most three scoped review rounds. Only new concerns justify repeated checks.",
+    "rollback": "Ordinary revert of this change; keep create-only evidence and never rewrite shared Git history.",
+    "plan_refinement": "The confirmed malformed-command-evidence finding is handled by an eager typed parser refusal plus an actual no-replay regression; no command, permission or source scope is broadened."
+  },
+  "design": {
+    "alternatives": [
+      "Forward authenticated, bounded overwrite snapshots before the repair request and reuse the exact chosen snapshot at apply (selected).",
+      "Only add a hardcoded code-repair example with the existing log-only repair prompt (rejected: missing actual authorized source and unbound provider-time baseline).",
+      "Introduce a new code-agent runtime or arbitrary command surface (rejected: duplicates existing task tools and broadens permissions)."
+    ],
+    "selected": "Keep the existing opt-in repair and command schemas; add bounded authorized source observations to its request and hold them through the existing stale-write guard. The offline provider demonstrates orchestration only; actual Swift tests validate the fixture candidate."
+  },
+  "plan": [
+    "Add red tests for actual source payload and a clean committed source change during the provider call, preserving all existing refusal checks.",
+    "Snapshot each explicitly overwritable source before payload/provider work; bound the whole request and reject configured credential content; apply only the selected original snapshot.",
+    "Add a red exact-resume regression for the existing model-repaired command: bind its successful retry trace/run and retained repair/failure/request evidence; reject changed repaired source before any resume action.",
+    "Add an offline CLI fixture and focused orchestration tests for failure, repair, same-template retry, diff/artifact binding and no-replay resume.",
+    "Run focused Python checks and one serial real Swift Package fixture under observed memory headroom, then finish scoped independent review and controlled delivery."
+  ],
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27.0, CPython 3.9.6",
+      "command": "python3.13 -B -m unittest tests.test_task_model_repair tests.test_plan_recovery -v",
+      "result": "52 tests passed; source binding, real fingerprint and exact repaired-command recovery red regressions turned green. Initial recovery test-path alias errors were corrected before the valid red run.",
+      "log_sha256": "75f8c391ea41a4dea0ec741eec912a89eae62a3e4aa2316dab2a55a21e9c5404"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.13 -B -m unittest tests.test_code_repair_demo -v",
+      "result": "2 portable real-file/declared-command fixture tests passed; this validator does not compile Swift.",
+      "log_sha256": "4c236b21c7134c9f2d378845423e38742f4b32174d0686cd8c6a08641abfe8f4"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff 0.17.3 check --select E9,F <six changed Python paths>",
+      "result": "All checks passed under the repository-required profile. The initial broader default profile returned 131 lint/style findings and was not treated as the required-profile result."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "unverified",
+      "command": "python3.13 -B examples/code-repair-demo.py --output <new private evidence directory>",
+      "result": "Exit 1: the selected Command Line Tools could not resolve XCTest before any test assertion; the bounded retry also exited 1. No successful real Swift acceptance claimed. Selected swift reports Apple Swift 6.4, arm64 macOS 27.0. Swap remained 1120.81 MiB before/after; free memory moved 50% to 44%; no OOM observed.",
+      "log_sha256": "bdd83853a16f0a6c19d5aedf0c54f9811855b2fa0b22fbe268f51bf233ab02cd"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27 arm64, CPython 3.13.9, Apple Swift 6.4; SDK 27.0; one serial build job",
+      "command": "Existing demonstrate(root, template=...) fixture API using an explicitly declared /usr/bin/env DEVELOPER_DIR=<installed Xcode developer directory> <full Xcode swift> test --jobs 1 --sdk <installed full SDK> template",
+      "result": "Actual XCTest assertion failed with exit 1, then the same declared template passed one XCTest with exit 0. All seven evidence checks passed; one deterministic offline repair provider call; exact edit/diff and no-replay resume. Global developer selection unchanged. Real-provider quality not tested.",
+      "evidence_sha256": "69db6d40f878fee983c91d3f195a61b5ef9789b4ee635a8413c0a8cbf8246fb8",
+      "log_sha256": "69db6d40f878fee983c91d3f195a61b5ef9789b4ee635a8413c0a8cbf8246fb8"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27 arm64, CPython 3.13.9",
+      "command": "python3.13 -B -m unittest tests.test_plan_recovery.PlanRecoveryTests.test_non_object_command_evidence_refuses_without_replaying tests.test_plan_recovery.PlanRecoveryTests.test_invalid_report_status_order_identity_and_issues_are_refused tests.test_plan_recovery.PlanRecoveryTests.test_resume_completes_remaining_steps_without_repeating_side_effects -v",
+      "result": "3 targeted tests passed. The expanded string/list/integer cases first raised AttributeError when evidence_hashes was absent; eager command-evidence validation now refuses all six present/absent-hash subcases through TaskRecoveryError before replay. The two adjacent recovery regressions also passed; no full suite was repeated.",
+      "red_log_sha256": "e15edfa9af7dec2347ac9be3c2929a5a493197e59d47235eb4362e71754c9afa",
+      "green_log_sha256": "41dfe4e90707aac3020e38378d92cb08bace2ff03a8071d27957182609d1992b"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff 0.17.3 check --select E9,F <all seven changed Python paths>",
+      "result": "All changed Python files passed the repository-required E9/F profile on the final local candidate.",
+      "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27 arm64, CPython 3.13.9",
+      "command": "python3.13 -B -m unittest tests.test_task_model_repair.AttemptTests.test_provider_time_request_corruption_refuses_before_edit_or_retry tests.test_task_model_repair.AttemptTests.test_receipt_binds_request_snapshot_bytes tests.test_code_repair_demo -v",
+      "result": "The focused corruption case first failed because no ModelRepairError was raised. After retaining the pre-provider request commitment, the corruption case, request-byte receipt binding and both portable fixture cases passed (4 tests total); no source edit or retry occurred on corruption.",
+      "red_log_sha256": "cda1f73d347cb34acbdb2fe0ef9836a53d326f17b5b1008ee86d4e2ae897d461",
+      "green_log_sha256": "806ffead36dce07ee6a818c95c2646c2d477185d874ae9a7b8ed9f4449f9fccc"
+    },
+    {
+      "source_type": "published CI run (V)",
+      "status": "verified failure",
+      "environment": "GitHub Actions run 42937213846 on candidate 5ad6dec7882d10ce5fb363f6618a48b4cdea27df; Windows latest CPython 3.9/3.13",
+      "command": "repository pocketchat-ci matrix and pocketchat-release-smoke",
+      "result": "Release smoke plus both Ubuntu and both macOS jobs passed. Both Windows jobs failed the same five tests: four success-path acceptance/recovery cases hit the intended unsupported_platform refusal, and one prompt test hardcoded LF instead of the actual authorized CRLF bytes. This run is red evidence for the capability-scoping/test assertion correction, not a product acceptance pass.",
+      "run_url": "https://github.com/barry31-dev/pocketchat/actions/runs/42937213846"
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS 27 arm64, CPython 3.13.9",
+      "command": "python3.13 -B -m unittest <the five Windows-failing code-repair tests> -v; ruff 0.17.3 check --select E9,F tests/test_task_model_repair.py tests/test_code_repair_demo.py; git diff --check",
+      "result": "All five focused tests passed locally after capability-scoping the four secure-read success paths and comparing the prompt with pre-repair authorized bytes; required lint and diff checks passed. Windows behavior still requires the corrected exact-head CI matrix.",
+      "test_log_sha256": "52daa21e6dbed9b8e2fe365631e68c32a414cdc04efcc3e5f9242aac4b01e7a6",
+      "lint_log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "diff_check_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "review_rounds": [
+    {
+      "round": 1,
+      "reviewer": "independent fresh-context agent (maintainer delegation 2026-11-09)",
+      "decision": "BLOCK",
+      "coverage": "Full original twelve-path candidate plus the requested CLI error-boundary and request/receipt/source cross-binding supplement. Static review inspected the candidate and the first parser-fix diff; it did not execute tests.",
+      "findings": [
+        {
+          "id": "PC-CODE-REPAIR-R1-001",
+          "severity": "minor",
+          "status": "open",
+          "fingerprint": "code-repair:recovery:non-object-command-evidence-untyped-exception",
+          "reason": "Non-object command evidence could raise AttributeError; the first guard fixed only reports that retained evidence_hashes and left the same malformed-input class open when hashes were absent."
+        },
+        {
+          "id": "PC-CODE-REPAIR-R1-002",
+          "severity": "major",
+          "status": "open",
+          "fingerprint": "code-repair:request:provider-time-snapshot-mutation-late-hash",
+          "reason": "The request file was hashed only after provider work and retry, so provider-time replacement could be authenticated as the original request."
+        }
+      ],
+      "limitations": "The reviewer did not run Python tests, the Swift fixture, provider/network work, Git delivery or publication actions."
+    },
+    {
+      "round": 2,
+      "reviewer": "fresh continuation agent (maintainer delegation 2026-11-09)",
+      "decision": "APPROVE",
+      "coverage": "Reviewed the seven-path correction diff, request-hash timing, typed parser boundary, both reviewer-directed negative regressions, documentation claims and preserved Swift evidence. Ran the final three parser/recovery cases and inspected the retained request-corruption red/green logs.",
+      "findings": [
+        {
+          "id": "PC-CODE-REPAIR-R1-001",
+          "severity": "minor",
+          "status": "fixed",
+          "fingerprint": "code-repair:recovery:non-object-command-evidence-untyped-exception",
+          "reason": "A real report with string/list/integer command evidence previously escaped the typed recovery boundary through AttributeError. Command evidence is now rejected before the optional evidence_hashes branch, and the red/green regression covers both present and absent evidence_hashes without replay."
+        },
+        {
+          "id": "PC-CODE-REPAIR-R1-002",
+          "severity": "major",
+          "status": "fixed",
+          "fingerprint": "code-repair:request:provider-time-snapshot-mutation-late-hash",
+          "reason": "The repair request is now hashed immediately after the runtime writes it, rechecked before any edit/retry, and rechecked when receipt evidence is finalized. A red provider-time corruption case now refuses before source mutation or command replay."
+        }
+      ],
+      "new_findings": [],
+      "limitations": "The final parser move followed the prior independent reviewer prescription and was author-run in this continuation. Full local suite, build/wheel/install, real provider, manual terminal UX, cross-platform execution, exact-head CI and product-main readback remain separate evidence."
+    },
+    {
+      "round": 3,
+      "reviewer": "CI-directed continuation review (maintainer delegation 2026-11-09)",
+      "decision": "APPROVE",
+      "coverage": "Reviewed the two exact Windows failure classes from GitHub Actions run 42937213846, matched them to the existing secure descriptor-read capability policy, and inspected the test-only/docs correction. Production code and permission boundaries are unchanged.",
+      "findings": [
+        {
+          "id": "PC-CODE-REPAIR-CI-001",
+          "severity": "major",
+          "status": "fixed",
+          "fingerprint": "code-repair:windows:secure-descriptor-success-tests-not-scoped",
+          "reason": "Exact-head GitHub Actions run 42937213846 passed release smoke plus both Ubuntu and both macOS jobs, but both Windows jobs correctly refused acceptance/recovery reads with unsupported_platform. The four positive success/resume tests now use the repository capability guard; production fail-closed behavior is unchanged and the bilingual code-repair contract states the boundary."
+        },
+        {
+          "id": "PC-CODE-REPAIR-CI-002",
+          "severity": "minor",
+          "status": "fixed",
+          "fingerprint": "code-repair:windows:authorized-source-newline-hardcoded",
+          "reason": "The source-binding test hardcoded LF bytes although Windows text writes produced CRLF. It now compares the prompt with the exact authorized file bytes and byte count, preserving the intended snapshot assertion across platforms."
+        }
+      ],
+      "new_findings": [],
+      "limitations": "Local macOS cannot execute the Windows capability branch. The corrected exact-head GitHub Actions matrix remains the authoritative Windows evidence; full local suite and formal publication remain outside this review."
+    }
+  ],
+  "unverified": "The corrected Windows capability branch has not yet run on exact-head CI. Full local suite, build/wheel/install outside CI, real provider reasoning quality, arbitrary projects, human terminal UX, formal tag/Release/package publication and positive secure recovery on unsupported platforms remain unverified or intentionally refused.",
+  "scope_amendment": {
+    "at": 1794342039.347064,
+    "added_paths": [
+      "pocketchat/task_exec.py",
+      "pocketchat/task_recovery.py",
+      "tests/test_plan_recovery.py"
+    ],
+    "reason": "The existing command step still points at the failed original trace after a successful repair, while strict recovery expects a successful same-run archive. A complete code-repair/resume path requires this narrowly bounded evidence integration.",
+    "authority": "Agent technical decision under the maintainer standing routine-development delegation of 2026-11-09.",
+    "original_contract_sha256": "176bbef210dbbaf7ade4b1996aad46732811da9f58ee01881f1f511fae5d2082"
+  },
+  "checkpoint": {
+    "complete": true,
+    "ready_for_integration": true,
+    "next_action": "Commit and push the test-only Windows capability correction, require a new exact-head seven-job CI pass, merge the PR and re-read product main before settling the fleet card."
+  },
+  "gate_result": "Local technical review has no open blocking finding; corrected exact-head CI and product-main readback remain pending."
+}
