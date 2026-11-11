@@ -51,7 +51,10 @@ A tool-only response is valid with empty `content` and `finish_reason` set to
 `tool_calls`. A usage event may have `choices: []` and is merged into the same
 result at any point after response content or a tool call has been observed;
 a stream containing only usage and no response content or tool call is refused
-rather than turned into an empty assistant reply.
+rather than turned into an empty assistant reply. A stream must also end with an
+explicit `[DONE]` marker or a non-empty terminal `finish_reason`. EOF before
+either is refused as retryable `incomplete_stream`; a partial answer is never
+recorded as a completed turn.
 
 ## Session integration
 

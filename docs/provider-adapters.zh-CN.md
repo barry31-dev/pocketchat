@@ -40,7 +40,9 @@ Provider 未报告 usage 时用零表示，绝不估算。新增 `usage_reported
 统一以 `malformed_response` 失败，绝不执行半截调用。只有工具、没有文本的响应合法，
 表现为空 `content` 与 `finish_reason=tool_calls`。usage event 可以带 `choices: []`，
 在已观察到正文或 tool call 后合并到同一结果；只有 usage、没有正文或 tool call 的流会
-被拒绝，不生成空 assistant 回复。
+被拒绝，不生成空 assistant 回复。流还必须以显式 `[DONE]` 或非空的终止
+`finish_reason` 结束；两者都未出现就遇到 EOF 时，以可重试的 `incomplete_stream`
+拒绝，绝不把半截回答记录成完成回合。
 
 ## Session 集成
 

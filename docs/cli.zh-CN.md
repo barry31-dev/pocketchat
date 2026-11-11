@@ -505,7 +505,9 @@ schema `"2"` profile 可声明 `retry_max_attempts`（1-5，默认 1）、
 和只能一跳的 `fallback_profile`。只有 `retryable` provider 失败消耗重试预算；
 每次重试写 `retry.attempt`，记录物理请求序号与 backoff。主 profile 预算耗尽后
 写 `fallback.activated`，标明源/目标 profile；fallback 有独立预算，不允许链式
-fallback。backoff 或请求中取消会结束 run，不伪造恢复成功。
+fallback。流式响应若未以 `[DONE]` 或终止 `finish_reason` 结束，会以可重试的
+`incomplete_stream` 失败，半截内容不会被记录成完成回合。backoff 或请求中取消会
+结束 run，不伪造恢复成功。
 
 `workspace` 把整个目录读成一张关系图：哪些文件是同一段对话的两条路径、每个分支从哪个 turn
 岔出、每个文件记录的是哪一次 run、哪一次对比测量了哪些 run。它不写任何文件、不读任何凭据，

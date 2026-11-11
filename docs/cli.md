@@ -615,8 +615,10 @@ default 1) and a one-hop `fallback_profile`. Only `retryable` provider
 failures consume retry attempts. Each retry writes `retry.attempt` with its
 physical request ordinals and backoff; when the primary budget is exhausted,
 `fallback.activated` names the source and target profiles. Fallback has its
-own budget and is not a chain. Cancellation during backoff or a request ends
-the run without inventing a recovery success.
+own budget and is not a chain. A streamed response that ends without `[DONE]`
+or a terminal `finish_reason` fails as retryable `incomplete_stream`; partial
+content is not recorded as a completed turn. Cancellation during backoff or a
+request ends the run without inventing a recovery success.
 
 `workspace` reads the whole directory back as a graph: which files are two
 paths through one conversation, which turn each branch forked from, which run

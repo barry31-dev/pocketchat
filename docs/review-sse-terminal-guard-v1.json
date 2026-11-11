@@ -1,0 +1,98 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/provider.py",
+    "tests/test_kernel.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-sse-terminal-guard-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "slice": "PC-SSE-TERMINAL-GUARD-1",
+  "base_commit": "fd36213d772f62dbb49a8da87c0e9e5c1857e4bd",
+  "authority": {
+    "kind": "agent-delegated",
+    "decision": "PocketChat routine-development delegation 2026-11-09"
+  },
+  "goal": "Refuse a truncated OpenAI-compatible SSE stream instead of returning a completed turn with fabricated stop semantics.",
+  "not_doing": [
+    "No real-provider or manual-terminal claim",
+    "No tag, Release or package upload",
+    "No change to non-streaming response parsing"
+  ],
+  "done_when": "A truncated SSE stream without [DONE] or a terminal finish_reason raises retryable incomplete_stream before any completed response is returned; complete streams, tool-only streams, usage handling and existing response fields remain valid.",
+  "write_scope": [
+    "pocketchat/provider.py",
+    "tests/test_kernel.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-sse-terminal-guard-v1.json"
+  ],
+  "plan": [
+    "Reproduce a partial stream being returned as completed with stop.",
+    "Track [DONE] and terminal finish_reason separately and fail EOF as retryable incomplete_stream.",
+    "Cover parser and Session trace behavior, document the contract, run focused checks, then obtain independent review and deliver through the controlled product entry."
+  ],
+  "budget_stop": "One bounded correctness slice; stop on ownership conflict, unexpected file effects or a blocking review finding.",
+  "rollback": "Revert the terminal-marker check; no persisted session, trace or user file is migrated.",
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests.test_truncated_stream_is_refused_instead_of_fabricating_stop -v before implementation",
+      "result": "exit 1; ProviderError was not raised and the partial response would have been normalized as completed."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests.test_truncated_stream_is_refused_instead_of_fabricating_stop tests.test_kernel.ProviderStreamTests.test_session_records_truncated_stream_as_retryable_failure tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_is_accepted_without_done_marker -v",
+      "result": "3 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests tests.test_tool_calls tests.test_recovery_policy -v",
+      "result": "38 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff check --select E9,F pocketchat/provider.py tests/test_kernel.py; python3 -m compileall -q pocketchat/provider.py tests/test_kernel.py; git diff --check",
+      "result": "Ruff, compileall and diff check exited 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "blocked",
+      "command": "HTTP/loopback stream and request-snapshot tests",
+      "result": "Two existing HTTP tests errored before executing their assertions with PermissionError [Errno 1] from binding 127.0.0.1 in this sandbox. This is an environment restriction, not a product result."
+    }
+  ],
+  "unverified": "Real provider behavior, manual terminal usability, cross-platform local runtime, full local suite, HTTP loopback tests in this sandbox, packaging, tag, Release and upload were not run or not available. Exact-head CI and main readback remain pending.",
+  "checkpoint": {
+    "complete": true,
+    "ready_for_integration": false,
+    "next_action": "Commit the bounded candidate, obtain a fresh-context standard review, then use pocketchat_delivery.py for exact-candidate push/PR/CI and merge readback."
+  },
+  "reviews": [
+    {
+      "round": 1,
+      "reviewer": "author self-review",
+      "decision": "PENDING",
+      "coverage": "Full six-file code/document diff, parser call path and Session failure recording; independent fresh-context review still pending.",
+      "findings": []
+    }
+  ]
+}

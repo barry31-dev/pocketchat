@@ -410,12 +410,14 @@ def _stream_response(response, model: str, status_code: int,
     first_reasoning_ms = None
     first_content_ms = None
     tool_fragments: Dict[int, Dict[str, Any]] = {}
+    saw_terminal_marker = False
     for raw_line in response:
         line = raw_line.decode("utf-8", "replace").strip()
         if not line or line.startswith(":") or not line.startswith("data:"):
             continue
         data = line[5:].strip()
         if data == "[DONE]":
+            saw_terminal_marker = True
             break
         try:
             payload = json.loads(data)
@@ -473,6 +475,14 @@ def _stream_response(response, model: str, status_code: int,
                 saw_event = True
         if isinstance(choice.get("finish_reason"), str) and choice["finish_reason"]:
             finish_reason = choice["finish_reason"]
+    if not saw_terminal_marker and not finish_reason:
+        raise ProviderError(
+            "incomplete_stream",
+            "HTTP %d stream ended without [DONE] or a terminal finish_reason"
+            % status_code,
+            status_code=status_code,
+            retryable=True,
+        )
     if not saw_event:
         raise ProviderError(
             "malformed_response",
