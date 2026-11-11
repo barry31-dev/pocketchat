@@ -1,0 +1,103 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/provider.py",
+    "pocketchat/session.py",
+    "tests/test_kernel.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/review-stream-request-snapshot-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "slice": "PC-STREAM-SNAPSHOT-1",
+  "base_commit": "4aece29fb5c6fb73e256d4929a59058c8f080a3f",
+  "authority": {
+    "kind": "agent-delegated",
+    "decision": "PocketChat routine-development delegation 2026-11-09"
+  },
+  "goal": "Make the request snapshot record the exact stream=true body sent while preserving non-streaming bytes and the existing provider adapter contract.",
+  "not_doing": [
+    "No real-provider quality or manual terminal claim",
+    "No tag, Release, package upload or shared-history rewrite",
+    "No schema or CLI contract change"
+  ],
+  "done_when": "A discriminating Session-level SSE regression shows the snapshot request equals the body observed by a local HTTP server, with stream=true on both and stream=false unchanged for non-streaming requests.",
+  "write_scope": [
+    "pocketchat/provider.py",
+    "pocketchat/session.py",
+    "tests/test_kernel.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/review-stream-request-snapshot-v1.json"
+  ],
+  "plan": [
+    "Observe the streamed request snapshot mismatch as a focused red test.",
+    "Move the stream flag onto the admitted/snapshotted payload and keep adapter compatibility.",
+    "Run focused and adjacent tests, Ruff E9/F, compileall and diff checks; obtain independent review; use routine PR/CI/main delivery."
+  ],
+  "budget_stop": "One bounded correctness slice; stop on ownership conflict, unexpected file effects or a blocking review finding.",
+  "rollback": "Revert the additive request-body marking change; no persisted session, trace or user file is migrated or rewritten.",
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamSnapshotTests -v before implementation",
+      "result": "exit 1; request body stream=true while snapshot request stream=false."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamSnapshotTests tests.test_kernel.ProviderStreamHttpTests tests.test_request.BuildPayloadTests -v",
+      "result": "7 tests passed, exit 0 on macOS CPython 3.13.9 after the fix."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "git diff --check",
+      "result": "exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest discover -s tests -v",
+      "result": "1675 tests passed with 1 skipped in 57.144s on macOS CPython 3.13.9, exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff check --select E9,F pocketchat/provider.py pocketchat/session.py tests/test_kernel.py; python3 -m compileall -q pocketchat/provider.py pocketchat/session.py tests/test_kernel.py",
+      "result": "Ruff and compileall exited 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "gh run watch 43077107138 --repo barry31-dev/pocketchat --interval 20 --exit-status",
+      "result": "Exact-head PR run completed successfully, 7/7 jobs: Ubuntu/macOS/Windows CPython 3.9/3.13 plus release smoke. Covers only candidate cba2740 and that workflow."
+    }
+  ],
+  "unverified": "Real provider behavior, manual terminal usability, full local suite, cross-platform runtime, packaging, tag, Release and upload were not run for this slice. CI can cover only its exact candidate and workflow.",
+  "checkpoint": {
+    "complete": true,
+    "ready_for_integration": true,
+    "next_action": "Squash-merge PR #64 after final evidence is pushed, then read back product main and settle PC-STREAM-SNAPSHOT-1."
+  },
+  "reviews": [
+    {
+      "round": 1,
+      "reviewer": "fresh-context agent under the 2026-11-09 routine-development delegation",
+      "decision": "APPROVE",
+      "coverage": "Uncommitted six-path diff, provider/session payload flow, focused SSE snapshot regression, adapter compatibility and non-streaming payload preservation; reviewer did not run the SSE integration test or full suite.",
+      "findings": []
+    }
+  ],
+  "commit_or_candidate_sha": "cba27400fadc4168d4d0cfba2d77029ddf810bcd"
+}

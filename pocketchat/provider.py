@@ -78,8 +78,12 @@ class OpenAICompatibleAdapter(ProviderAdapter):
 
     def complete(self, messages: List[Dict[str, str]], config: Dict[str, Any],
                  api_key: str, on_delta=None, **kwargs: Any) -> Dict[str, Any]:
+        prepared_payload = kwargs.get("prepared_payload")
+        if on_delta is not None and prepared_payload is not None:
+            prepared_payload = dict(prepared_payload)
+            prepared_payload["stream"] = True
         return complete(messages, config, api_key, on_delta=on_delta,
-                        prepared_payload=kwargs.get("prepared_payload"))
+                        prepared_payload=prepared_payload)
 
 
 DEFAULT_PROVIDER_ADAPTER = OpenAICompatibleAdapter()
