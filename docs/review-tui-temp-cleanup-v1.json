@@ -1,0 +1,28 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "tests/test_agent.py",
+    "docs/review-tui-temp-cleanup-v1.json"
+  ],
+  "categories": [
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "changed_paths": [
+    "tests/test_agent.py",
+    "docs/review-tui-temp-cleanup-v1.json"
+  ],
+  "reviewed_evidence": [
+    "C: product main ca58517d7f2e1b2e42ba456bc9de3f0d7073fa87 leaves the new-message view-reset test with a live TUI send worker and no join before unittest destroys the test TemporaryDirectory.",
+    "C: the exact-main Ubuntu Python 3.9 push CI run 42976970166 failed after 1657 tests with OSError Errno 39 Directory not empty during TemporaryDirectory cleanup attributed to this test; the trace shows the suite itself completed and the failure is cleanup-only.",
+    "R: fresh-context review traced the worker lifetime to AgentTUI.start_send: busy is cleared at the end of the background callback, while the TemporaryDirectory cleanup runs independently. Joining the existing bounded _wait_for_tui_idle helper before test teardown removes the filesystem race without changing the asserted view reset or production behavior.",
+    "V: on macOS CPython 3.9.6, AgentCommandTests ran 95 tests OK after the one-line test change; the focused case passed 20/20 isolated repetitions. On CPython 3.13.9 the focused case passed and Ruff E9/F and git diff --check passed.",
+    "U: the local reproduction did not force the Linux cleanup interleaving; the production change is test-only and exact-candidate CI plus merged-main readback remain required before claiming the red main run repaired."
+  ],
+  "unverified_scope": "This test-only change does not alter runtime behavior, provider calls, packaging, release artifacts, tags, Releases or uploads. It has not been proven to eliminate every scheduler interleaving on Linux; exact-candidate CI and merged-main readback remain delivery evidence."
+}

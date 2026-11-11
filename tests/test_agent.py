@@ -1598,6 +1598,7 @@ class AgentCommandTests(unittest.TestCase):
         tui.transcript_offset = 20
         state = InputState(text="hello", cursor=5)
         apply_key(tui, state, "\n")
+        self._wait_for_tui_idle(tui)
         self.assertEqual(tui.transcript_offset, 0)
 
     def test_tui_streaming_blocks_have_separating_blank_lines(self):
