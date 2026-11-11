@@ -99,11 +99,14 @@
 真实集成：`stop_after=1` 后创建 checkpoint，解析后续跑，`stage1.md` hash 与 mtime
 未变、`stage2.md` 由恢复生成。未验证：自动触发恢复、任意崩溃恢复、并发写者。
 
-### 使用门槛（同日记录）
+### 使用门槛（2026-11-01 记录，2026-11-12 更新入口）
 
-`task run --policy` 只接受 `pocketchat-task-policy.v1`，**不接受 TaskSpec**；
-带命令模板必须走 `task_exec.authorize` + `execute_plan` 的 Python 路径。
-这不是缺陷，但文档未明确说明该组合无法经 CLI 直接运行。
+`task run --policy` 只接受 `pocketchat-task-policy.v1`，**不接受 TaskSpec**。
+带 command templates 的 TaskSpec/TaskPlan 通过产品 CLI 入口执行：
+`task exec --spec SPEC --plan PLAN --plan-sha256 DIGEST`。该入口在读取 provider 配置前
+重新校验 spec、plan 与显式摘要；命令只使用 TaskSpec 声明的 argv 模板，不是自由 shell。
+此前的“必须走 Python 路径”记录已过期，现由 `TA-CLI-EXEC-1` 交付的 CLI 入口取代；
+`task exec` 仍不生成计划、不扩大授权，命令成功也不等于任务验收通过。
 
 ## 4. 入口规则
 
