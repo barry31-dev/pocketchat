@@ -123,6 +123,7 @@ class SkeletonTests(unittest.TestCase):
         # model call yet -- the point is the terminal event, not the request.
         config = self._config()
         trace_path = self.base / "interrupted.jsonl"
+        ready_path = self.base / "turn-started"
         script = (
             "import time, sys;"
             "sys.path.insert(0, %r);"
@@ -131,8 +132,15 @@ class SkeletonTests(unittest.TestCase):
             "from pathlib import Path;"
             "session = Session(config=load_config(Path(%r)),"
             " trace_path=Path(%r));"
-            "session._turn = lambda prompt: time.sleep(5);"
-            "print(session.run(['hello']))" % (str(ROOT), str(config), str(trace_path))
+            "ready_path = Path(%r);"
+            "\n"
+            "def turn(prompt):\n"
+            "    ready_path.write_text('ready', encoding='utf-8')\n"
+            "    time.sleep(5)\n"
+            "\n"
+            "session._turn = turn;"
+            "print(session.run(['hello']))" % (
+                str(ROOT), str(config), str(trace_path), str(ready_path))
         )
         env = {"PYTHONPATH": str(ROOT),
                "POCKETCHAT_API_KEY": "test-key"}
@@ -141,11 +149,13 @@ class SkeletonTests(unittest.TestCase):
             cwd=str(self.base), env=hp.subprocess_environment(env),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
-        for _ in range(50):
-            if trace_path.exists():
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if ready_path.exists():
                 break
-            time.sleep(0.1)
-        self.assertTrue(trace_path.exists())
+            time.sleep(0.01)
+        else:
+            self.fail("the interrupted turn did not start")
         proc.send_signal(signal.SIGINT)
         proc.communicate(timeout=30)
         self.assertTrue(trace_path.exists())
