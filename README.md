@@ -83,6 +83,19 @@ python3 examples/task-acceptance/demo.py
 
 This reviewed source candidate lets the existing authorized task CLI forward completed read snapshots to a dependent report step, with Session results bound to the pinned read trace and task workspace bound to the authorized policy, then create a separate revised artifact and resume without replaying completed reads or writes. Run `python3 examples/local-report-demo.py` for the offline real-file CLI fixture. See [local-report.md](docs/local-report.md) for grants, snapshot provenance, refusal paths and the real-provider verification boundary. Exact-head CI and product-main readback remain pending; this source addition is not a formal release.
 
+## Unreleased: explicit project continuity
+
+The source candidate adds `memory propose`, which creates one bounded,
+unverified v2 candidate without touching the legacy store or granting recall.
+An operator accepts the exact record separately; an explicitly configured
+profile may then project its source-, revision- and digest-bound excerpt into a
+later Session. Unaccepted, retired, expired and foreign-workspace records stay
+out of new requests. Run `python3 examples/project-continuity-demo.py` for the
+offline request/trace fixture and see
+[project-continuity.md](docs/project-continuity.md) for the authority, evidence
+and deletion boundaries. This does not add automatic capture, model approval,
+provider verification, sync or formal publication.
+
 ## Requirements
 
 Python 3.9 or newer. No third-party packages at runtime.

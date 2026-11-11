@@ -40,7 +40,7 @@ from .memory import (MemoryError, add_memory, list_memory, remove_memory,
                      search_memory)
 from .memory_migration import (MemoryMigrationError, accept_v2_record,
                                forget_v2_record, migrate_v1_to_v2,
-                               read_v2_store, retire_v2_record)
+                               propose_v2_record, read_v2_store, retire_v2_record)
 from .memory_retrieval import (MemoryRetrievalError, recall_context_message,
                                retrieve_memories)
 from .queries import (QueryError, collect_history, diff_sessions,
@@ -310,6 +310,25 @@ def _parser() -> argparse.ArgumentParser:
     memory_remove = memory_sub.add_parser("remove", help="remove one memory")
     memory_remove.add_argument("memory_id", help="memory id")
     memory_remove.add_argument("--json", action="store_true", dest="as_json")
+    memory_propose = memory_sub.add_parser(
+        "propose", help="append one unverified candidate to an explicit v2 store")
+    memory_propose.add_argument("content", help="explicit memory text")
+    memory_propose.add_argument("--workspace-id", required=True,
+                                help="exact project identity for recall admission")
+    memory_propose.add_argument("--by", required=True,
+                                help="operator-supplied author label, not acceptance")
+    memory_propose.add_argument(
+        "--category", choices=("user_preference", "project_decision",
+                               "workflow_hint", "source_note"),
+        default="user_preference", help="memory category")
+    memory_propose.add_argument("--tag", action="append", default=[], dest="tags")
+    memory_propose.add_argument("--expires-at", default=None,
+                                help="optional UTC RFC 3339 expiry (ending in Z)")
+    memory_propose.add_argument("--sensitive", action="store_true",
+                                help="exclude this record from recall")
+    memory_propose.add_argument("--store", type=Path, required=True,
+                                help="workspace-relative v2 store; never the v1 store")
+    memory_propose.add_argument("--json", action="store_true", dest="as_json")
     memory_migrate = memory_sub.add_parser(
         "migrate", help="create an explicit v2 store from the v1 store")
     memory_migrate.add_argument("--workspace-id", required=True,
@@ -2879,6 +2898,12 @@ def _cmd_memory(args: argparse.Namespace) -> int:
             record = add_memory(root, args.content, args.tags)
             result = {"ok": True, "schema_version": "1",
                       "memory_id": record["memory_id"], "item": record}
+        elif args.memory_command == "propose":
+            item = propose_v2_record(
+                root, args.store, args.content, workspace_id=args.workspace_id,
+                proposed_by=args.by, category=args.category, tags=args.tags,
+                expires_at=args.expires_at, sensitive=args.sensitive)
+            result = {"ok": True, "schema_version": "1", "item": item}
         elif args.memory_command == "list":
             result = {"ok": True, "schema_version": "1",
                       "items": list_memory(root)}
