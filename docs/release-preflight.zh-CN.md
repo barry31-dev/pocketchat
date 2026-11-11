@@ -1,16 +1,17 @@
 # 发布验收预检
 
-`release-preflight` 对一份显式观察文件做只读检查。它报告版本 1.2 尚缺的发布门禁中，
+`evidence release-preflight` 对一份显式观察文件做只读检查。它报告版本 1.2 尚缺的发布门禁中，
 哪些已有输入事实支持、哪些仍 pending / unknown / blocked。它不是 provider 调用、
 人工验收、tag、Release、上传，也不证明命令行重读了原始文件。
 
 ## 命令
 
 ```bash
-pocketchat release-preflight release-acceptance.json --workspace . --json
+pocketchat evidence release-preflight release-acceptance.json --workspace . --json
 ```
 
-参数只能是一份工作区相对、普通非软链接、最大 64 KiB 的 JSON 文件。不加 `--json`
+该嵌套命令不改变现有顶层稳定命令清单。参数只能是一份工作区相对、普通非软链接、
+最大 64 KiB 的 JSON 文件。不加 `--json`
 输出人类摘要，不加 `--workspace` 使用当前目录。命令只读这份文件；不读 wheel、
 源码树、trace、provider 配置、凭据、Git 元数据或网络，也不写任何文件。它要求与
 `evidence verify` 相同的 descriptor-relative no-follow 文件原语；不支持平台返回

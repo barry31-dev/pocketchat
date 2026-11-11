@@ -13,10 +13,13 @@
     "docs/cli.zh-CN.md",
     "docs/review-release-preflight-v1.json"
   ],
-  "categories": ["docs", "python-tools"],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
   "tier": "medium",
   "review_depth": "standard",
-  "review_scope": "Nine-path read-only release acceptance preflight: pure observation evaluator, explicit-file CLI, focused tests, CLI manuals, bilingual contract and this review record. The review does not cover the actual provider, manual terminal, tag, Release, upload or public install gates.",
+  "review_scope": "Eight-path read-only release acceptance preflight. The release-preflight surface is a subcommand of the existing evidence command so the stable top-level v1 inventory is unchanged. The review does not cover provider, manual terminal, tag, Release, upload or public-install gates.",
   "goal": "Make the remaining 1.2 release evidence classes explicit and machine-checkable only from caller-supplied observations, without invoking or implying any external gate.",
   "not_doing": [
     "No real provider or paid call",
@@ -25,9 +28,9 @@
     "No authority to treat supplied evidence as re-executed proof",
     "No release-ledger or release-1.2 publication-status change"
   ],
-  "rounds": 2,
-  "round_decision": "approve",
-  "round_scope": "full plus focused regression verification",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
   "findings": [
     {
       "id": "REL-PREFLIGHT-R1-01",
@@ -55,14 +58,21 @@
     "C: Input parsing is closed and bounded to 64 KiB. Unsafe paths, symlinks, non-regular files, duplicate JSON keys, non-finite numbers, excessive nesting, invalid digests, wrong version/tag/CI count, duplicate blockers and blocker/evidence overlap are refused.",
     "C: Provider/model/operator/tag/action text is validated but omitted from output. The report states supplied_observations and files_rechecked=false.",
     "C: The CLI reads only one explicit file and never calls provider/network/publication. Unsupported descriptor primitives return refused/unsupported_platform.",
-    "F: Fresh-context review initially ran read-only and could not create temporary directories, so its execution-dependent probes were limited. It still found the two major defects above by static inspection and in-memory checks; no independent CI or product-main evidence was produced."
+    "F: Fresh-context review initially ran read-only and could not create temporary directories, so its execution-dependent probes were limited. It still found the two major defects above by static inspection and in-memory checks; no independent CI or product-main evidence was produced.",
+    "V: exact-head PR #60 run 43012338542 reached Ubuntu Python 3.13 and failed only test_skeleton.StableV1ContractTests.test_cli_command_inventory_is_stable because the additive command was absent from its expected public inventory; 1671 tests ran with 1 failure and 1 skip.",
+    "V: public CI reproduction on CPython 3.9.6: the stable inventory test failed with one extra element release-preflight, exit 1.",
+    "V: this narrow repair replaces that new top-level command with evidence release-preflight; a red-first regression asserts both the unchanged top-level inventory and the nested subcommand. CPython 3.9.6 passes 15 focused preflight tests, the stable inventory test, 23 document/package guards, 11 adjacent evidence tests, Ruff E9/F, compileall and git diff --check, all exit 0.",
+    "V: the earlier eleven-path candidate d9eb37c remains private; its three compatibility/inventory edits are not used here. Public branch history dbae0a1 is retained and this repair is an ordinary descendant."
   ],
   "review_rounds": [
     {
       "round": 1,
       "scope": "Complete uncommitted nine-path diff, CLI call path and adjacent evidence-reader patterns",
       "decision": "REQUEST_CHANGES",
-      "findings": ["REL-PREFLIGHT-R1-01", "REL-PREFLIGHT-R1-02"],
+      "findings": [
+        "REL-PREFLIGHT-R1-01",
+        "REL-PREFLIGHT-R1-02"
+      ],
       "result": "Two major findings; neither involved a provider/manual or publication claim."
     },
     {
@@ -71,6 +81,13 @@
       "decision": "APPROVE",
       "findings": [],
       "result": "Both findings closed by the recorded focused tests; no new blocker or major finding in the corrected diff."
+    },
+    {
+      "round": 3,
+      "scope": "New diff only after exact-head CI exposed an additive top-level command; nested evidence subcommand, bilingual docs, focused regression and review record",
+      "decision": "APPROVE",
+      "findings": [],
+      "result": "The prior CI failure is closed without changing the stable command inventory or any path outside the original eight-path card scope. The focused tests, stable inventory test, adjacent evidence tests, document guards, Ruff, compileall and diff check are green. Exact-head CI and merged-main readback remain pending."
     }
   ],
   "independence": {
@@ -84,7 +101,7 @@
     "authority": "Standing routine-development authorization, 2026-11-09; product development-and-release.md §7",
     "scope": "Routine non-force task push, PR, required exact-head CI and reviewed main integration only. Formal provider calls, manual TUI acceptance, tags, Releases, uploads and public-artifact claims remain excluded.",
     "reviewer": "fresh-context technical reviewer under the standing technical-review decision",
-    "verdict": "APPROVE after both recorded major findings were fixed and the focused regressions passed."
+    "verdict": "APPROVE for the new-diff narrow repair; ordinary non-force task push, PR, exact-head CI and reviewed main integration only. Formal release gates remain excluded."
   },
-  "unverified_scope": "No real provider request, paid call, credential, manual trusted-terminal gesture, final 1.2 wheel build, tag, Release, package upload, public install, release-ledger publication record or external authority. Exact-head CI and merged-main readback remain pending until the controlled delivery path completes. The core checks only the truthfulness and internal consistency of caller-supplied observations; it does not re-execute their claimed evidence."
+  "unverified_scope": "No real provider request, paid call, credential, manual trusted-terminal gesture, final 1.2 wheel build, tag, Release, package upload, public install, release-ledger publication record or external authority. Exact-head CI for the narrow repair and merged-main readback remain pending. The evaluator checks caller-supplied observations only; it does not re-execute their claimed evidence."
 }

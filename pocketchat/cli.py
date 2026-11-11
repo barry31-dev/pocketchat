@@ -453,7 +453,7 @@ def _parser() -> argparse.ArgumentParser:
     evidence_verify.add_argument("--json", action="store_true", dest="as_json",
                                  help="print one bounded JSON result")
 
-    release_preflight = subparsers.add_parser(
+    release_preflight = evidence_subparsers.add_parser(
         "release-preflight",
         help="check supplied release-acceptance evidence without running gates")
     release_preflight.add_argument("observations", type=Path,
@@ -941,8 +941,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         return _cmd_rewind(args)
     if args.command == "evidence":
         return _cmd_evidence(args)
-    if args.command == "release-preflight":
-        return _cmd_release_preflight(args)
     if args.command == "task":
         return _cmd_task(args)
     if args.command == "profile":
@@ -968,6 +966,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 def _cmd_evidence(args) -> int:
+    if args.evidence_command == "release-preflight":
+        return _cmd_release_preflight(args)
     result = verify_evidence_observations(args.observations, workspace=args.workspace)
     if args.as_json:
         print(json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=True))

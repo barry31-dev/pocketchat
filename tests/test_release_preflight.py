@@ -271,12 +271,24 @@ class ReleasePreflightCliTests(unittest.TestCase):
         self.input.write_bytes(data)
 
     def command(self, *extra, as_json=True):
-        args = ["release-preflight", "release-preflight.json", "--workspace",
-                str(self.root)]
+        args = ["evidence", "release-preflight", "release-preflight.json",
+                "--workspace", str(self.root)]
         if as_json:
             args.append("--json")
         args.extend(extra)
         return run_cli(args, self.root)
+
+    def test_release_preflight_is_not_a_new_stable_top_level_command(self):
+        from pocketchat.cli import _parser
+        parser = _parser()
+        commands = next(
+            action.choices for action in parser._actions
+            if getattr(action, "choices", None) is not None
+            and action.__class__.__name__ == "_SubParsersAction"
+        )
+        self.assertIn("evidence", commands)
+        self.assertNotIn("release-preflight", commands)
+        self.assertIn("release-preflight", commands["evidence"]._subparsers._group_actions[0].choices)
 
     def test_complete_json_and_human_output_share_status_and_do_not_write(self):
         self.write()
@@ -371,8 +383,8 @@ class ReleasePreflightCliTests(unittest.TestCase):
         outside_input = outside / "input.json"
         outside_input.write_text(json.dumps(complete_observations()), encoding="utf-8")
         answer = run_cli(
-            ["release-preflight", str(outside_input), "--workspace", str(self.root),
-             "--json"], self.root)
+            ["evidence", "release-preflight", str(outside_input),
+             "--workspace", str(self.root), "--json"], self.root)
         self.assertEqual(2, answer.returncode, answer.stdout + answer.stderr)
         self.assertEqual("refused", json.loads(answer.stdout)["status"])
 

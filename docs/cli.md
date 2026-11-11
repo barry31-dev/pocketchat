@@ -802,14 +802,15 @@ invalid input returns 2; partial is never `ok: true`. JSON is one safe bounded
 document with input indexes and reason codes, not paths, identity values or
 bodies. See [the input contract and limits](evidence-links.md#explicit-observation-cli).
 
-## `release-preflight`
+## `evidence release-preflight`
 
 ```bash
-pocketchat release-preflight release-acceptance.json --workspace . --json
+pocketchat evidence release-preflight release-acceptance.json --workspace . --json
 ```
 
-Read one explicit release-acceptance observation file and report the remaining
-1.2 artifact, provider, manual, authority and publication gates. It does not
+This is a subcommand of `evidence`; the stable top-level command list is
+unchanged. Read one explicit release-acceptance observation file and report the
+remaining 1.2 artifact, provider, manual, authority and publication gates. It does not
 invoke a provider, read the wheel or source tree, publish or write. Complete
 returns 0; pending/unknown/blocked return 1; refused input returns 2. See
 [the observation contract](release-preflight.md).

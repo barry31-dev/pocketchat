@@ -1,6 +1,6 @@
 # Release acceptance preflight
 
-`release-preflight` is a read-only check over an explicit observation file. It
+`evidence release-preflight` is a read-only check over an explicit observation file. It
 reports which remaining version 1.2 release gates are supported by the supplied
 facts and which are still pending, unknown or blocked. It is not a provider call,
 manual acceptance, tag, Release, upload or proof that the original files were
@@ -9,10 +9,11 @@ rechecked.
 ## Command
 
 ```bash
-pocketchat release-preflight release-acceptance.json --workspace . --json
+pocketchat evidence release-preflight release-acceptance.json --workspace . --json
 ```
 
-The argument names one regular, non-symlink, workspace-relative JSON file of at
+The nested command preserves the stable top-level CLI inventory. The argument
+names one regular, non-symlink, workspace-relative JSON file of at
 most 64 KiB. Omit `--json` for the human summary; omit `--workspace` to use the
 current directory. The command reads only that file. It does not read the wheel,
 source tree, traces, provider configuration, credentials, Git metadata or the
