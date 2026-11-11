@@ -22,7 +22,7 @@
   "base_commit": "4aece29fb5c6fb73e256d4929a59058c8f080a3f",
   "authority": {
     "kind": "agent-delegated",
-    "decision": "maintainer standing routine-development delegation 2026-11-09"
+    "decision": "PocketChat routine-development delegation 2026-11-09"
   },
   "goal": "Make the request snapshot record the exact stream=true body sent while preserving non-streaming bytes and the existing provider adapter contract.",
   "not_doing": [
@@ -76,21 +76,28 @@
       "status": "verified",
       "command": "ruff check --select E9,F pocketchat/provider.py pocketchat/session.py tests/test_kernel.py; python3 -m compileall -q pocketchat/provider.py pocketchat/session.py tests/test_kernel.py",
       "result": "Ruff and compileall exited 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "gh run watch 43077107138 --repo barry31-dev/pocketchat --interval 20 --exit-status",
+      "result": "Exact-head PR run completed successfully, 7/7 jobs: Ubuntu/macOS/Windows CPython 3.9/3.13 plus release smoke. Covers only candidate cba2740 and that workflow."
     }
   ],
   "unverified": "Real provider behavior, manual terminal usability, full local suite, cross-platform runtime, packaging, tag, Release and upload were not run for this slice. CI can cover only its exact candidate and workflow.",
   "checkpoint": {
     "complete": true,
     "ready_for_integration": true,
-    "next_action": "Commit, push through pocketchat_delivery.py, require exact-head CI, merge and read back product main."
+    "next_action": "Squash-merge PR #64 after final evidence is pushed, then read back product main and settle PC-STREAM-SNAPSHOT-1."
   },
   "reviews": [
     {
       "round": 1,
-      "reviewer": "fresh-context agent (maintainer standing routine-development delegation 2026-11-09)",
+      "reviewer": "fresh-context agent under the 2026-11-09 routine-development delegation",
       "decision": "APPROVE",
       "coverage": "Uncommitted six-path diff, provider/session payload flow, focused SSE snapshot regression, adapter compatibility and non-streaming payload preservation; reviewer did not run the SSE integration test or full suite.",
       "findings": []
     }
-  ]
+  ],
+  "commit_or_candidate_sha": "cba27400fadc4168d4d0cfba2d77029ddf810bcd"
 }
