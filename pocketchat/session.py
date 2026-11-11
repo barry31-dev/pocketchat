@@ -609,8 +609,15 @@ class Session:
             try:
                 payload = self.provider_adapter.build_payload(
                     working_context, config)
+                # Streaming is part of the physical request. Put it on the
+                # admitted/snapshotted body before either side is recorded, so
+                # the snapshot and the provider call cannot disagree.
+                if self.on_delta is not None:
+                    payload["stream"] = True
                 rebuilt = self.provider_adapter.build_payload(
                     working_context, config)
+                if self.on_delta is not None:
+                    rebuilt["stream"] = True
                 if request_digest(payload) != request_digest(rebuilt):
                     raise SessionError(
                         "request_payload_mismatch",

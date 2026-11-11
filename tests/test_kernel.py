@@ -1121,6 +1121,44 @@ class SessionStreamTests(unittest.TestCase):
             self.assertEqual(completed["payload"]["output_summary"],
                              "hello world")
 
+class ProviderStreamSnapshotTests(unittest.TestCase):
+    def test_streamed_request_snapshot_matches_the_body_sent(self):
+        from pocketchat.session import Session
+
+        class StreamHandler(BaseHTTPRequestHandler):
+            request_body = None
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                StreamHandler.request_body = json.loads(
+                    self.rfile.read(length).decode("utf-8"))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(
+                    b'data: {"choices":[{"delta":{"content":"answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}\n\n')
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+
+            def log_message(self, *args):
+                pass
+
+        stub = hp.StubHTTPServer(StreamHandler)
+        self.addCleanup(stub.close)
+        config = {"base_url": "http://127.0.0.1:%d/v1" % stub.port,
+                  "model": "m", "api_key_env": "K", "timeout_seconds": 5,
+                  "max_context_chars": 1000, "summary_prefix_chars": 40}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            session = Session(config, root / "traces" / "run.jsonl",
+                              "run_stream_snapshot", api_key="k")
+            session.on_delta = lambda *_: None
+            self.assertEqual(session.run(["hi"]), "completed")
+            snapshot = json.loads(session.request_snapshots[0].read_text())
+            self.assertIs(StreamHandler.request_body["stream"], True)
+            self.assertEqual(snapshot["request"], StreamHandler.request_body)
+
+
 class ProviderAdapterContractTests(unittest.TestCase):
     """A provider adapter is the boundary future native providers implement."""
 

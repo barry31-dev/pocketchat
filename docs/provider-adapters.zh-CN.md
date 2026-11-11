@@ -49,6 +49,9 @@ Session 在配置含 `config["provider_adapter"]` 时使用该适配器，否则
 能说明这次用了哪条协议实现。
 
 请求快照与真实调用必须走同一个适配器实例。这条不变量保证快照不会描述一个从未发出的请求。
+流式标志也属于实际请求体：当 `on_delta` 显示回调启用时，Session 会在准入、写快照和
+调用 provider 前对同一个 payload 标记 `stream: true`，因此快照记录的是实际发送的流式请求，
+而不是 `build_payload()` 返回的非流式默认值。
 
 Agent TUI 把每个用户回合当作一次 session run。该 run 结束时 session writer claim 会释放；
 下一回合惰性取得新的 claim，同时保留同一个内存会话与累计 token 计数。进程重启时仍从 session

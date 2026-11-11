@@ -69,7 +69,10 @@ session write.
 
 The same adapter instance builds the request snapshot and performs the call.
 This is the invariant that keeps a snapshot from describing a request that was
-never sent.
+never sent. Streaming is part of that body: before admission, snapshot creation
+and the provider call, Session marks the same payload with `stream: true` when
+an `on_delta` display hook is active. The snapshot therefore records the exact
+streamed body, not the non-streaming default returned by `build_payload()`.
 
 ## Error contract
 
