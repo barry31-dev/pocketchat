@@ -1,0 +1,113 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/pocketchat-evidence-matrix.md",
+    "tests/test_evidence_matrix_exec_entry.py",
+    "docs/review-evidence-matrix-exec-entry-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "EM-EXEC-001",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "tests/test_evidence_matrix_exec_entry.py:whole-document-substring-checks",
+      "reason": "The guard now extracts only the usage-gate section and checks its command entry, preserved TaskSpec exclusion, no-plan/no-widened-authority caveat and execution/acceptance separation inside that section. The new-diff reviewer approved with no findings."
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/pocketchat-evidence-matrix.md",
+    "tests/test_evidence_matrix_exec_entry.py",
+    "docs/review-evidence-matrix-exec-entry-v1.json"
+  ],
+  "slice": "PC-EVIDENCE-MATRIX-EXEC-ENTRY-1",
+  "base_commit": "c93acc0b1e909f1ab9d2377d95fd9e6ec5bf690b",
+  "authority": {
+    "kind": "agent-delegated",
+    "decision": "maintainer standing routine-development delegation 2026-11-09"
+  },
+  "contract": {
+    "objective": "Correct the stale evidence-matrix usage note so it names the authorized task exec CLI entry for command-bearing TaskSpec/TaskPlan execution, while preserving the task run --policy TaskSpec exclusion.",
+    "scope": {
+      "repository_id": "pocketchat",
+      "baseline_commit": "c93acc0b1e909f1ab9d2377d95fd9e6ec5bf690b",
+      "branch": "task/pocketchat-evidence-matrix-exec-entry",
+      "paths": [
+        "docs/pocketchat-evidence-matrix.md",
+        "tests/test_evidence_matrix_exec_entry.py",
+        "docs/review-evidence-matrix-exec-entry-v1.json"
+      ]
+    },
+    "acceptance": "The usage gate states that command templates execute through task exec with an exact plan digest, keeps task run --policy's TaskSpec exclusion, and states that command success is not acceptance. The focused guard is red against the old sentence and green after the correction. Fresh-context review has no open blocker or major finding; exact-head CI and product-main readback bind delivery.",
+    "unverified_scope": "Documentation and static guard only. No runtime, provider, command execution, packaging, release, tag, upload or cross-platform behavior is verified by this slice.",
+    "dependencies": []
+  },
+  "design": [
+    "Keep the existing evidence-matrix ownership and historical record; update only the obsolete usage note.",
+    "Use a section-scoped static guard so a CLI example elsewhere cannot mask a future regression in this note.",
+    "Do not alter task exec or task run behavior; the correction documents the already-delivered TA-CLI-EXEC-1 entry."
+  ],
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS arm64, CPython 3.9.6",
+      "command": "python3 -B -m unittest tests.test_evidence_matrix_exec_entry -v",
+      "result": "Before the document correction: 2 failures, exit 1, for the obsolete Python-only sentence and the missing task exec entry."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "environment": "macOS arm64, CPython 3.9.6",
+      "command": "python3 -B -m unittest tests.test_evidence_matrix_exec_entry -v",
+      "result": "After the document correction and section-scoped guard: 2 tests passed, exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "git diff --check",
+      "result": "exit 0."
+    }
+  ],
+  "review_rounds": [
+    {
+      "round": 1,
+      "reviewer": "fresh-context agent (maintainer delegation 2026-11-09)",
+      "decision": "APPROVE",
+      "coverage": "docs/task-exec.md, docs/cli.md task exec section, docs/slice-queue.md TA-CLI-EXEC-1 row, the matrix diff and complete guard; reviewer did not execute tests.",
+      "findings": [
+        {
+          "id": "EM-EXEC-001",
+          "severity": "minor",
+          "status": "open",
+          "fingerprint": "tests/test_evidence_matrix_exec_entry.py:whole-document-substring-checks",
+          "reason": "Whole-document substring checks could be satisfied by a CLI example elsewhere and did not protect the authorization or acceptance caveats in the usage section."
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "reviewer": "fresh-context agent (maintainer delegation 2026-11-09)",
+      "decision": "APPROVE",
+      "coverage": "New guard diff and the exact usage-gate documentation excerpt; reviewer confirmed section scoping fixes the prior minor and found no new blocker, major or minor.",
+      "findings": [],
+      "new_findings": []
+    }
+  ],
+  "unverified": "Reviewer did not independently execute the focused test or diff check. No runtime, provider, command execution, packaging, release, tag, upload, cross-platform or real publication evidence is claimed.",
+  "gate_result": "Documentation correction and section-scoped guard approved; exact-head CI and product-main readback remain required before settlement.",
+  "checkpoint": {
+    "complete": true,
+    "ready_for_integration": true,
+    "next_action": "Commit the reviewed candidate, push through pocketchat_delivery.py, require exact-head CI, merge the PR and re-read product main before settling the fleet card."
+  }
+}
