@@ -33,9 +33,10 @@
     "C: the stubbed turn now writes an explicit readiness marker as its first action; the test delivers SIGINT only after that marker exists, so it interrupts the in-flight turn rather than trace startup.",
     "V: the corrected focused test passed 100/100 consecutive local repetitions; the complete tests.test_skeleton module passed 16/16; Ruff E9/F, compileall and git diff --check passed.",
     "U: exact-head CI for this test-only repair and merged-main readback remain pending.",
-    "R: final fresh-context review of commit 7f26f69 found no actionable regressions; it confirmed the readiness marker is created inside the stubbed turn after Session.run enters its interrupt-handling block and the cancellation assertions remain unchanged."
+    "R: final fresh-context review of commit 7f26f69 found no actionable regressions; it confirmed the readiness marker is created inside the stubbed turn after Session.run enters its interrupt-handling block and the cancellation assertions remain unchanged.",
+    "V: exact-head PR #62 run 43043649889 for 3b7f653 completed 7/7 jobs successfully across Ubuntu/macOS/Windows Python 3.9/3.13 plus release-smoke."
   ],
-  "unverified_scope": "This test-only change does not alter runtime behavior, provider calls, packaging, release artifacts, tags, Releases or uploads. It removes the observed test race but does not claim that arbitrary SIGINT timing during trace I/O is a supported product behavior.",
+  "unverified_scope": "This test-only change does not alter runtime behavior, provider calls, packaging, release artifacts, tags, Releases or uploads. It removes the observed test race but does not claim that arbitrary SIGINT timing during trace I/O is a supported product behavior. Windows skips the POSIX signal test; merged-main readback remains pending.",
   "commit_or_candidate_sha": "7f26f693041f00d44801bc464fcf1f323623b867",
   "independent_review": {
     "reviewer": "fresh-context agent under the maintainer standing routine-development delegation",
