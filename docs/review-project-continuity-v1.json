@@ -69,9 +69,9 @@
     {
       "id": "PC-PCONT-R2-02",
       "severity": "minor",
-      "status": "deferred",
+      "status": "fixed",
       "fingerprint": "project-continuity:docs:formats-operation-list-omits-propose",
-      "reason": "docs/formats.md still lists the earlier v2 mutation commands without propose. The exact approved execution scope excludes that format-owner page, so this candidate corrects the in-scope CLI manual and dedicated bilingual workflow without silently widening the lease. A docs-only maintenance follow-up must update the format index before claiming every adjacent memory document is current."
+      "reason": "docs/formats.md previously listed the earlier v2 mutation commands without propose. The docs-only maintenance follow-up updated the format inventory and was merged in PR #57 as ca58517d7f2e1b2e42ba456bc9de3f0d7073fa87; this record closes the deferred finding against that readback."
     },
     {
       "id": "PC-PCONT-R3-01",
@@ -250,9 +250,11 @@
     "V: a real umask 077 regression failed at mode 0644, then passed at owner-only 0600. Final CPython 3.13.9 and 3.9.6 affected suites each passed 105 tests; Ruff E9/F, dual compileall and git diff --check passed.",
     "C: final publication preparation removes internal orchestration labels from this public review record without changing the implementation, tests, findings, verification results or unverified scope.",
     "V: exact-head workflow run 42966168189 completed seven successful checks for candidate 0ea708fad83a880cfb8020bdb48ce05fe3f2fec2: release smoke and the Ubuntu/macOS/Windows CPython 3.9/3.13 matrix.",
-    "V: PR #55 merged the reviewed candidate as 3091090b53f5c5bdc217313b6a7d1677f0d69b02; origin/main readback verifies the candidate is the merge second parent and all 12 changed paths are present."
+    "V: PR #55 merged the reviewed candidate as 3091090b53f5c5bdc217313b6a7d1677f0d69b02; origin/main readback verifies the candidate is the merge second parent and all 12 changed paths are present.",
+    "V: docs-only maintenance PR #57 merged the corrected docs/formats.md inventory as ca58517d7f2e1b2e42ba456bc9de3f0d7073fa87 after seven exact-candidate PR checks; this closes deferred finding PC-PCONT-R2-02 without changing this slice implementation or CI evidence.",
+    "U: the follow-up records only the documentation-index correction and merged-main path readback; it does not re-run the project-continuity implementation, real-provider relevance/quality, arbitrary projects, secure deletion, tags, Releases or uploads."
   ],
-  "unverified_scope": "Real-provider relevance/answer quality, arbitrary projects, cross-platform manual operation, secure deletion of traces or already-sent content, tag, Release and package publication are not run or authorized. docs/formats.md needs the recorded docs-only follow-up because it is outside this task write scope.",
+  "unverified_scope": "Real-provider relevance/answer quality, arbitrary projects, cross-platform manual operation, secure deletion of traces or already-sent content, tag, Release and package publication are not run or authorized. The docs/formats.md follow-up was corrected and merged separately; this record does not re-run or certify that maintenance CI.",
   "new_diff_reviews": [
     {
       "after_round": 3,
