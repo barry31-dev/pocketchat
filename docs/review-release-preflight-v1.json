@@ -1,0 +1,107 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "slice_id": "PC-RELEASE-ACCEPTANCE-PREFLIGHT-1",
+  "base_sha": "5665c77e193072c2a3589bea4ccd1041d0c8ab8b",
+  "branch": "task/pocketchat-release-acceptance-preflight",
+  "paths": [
+    "pocketchat/release_preflight.py",
+    "pocketchat/cli.py",
+    "tests/test_release_preflight.py",
+    "docs/release-preflight.md",
+    "docs/release-preflight.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-release-preflight-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "review_scope": "Eight-path read-only release acceptance preflight. The release-preflight surface is a subcommand of the existing evidence command so the stable top-level v1 inventory is unchanged. The review does not cover provider, manual terminal, tag, Release, upload or public-install gates.",
+  "goal": "Make the remaining 1.2 release evidence classes explicit and machine-checkable only from caller-supplied observations, without invoking or implying any external gate.",
+  "not_doing": [
+    "No real provider or paid call",
+    "No manual terminal acceptance",
+    "No wheel build, tag, Release, package upload or public install",
+    "No authority to treat supplied evidence as re-executed proof",
+    "No release-ledger or release-1.2 publication-status change"
+  ],
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "REL-PREFLIGHT-R1-01",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "release-preflight:windows-ci-without-secure-reader-guard",
+      "reason": "The fresh-context review observed that the CLI success tests created temporary files and called the descriptor-relative reader without a POSIX capability skip. On the Windows matrix those tests would fail as unsupported_platform rather than exercising the advertised command. The test class now declares the same O_DIRECTORY/O_NOFOLLOW/O_NONBLOCK plus dir_fd guard used by evidence verification; a focused unsupported-platform regression calls the production seam with an emptied dir_fd set and receives refused/unsupported_platform."
+    },
+    {
+      "id": "REL-PREFLIGHT-R1-02",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "release-preflight:report-digest-omits-source-binding",
+      "reason": "The reviewer reproduced that report_sha256 was first computed by the evaluator, then verify_release_acceptance added source_sha256 without recomputing it. A reader recomputing the documented canonical digest over the emitted report failed. The verification seam now attaches source_sha256, removes only report_sha256, recomputes over every remaining field and rechecks the report budget. A real-file CLI regression and a focused verification regression both recompute the digest successfully."
+    }
+  ],
+  "verification": [
+    "V: red run before implementation: tests/test_release_preflight.py failed at import because pocketchat.release_preflight did not exist, exit 1.",
+    "V: macOS CPython 3.13.9: python3 -B -m unittest tests.test_release_preflight -v passed 14 tests, exit 0.",
+    "V: macOS CPython 3.13.9: python3 -B -m unittest tests.test_release_process_docs tests.test_package_independence -v passed 23 tests, exit 0.",
+    "V: Ruff 0.17.3 E9/F on pocketchat/release_preflight.py, pocketchat/cli.py and tests/test_release_preflight.py passed, exit 0.",
+    "V: python3 -m compileall -q pocketchat tests/test_release_preflight.py passed, exit 0.",
+    "V: git diff --check passed, exit 0.",
+    "C: The report has fixed gate order and separates satisfied, pending/not_run, unknown and failed. Missing later evidence and a supplied blocker remain different states; a blocker is accepted only for a gate with no evidence.",
+    "C: Input parsing is closed and bounded to 64 KiB. Unsafe paths, symlinks, non-regular files, duplicate JSON keys, non-finite numbers, excessive nesting, invalid digests, wrong version/tag/CI count, duplicate blockers and blocker/evidence overlap are refused.",
+    "C: Provider/model/operator/tag/action text is validated but omitted from output. The report states supplied_observations and files_rechecked=false.",
+    "C: The CLI reads only one explicit file and never calls provider/network/publication. Unsupported descriptor primitives return refused/unsupported_platform.",
+    "F: Fresh-context review initially ran read-only and could not create temporary directories, so its execution-dependent probes were limited. It still found the two major defects above by static inspection and in-memory checks; no independent CI or product-main evidence was produced.",
+    "V: exact-head PR #60 run 43012338542 reached Ubuntu Python 3.13 and failed only test_skeleton.StableV1ContractTests.test_cli_command_inventory_is_stable because the additive command was absent from its expected public inventory; 1671 tests ran with 1 failure and 1 skip.",
+    "V: public CI reproduction on CPython 3.9.6: the stable inventory test failed with one extra element release-preflight, exit 1.",
+    "V: this narrow repair replaces that new top-level command with evidence release-preflight; a red-first regression asserts both the unchanged top-level inventory and the nested subcommand. CPython 3.9.6 passes 15 focused preflight tests, the stable inventory test, 23 document/package guards, 11 adjacent evidence tests, Ruff E9/F, compileall and git diff --check, all exit 0.",
+    "V: the earlier eleven-path candidate d9eb37c remains private; its three compatibility/inventory edits are not used here. Public branch history dbae0a1 is retained and this repair is an ordinary descendant."
+  ],
+  "review_rounds": [
+    {
+      "round": 1,
+      "scope": "Complete uncommitted nine-path diff, CLI call path and adjacent evidence-reader patterns",
+      "decision": "REQUEST_CHANGES",
+      "findings": [
+        "REL-PREFLIGHT-R1-01",
+        "REL-PREFLIGHT-R1-02"
+      ],
+      "result": "Two major findings; neither involved a provider/manual or publication claim."
+    },
+    {
+      "round": 2,
+      "scope": "New fixes only: capability guard/skip, source-bound report digest, path conversion and focused regressions",
+      "decision": "APPROVE",
+      "findings": [],
+      "result": "Both findings closed by the recorded focused tests; no new blocker or major finding in the corrected diff."
+    },
+    {
+      "round": 3,
+      "scope": "New diff only after exact-head CI exposed an additive top-level command; nested evidence subcommand, bilingual docs, focused regression and review record",
+      "decision": "APPROVE",
+      "findings": [],
+      "result": "The prior CI failure is closed without changing the stable command inventory or any path outside the original eight-path card scope. The focused tests, stable inventory test, adjacent evidence tests, document guards, Ruff, compileall and diff check are green. Exact-head CI and merged-main readback remain pending."
+    }
+  ],
+  "independence": {
+    "reviewer": "fresh-context technical reviewer",
+    "context": "Received only the repository root and review request; read the uncommitted diff and call sites; no author reasoning history.",
+    "authority": "Standing routine-development technical-review decision, 2026-11-09",
+    "limits": "Read-only sandbox prevented test temp directories. It did not approve provider/manual/tag/Release actions."
+  },
+  "landing_sign_off": {
+    "status": "agent-approved",
+    "authority": "Standing routine-development authorization, 2026-11-09; product development-and-release.md §7",
+    "scope": "Routine non-force task push, PR, required exact-head CI and reviewed main integration only. Formal provider calls, manual TUI acceptance, tags, Releases, uploads and public-artifact claims remain excluded.",
+    "reviewer": "fresh-context technical reviewer under the standing technical-review decision",
+    "verdict": "APPROVE for the new-diff narrow repair; ordinary non-force task push, PR, exact-head CI and reviewed main integration only. Formal release gates remain excluded."
+  },
+  "unverified_scope": "No real provider request, paid call, credential, manual trusted-terminal gesture, final 1.2 wheel build, tag, Release, package upload, public install, release-ledger publication record or external authority. Exact-head CI for the narrow repair and merged-main readback remain pending. The evaluator checks caller-supplied observations only; it does not re-execute their claimed evidence."
+}

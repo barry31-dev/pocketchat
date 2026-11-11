@@ -656,3 +656,15 @@ pocketchat evidence verify observations.json --workspace ./checkout --json
 不写文件，两模式均说明只核对传入观察、原文件未重读。complete 返回 0，partial 返回 1，refused
 或坏输入返回 2；partial 不能是 ok=true。JSON 为单个有界安全对象，只有输入索引/原因码，不回显
 路径、身份或正文。输入与限额见 [证据契约](evidence-links.zh-CN.md#显式观察-cli)。
+
+## `evidence release-preflight`
+
+```bash
+pocketchat evidence release-preflight release-acceptance.json --workspace . --json
+```
+
+这是 `evidence` 的子命令，既有顶层稳定命令清单不变。只读一份显式发布验收观察文件，
+报告 1.2 尚缺的产物、provider、人工、授权与发布门禁。
+不调用 provider、不读 wheel/源码树、不发布、不写文件。complete 返回 0；
+pending/unknown/blocked 返回 1；拒绝输入返回 2。观察契约见
+[发布验收预检](release-preflight.zh-CN.md)。

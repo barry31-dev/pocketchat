@@ -48,6 +48,7 @@ from .queries import (QueryError, collect_history, diff_sessions,
                       render_search_lines, search_messages)
 from .recovery import (RecoveryError, create_checkpoint, rewind_to_checkpoint,
                        resume_task)
+from .release_preflight import (ReleasePreflightError, verify_release_acceptance)
 from .replay import ReplayError, replay_snapshots
 from .selection import SelectionError, record_selection
 from .repl import echo_reply, goodbye, read_lines
@@ -451,6 +452,16 @@ def _parser() -> argparse.ArgumentParser:
                                  help="explicit read-only workspace (default: current directory)")
     evidence_verify.add_argument("--json", action="store_true", dest="as_json",
                                  help="print one bounded JSON result")
+
+    release_preflight = evidence_subparsers.add_parser(
+        "release-preflight",
+        help="check supplied release-acceptance evidence without running gates")
+    release_preflight.add_argument("observations", type=Path,
+                                   help="supplied release observation JSON")
+    release_preflight.add_argument("--workspace", type=Path, default=None,
+                                   help="explicit read-only workspace (default: current directory)")
+    release_preflight.add_argument("--json", action="store_true", dest="as_json",
+                                   help="print one bounded JSON result")
 
     task = subparsers.add_parser(
         "task", help="run and inspect one bounded, evidence-backed task")
@@ -955,6 +966,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 def _cmd_evidence(args) -> int:
+    if args.evidence_command == "release-preflight":
+        return _cmd_release_preflight(args)
     result = verify_evidence_observations(args.observations, workspace=args.workspace)
     if args.as_json:
         print(json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
@@ -969,6 +982,33 @@ def _cmd_evidence(args) -> int:
         else:
             print("Reason: %s" % result["reason"])
     return {"complete": EXIT_OK, "partial": EXIT_RUN_FAILED,
+            "refused": EXIT_USAGE}[result["status"]]
+
+
+def _cmd_release_preflight(args) -> int:
+    try:
+        result = verify_release_acceptance(
+            str(args.observations), workspace=args.workspace)
+    except (ReleasePreflightError, OSError, ValueError):
+        result = {"ok": False, "status": "refused",
+                  "scope": "supplied_observations", "files_rechecked": False,
+                  "reason": "unsafe_input_path", "source_sha256": None}
+    if args.as_json:
+        print(json.dumps(result, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=True))
+    else:
+        print("Release acceptance preflight: %s (supplied observations; files not rechecked)"
+              % result["status"])
+        if result["status"] == "refused":
+            print("Reason: %s" % result.get("reason", "refused"))
+        else:
+            print("Pending: %s" % (", ".join(result["pending"]) or "(none)"))
+            print("Unknown: %s" % (", ".join(result["unknown"]) or "(none)"))
+            print("Blocked: %s" % (", ".join(result["blocked"]) or "(none)"))
+            for action in result["next_actions"]:
+                print("Next: %s" % action)
+    return {"complete": EXIT_OK, "pending": EXIT_RUN_FAILED,
+            "unknown": EXIT_RUN_FAILED, "blocked": EXIT_RUN_FAILED,
             "refused": EXIT_USAGE}[result["status"]]
 
 
