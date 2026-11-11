@@ -103,7 +103,7 @@
   "checkpoint": {
     "complete": true,
     "ready_for_integration": false,
-    "next_action": "Commit the bounded candidate, obtain a fresh-context standard review, then use pocketchat_delivery.py for exact-candidate push/PR/CI and merge readback."
+    "next_action": "Fresh-context standard review of 9948208, then use pocketchat_delivery.py for exact-candidate push/PR/CI and merge readback."
   },
   "reviews": [
     {
