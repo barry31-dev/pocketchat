@@ -161,9 +161,26 @@ does not authorize a tag, GitHub Release or package-index upload.
 - Publication: not performed. Tag, Release URL, publication time and uploaded
   artifact: not recorded. No package-index action is implied.
 - Source preparation and acceptance procedure: [release-1.2.md](release-1.2.md).
-  Exact candidate/wheel identity and machine results are recorded after freezing
-  that candidate; none are copied from the version 1.1 development wheel.
-- Required outstanding authority/evidence: artifact-bound real-provider and
-  manual file-terminal acceptance, then specific tag/Release authorization and
-  remote artifact/public-install readback. The routine development delegation
-  does not remove these release requirements.
+- Exact source candidate: `4019525ab297c131130da3fca1563176530beb50`,
+  product main after PR #60. Exact-head CI run
+  [43028154207](https://github.com/barry31-dev/pocketchat/actions/runs/43028154207)
+  completed seven successful jobs.
+- Release-smoke artifact: `pocketchat-release-smoke`, artifact id `13860340159`,
+  345465 bytes, archive SHA-256
+  `b665aedeab94c92e416ec8fcebc72c44fa58d87c446590bedeac97e2c3bfe91f`.
+  It contains `pocketchat-1.2.0-py3-none-any.whl`, 345168 bytes, SHA-256
+  `df8dbb69034a2ab961f708375ca1497fd157adc0416a9af11451782fcab7f729`,
+  80 members and the five declared schemas. A fresh install reports
+  `pocketchat 1.2.0`; the normal and dirty-Git offline fixture paths passed and
+  deliberate wrong output exited 1.
+- A separate local build produced the same 80 member paths and member bytes but
+  a different container SHA-256
+  (`11be7b63fd52f92302c84ace97e11355979aa61b456f9edbde2ae16a2fe5b111`)
+  because ZIP timestamps differ. Canonical manifests are identical; wheel
+  container reproducibility is not claimed.
+- Publication: **not performed**. No v1.2.0 tag or Release was observed and no
+  package-index action is implied.
+- Required outstanding authority/evidence: artifact-bound real tool-capable
+  provider and manual file-terminal acceptance, then specific tag/Release
+  authorization, same-artifact publication and public-install readback. The
+  offline stub does not satisfy the provider gate.

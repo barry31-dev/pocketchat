@@ -65,6 +65,42 @@
       "status": "verified",
       "command": "Controlled pre-push public-content check and attribution diff readback",
       "result": "The initial unpushed review attribution matched a reserved contributor-file token. The attribution now refers to the public development process without that token; no policy allowance was added and no public history was rewritten."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.13 scripts/release_smoke.py --work-dir /tmp/pocketchat-1.2-freeze-20261111 --json",
+      "result": "Built and clean-installed pocketchat-1.2.0-py3-none-any.whl, 345168 bytes, local wheel SHA-256 11be7b63fd52f92302c84ace97e11355979aa61b456f9edbde2ae16a2fe5b111, 80 members, all five schemas and the installed task command surface; exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "gh run download 43028154207 --repo barry31-dev/pocketchat --name pocketchat-release-smoke",
+      "result": "Exact main commit 4019525 has a completed successful seven-job run. Its uploaded release-smoke JSON reports version 1.2.0, 80 members, wheel bytes 345168 and wheel SHA-256 df8dbb69034a2ab961f708375ca1497fd157adc0416a9af11451782fcab7f729; artifact archive digest matches GitHub metadata sha256:b665aedeab94c92e416ec8fcebc72c44fa58d87c446590bedeac97e2c3bfe91f."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Member-by-member comparison of the local and CI wheels",
+      "result": "Both wheels have the same 80 member paths and identical member bytes; only ZIP entry timestamps differ, so the container SHA-256 differs although the canonical package manifests are identical. The CI wheel RECORD is internally consistent with zero mismatches."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Installed-wheel normal, dirty-Git and wrong-output fixture using the CI artifact and CPython 3.13.9 with PYTHONPATH unset",
+      "result": "Normal and dirty-Git paths both returned 0 with acceptance passed and all assertions true; deliberate wrong output returned 1 with acceptance failed at replacement_readback. Every evidence JSON was bound to source SHA 4019525 and version 1.2.0. This remains offline-stub provider evidence, not a real-provider or manual-terminal result."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "PYTHONPATH=. python3.13 -B -m unittest tests.test_release_smoke tests.test_release_process_docs tests.test_package_independence tests.test_file_work_e2e -v",
+      "result": "44 focused release, package and installed-fixture tests passed on macOS CPython 3.13.9; exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "gh api repos/barry31-dev/pocketchat/actions/runs/43028154207/artifacts",
+      "result": "The exact-head run artifact pocketchat-release-smoke id 13860340159 is unexpired, 345465 bytes, and its downloaded archive digest matches the API-reported digest. No v1.2.0 tag or Release was observed."
     }
   ],
   "reviews": [
@@ -84,10 +120,54 @@
         }
       ],
       "limitations": "Static review only; tests/builds/fixtures/CI not rerun by reviewer. No real-provider/manual acceptance, external release authority or unchanged-runtime review claimed."
+    },
+    {
+      "scope": "Exact freeze-evidence delta: docs/release-ledger.md and docs/review-file-release-v1.json",
+      "reviewer": "Fresh-context agent under maintainer technical-review delegation",
+      "source_type": "current documentation/evidence (C) plus local run (V)",
+      "verification": "verified",
+      "conclusion": "The fresh-context review found two actionable issues; both are fixed in the amended candidate. Independent re-review of those fixes was attempted twice but the configured provider returned HTTP 503 before a verdict, so the final re-review is not claimed.",
+      "findings": [
+        {
+          "id": "RELEASE-EVIDENCE-IDENTITY",
+          "severity": "major",
+          "status": "fixed",
+          "fingerprint": "release-evidence:commit-identity:personal-email",
+          "reason": "The evidence commit initially used a personal email. It was amended to the published barry31-dev identity before the task branch was pushed."
+        },
+        {
+          "id": "RELEASE-EVIDENCE-STATUS-OWNER",
+          "severity": "minor",
+          "status": "fixed",
+          "fingerprint": "release-evidence:publication-status:duplicate-owner",
+          "reason": "The review record duplicated publication status outside the release ledger. The duplicate field was removed; the ledger remains the sole publication-status owner."
+        }
+      ],
+      "limitations": "The review covers this documentation/evidence delta only. It does not re-run the product suite or verify real-provider/manual/tag/Release actions. The final independent re-review of the fixes did not complete."
     }
   ],
   "unverified": [
-    "Exact committed candidate/wheel and new-head CI are bound after source inputs are frozen.",
-    "Artifact-bound real-provider/manual acceptance and specific tag/Release authority are missing; the full original release card remains unfinished."
-  ]
+    "The exact 1.2.0 source and CI artifact are now bound, but the local and CI wheel container SHA-256 values differ because ZIP timestamps differ; member payloads and canonical manifests are identical.",
+    "Artifact-bound real tool-capable provider acceptance and trusted manual terminal acceptance were not run.",
+    "Specific tag/Release authorization, public-artifact install readback and package-index upload remain missing; the full original release card remains unfinished."
+  ],
+  "freeze": {
+    "source_sha": "4019525ab297c131130da3fca1563176530beb50",
+    "ci_run": 43028154207,
+    "ci_result": "7/7 success",
+    "ci_artifact": {
+      "id": 13860340159,
+      "name": "pocketchat-release-smoke",
+      "archive_bytes": 345465,
+      "archive_sha256": "b665aedeab94c92e416ec8fcebc72c44fa58d87c446590bedeac97e2c3bfe91f"
+    },
+    "wheel": {
+      "name": "pocketchat-1.2.0-py3-none-any.whl",
+      "bytes": 345168,
+      "ci_sha256": "df8dbb69034a2ab961f708375ca1497fd157adc0416a9af11451782fcab7f729",
+      "local_sha256": "11be7b63fd52f92302c84ace97e11355979aa61b456f9edbde2ae16a2fe5b111",
+      "members": 80
+    },
+    "fixture_authority": "offline-stub only"
+  }
 }
