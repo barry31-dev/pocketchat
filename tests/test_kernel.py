@@ -787,6 +787,41 @@ class ProviderStreamTests(unittest.TestCase):
                              "incomplete_stream")
             self.assertIs(failed["payload"]["retryable"], True)
 
+    def test_stream_read_error_without_terminal_marker_is_retryable(self):
+        from http.client import IncompleteRead
+
+        from pocketchat.provider import ProviderError, _stream_response
+
+        class TruncatedRead:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"partial"},'
+                       b'"finish_reason":""}]}\n')
+                raise IncompleteRead(b"partial")
+
+        with self.assertRaises(ProviderError) as caught:
+            _stream_response(TruncatedRead(), "m", 200)
+        self.assertEqual(caught.exception.error_type, "incomplete_stream")
+        self.assertTrue(caught.exception.retryable)
+
+    def test_terminal_finish_reason_survives_a_later_read_error(self):
+        from http.client import IncompleteRead
+
+        from pocketchat.provider import _stream_response
+
+        class TerminalThenReadError:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"complete"},'
+                       b'"finish_reason":"stop"}]}\n')
+                raise IncompleteRead(b"complete")
+
+        result = _stream_response(TerminalThenReadError(), "m", 200)
+        self.assertEqual(result["content"], "complete")
+        self.assertEqual(result["finish_reason"], "stop")
+
     def test_terminal_finish_reason_is_accepted_without_done_marker(self):
         from pocketchat.provider import _stream_response
 

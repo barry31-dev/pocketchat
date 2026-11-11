@@ -44,7 +44,8 @@
   "plan": [
     "Reproduce a partial stream being returned as completed with stop.",
     "Track [DONE] and terminal finish_reason separately and fail EOF as retryable incomplete_stream.",
-    "Cover parser and Session trace behavior, document the contract, run focused checks, then obtain independent review and deliver through the controlled product entry."
+    "Cover parser and Session trace behavior, document the contract, run focused checks, then obtain independent review and deliver through the controlled product entry.",
+    "Harden stream iteration so an IncompleteRead/connection reset before a terminal marker becomes the same retryable incomplete_stream failure; a terminal finish_reason already observed remains accepted."
   ],
   "budget_stop": "One bounded correctness slice; stop on ownership conflict, unexpected file effects or a blocking review finding.",
   "rollback": "Revert the terminal-marker check; no persisted session, trace or user file is migrated.",
@@ -78,6 +79,24 @@
       "status": "blocked",
       "command": "HTTP/loopback stream and request-snapshot tests",
       "result": "Two existing HTTP tests errored before executing their assertions with PermissionError [Errno 1] from binding 127.0.0.1 in this sandbox. This is an environment restriction, not a product result."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests.test_stream_read_error_without_terminal_marker_is_retryable tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_survives_a_later_read_error tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_is_accepted_without_done_marker tests.test_kernel.ProviderStreamTests.test_truncated_stream_is_refused_instead_of_fabricating_stop -v",
+      "result": "4 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests tests.test_tool_calls tests.test_recovery_policy -q",
+      "result": "40 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_release_process_docs -v",
+      "result": "16 documentation-contract tests passed, exit 0."
     }
   ],
   "unverified": "Real provider behavior, manual terminal usability, cross-platform local runtime, full local suite, HTTP loopback tests in this sandbox, packaging, tag, Release and upload were not run or not available. Exact-head CI and main readback remain pending.",
@@ -91,7 +110,7 @@
       "round": 1,
       "reviewer": "author self-review",
       "decision": "PENDING",
-      "coverage": "Full six-file code/document diff, parser call path and Session failure recording; independent fresh-context review still pending.",
+      "coverage": "Full seven-path committed candidate plus follow-up read-error hardening; independent fresh-context review still pending.",
       "findings": []
     }
   ]

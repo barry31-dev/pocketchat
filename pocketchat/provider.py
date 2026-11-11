@@ -19,6 +19,7 @@ evidence into guesswork:
 from __future__ import annotations
 
 import copy
+from http.client import IncompleteRead
 import json
 import re
 import socket
@@ -411,7 +412,22 @@ def _stream_response(response, model: str, status_code: int,
     first_content_ms = None
     tool_fragments: Dict[int, Dict[str, Any]] = {}
     saw_terminal_marker = False
-    for raw_line in response:
+    iterator = iter(response)
+    while True:
+        try:
+            raw_line = next(iterator)
+        except StopIteration:
+            break
+        except (IncompleteRead, ConnectionResetError, socket.timeout) as exc:
+            if saw_terminal_marker or finish_reason:
+                break
+            raise ProviderError(
+                "incomplete_stream",
+                "HTTP %d stream read failed before a terminal marker"
+                % status_code,
+                status_code=status_code,
+                retryable=True,
+            ) from exc
         line = raw_line.decode("utf-8", "replace").strip()
         if not line or line.startswith(":") or not line.startswith("data:"):
             continue
