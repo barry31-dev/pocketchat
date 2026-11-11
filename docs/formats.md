@@ -184,8 +184,9 @@ does not implement is a refusal, not a no-op.
 Owner: `pocketchat.memory_migration`. Schema version:
 **`pocketchat-memory.v2`**. The default `memory` commands still read and write
 `.pocketchat/memory.jsonl`; v2 is available only through the explicit
-`memory migrate/accept/retire/forget --store` operations documented in
-[cli.md](cli.md).
+`memory propose/migrate/accept/retire/forget --store` operations documented in
+[cli.md](cli.md). `memory propose` writes an unverified candidate; acceptance
+remains a separate operator action.
 
 Each non-empty JSONL line is one closed record. Unknown or missing fields are
 refused. The content digest is the lowercase SHA-256 of the UTF-8 content.

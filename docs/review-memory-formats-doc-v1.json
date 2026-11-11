@@ -1,0 +1,29 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/formats.md",
+    "docs/review-memory-formats-doc-v1.json"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "commit_or_candidate_sha": "self",
+  "changed_paths": [
+    "docs/formats.md",
+    "docs/review-memory-formats-doc-v1.json"
+  ],
+  "reviewed_evidence": [
+    "C: product main a33696d134260e95a80935e8debad7ee0bf8c942 contains the delivered memory propose parser in pocketchat/cli.py and guarded candidate creation in pocketchat/memory_migration.py.",
+    "C: docs/cli.md documents propose, migrate, accept, retire and forget as explicit v2-store operations, while docs/formats.md still named only the earlier four-operation set.",
+    "C: the earlier project-continuity review recorded this exact documentation gap as deferred finding PC-PCONT-R2-02 because docs/formats.md was outside that candidate's write scope.",
+    "R: fresh-context automated review of the staged two-file diff found no actionable issues; it confirmed that the operation inventory matches current code and that proposal remains separate from acceptance. No code, schema, test, compatibility, changelog, queue or release status changed.",
+    "V: python3 -m json.tool parsed this record, the exact operation-list assertion passed, and git diff --check exited 0. Product behavior tests and builds were not run because no executable or schema bytes changed."
+  ],
+  "unverified_scope": "This documentation maintenance does not run or change product behavior, provider calls, package builds, wheels, real project-memory quality, deletion behavior, tags, Releases or package uploads. Exact-head CI and merged-main readback remain delivery evidence."
+}
