@@ -194,7 +194,9 @@
     "python_3_9": "105 tests passed",
     "document_guards": "23 tests passed",
     "offline_fixture": "8 assertions passed",
-    "static_checks": "Ruff E9/F, compileall on Python 3.13 and 3.9, git diff --check passed"
+    "static_checks": "Ruff E9/F, compileall on Python 3.13 and 3.9, git diff --check passed",
+    "exact_head_ci": "Candidate 0ea708fad83a880cfb8020bdb48ce05fe3f2fec2 passed seven checks in workflow run 42966168189: release smoke plus Ubuntu, macOS and Windows on CPython 3.9 and 3.13.",
+    "merged_main": "PR #55 merged as 3091090b53f5c5bdc217313b6a7d1677f0d69b02; origin/main readback contains candidate 0ea708fad83a880cfb8020bdb48ce05fe3f2fec2 as its second parent."
   },
   "review_rounds": [
     {
@@ -246,14 +248,21 @@
     "V: a new real cross-process red regression reproduced the migration-first visible-empty-target window. After the staged unreadable/write/fsync/readable publication fix, both interleaving regressions and the existing descriptor cleanup failures passed; final CPython 3.13.9 and 3.9.6 affected suites each passed 105 tests.",
     "R: the post-cap new-diff review found one P2 permission regression: unconditional fchmod(0644) overrode umask 077 and widened migrated memory from 0600 to 0644.",
     "V: a real umask 077 regression failed at mode 0644, then passed at owner-only 0600. Final CPython 3.13.9 and 3.9.6 affected suites each passed 105 tests; Ruff E9/F, dual compileall and git diff --check passed.",
-    "C: final publication preparation removes internal orchestration labels from this public review record without changing the implementation, tests, findings, verification results or unverified scope."
+    "C: final publication preparation removes internal orchestration labels from this public review record without changing the implementation, tests, findings, verification results or unverified scope.",
+    "V: exact-head workflow run 42966168189 completed seven successful checks for candidate 0ea708fad83a880cfb8020bdb48ce05fe3f2fec2: release smoke and the Ubuntu/macOS/Windows CPython 3.9/3.13 matrix.",
+    "V: PR #55 merged the reviewed candidate as 3091090b53f5c5bdc217313b6a7d1677f0d69b02; origin/main readback verifies the candidate is the merge second parent and all 12 changed paths are present."
   ],
-  "unverified_scope": "Exact-head required GitHub CI and merged-main readback are pending. Real-provider relevance/answer quality, arbitrary projects, cross-platform manual operation, secure deletion of traces or already-sent content, tag, Release and package publication are not run or authorized. docs/formats.md needs the recorded docs-only follow-up because it is outside this task write scope.",
+  "unverified_scope": "Real-provider relevance/answer quality, arbitrary projects, cross-platform manual operation, secure deletion of traces or already-sent content, tag, Release and package publication are not run or authorized. docs/formats.md needs the recorded docs-only follow-up because it is outside this task write scope.",
   "new_diff_reviews": [
     {
       "after_round": 3,
       "scope": "two-phase migration publication fix only",
       "result": "one P2 permission-regression finding; red/green owner-only mode test fixed it; final new diff re-read with no remaining open major/blocker"
+    },
+    {
+      "after_round": 3,
+      "scope": "integration evidence record only",
+      "result": "records authenticated PR, exact candidate checks and merged-main readback; no product implementation or test bytes changed"
     }
   ]
 }
