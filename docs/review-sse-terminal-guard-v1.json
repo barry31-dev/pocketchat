@@ -22,8 +22,9 @@
     {
       "severity": "major",
       "status": "fixed",
-      "reason": "Fresh-context static review found TLS and other OSError read failures escaping as unclassified io_error rather than retryable incomplete_stream. Catch OSError alongside IncompleteRead, preserving acceptance after a terminal marker, and add a discriminating ssl.SSLEOFError regression.",
-      "fingerprint": "sse-read-errors-not-normalized"
+      "reason": "Fresh-context static review found TLS and other OSError read failures escaping as unclassified io_error rather than retryable incomplete_stream. Catch OSError alongside IncompleteRead, preserving acceptance after a terminal marker, and add a discriminating ssl.SSLEOFError regression. The finding was fixed in the exact final head 1042d7b596c98f8ee4c2bdb93e40efca1c7cd473.",
+      "fingerprint": "sse-read-errors-not-normalized",
+      "id": "SSE-READ-NORMALIZATION-1"
     }
   ],
   "slice": "PC-SSE-TERMINAL-GUARD-1",
@@ -116,20 +117,32 @@
       "status": "verified",
       "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests tests.test_tool_calls tests.test_recovery_policy -q; ruff check --select E9,F pocketchat/provider.py tests/test_kernel.py; python3 -m compileall -q pocketchat/provider.py tests/test_kernel.py; git diff --check",
       "result": "41 adjacent tests passed; Ruff, compileall and diff check exited 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.13 -B -m unittest [5 terminal-boundary tests + ProviderStreamTests + test_tool_calls + test_recovery_policy + test_release_process_docs] -q",
+      "result": "62 tests passed, exit 0 on macOS CPython 3.13.9 at exact head 1042d7b596c98f8ee4c2bdb93e40efca1c7cd473."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "blocked",
+      "command": "python3.13 -B -m unittest discover -s tests -v (exact final head)",
+      "result": "1650 discovered tests ran in 27.422s; 349 errors all with PermissionError [Errno 1] binding 127.0.0.1 in this sandbox, one skipped. This is an environment restriction, not a product assertion failure; full green suite remains unverified for this exact head."
     }
   ],
-  "unverified": "Real provider behavior, manual terminal usability, cross-platform local runtime, full local suite, HTTP loopback tests in this sandbox, packaging, tag, Release and upload were not run or not available. Exact-head CI and main readback remain pending.",
+  "unverified": "Real provider behavior, manual terminal usability, cross-platform local runtime, full local suite, HTTP loopback tests in this sandbox, packaging, tag, Release and upload were not run or not available. Exact-head CI and main readback remain pending. B-round 09:00 local full discovery was blocked by loopback bind; fresh-context final review, exact-head CI and main readback remain pending.",
   "checkpoint": {
     "complete": true,
     "ready_for_integration": false,
-    "next_action": "Fresh-context re-review of the final candidate head, then use pocketchat_delivery.py for exact-candidate push/PR/CI and merge readback."
+    "next_action": "Fresh-context review of exact final head 1042d7b596c98f8ee4c2bdb93e40efca1c7cd473 and its new-diff-only TLS EOF fix, then controlled push/PR/exact-head CI/merge readback with a valid live fleet token. Do not mark ready until that review has a non-PENDING decision."
   },
   "reviews": [
     {
       "round": 1,
       "reviewer": "author self-review",
       "decision": "PENDING",
-      "coverage": "Full seven-path committed candidate plus follow-up read-error hardening; independent fresh-context review still pending.",
+      "coverage": "Author self-review of the seven-path committed candidate plus TLS/OSError follow-up. Independent fresh-context review remains pending; no approval is claimed.",
       "findings": []
     }
   ],
