@@ -15,10 +15,17 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 1,
+  "rounds": 2,
   "round_decision": "review",
   "round_scope": "full",
-  "findings": [],
+  "findings": [
+    {
+      "severity": "major",
+      "status": "fixed",
+      "reason": "Fresh-context static review found TLS and other OSError read failures escaping as unclassified io_error rather than retryable incomplete_stream. Catch OSError alongside IncompleteRead, preserving acceptance after a terminal marker, and add a discriminating ssl.SSLEOFError regression.",
+      "fingerprint": "sse-read-errors-not-normalized"
+    }
+  ],
   "slice": "PC-SSE-TERMINAL-GUARD-1",
   "base_commit": "fd36213d772f62dbb49a8da87c0e9e5c1857e4bd",
   "authority": {
@@ -97,13 +104,25 @@
       "status": "verified",
       "command": "python3 -B -m unittest tests.test_release_process_docs -v",
       "result": "16 documentation-contract tests passed, exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests.test_tls_eof_before_terminal_marker_is_retryable tests.test_kernel.ProviderStreamTests.test_stream_read_error_without_terminal_marker_is_retryable tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_survives_a_later_read_error tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_is_accepted_without_done_marker tests.test_kernel.ProviderStreamTests.test_truncated_stream_is_refused_instead_of_fabricating_stop -v",
+      "result": "5 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests tests.test_tool_calls tests.test_recovery_policy -q; ruff check --select E9,F pocketchat/provider.py tests/test_kernel.py; python3 -m compileall -q pocketchat/provider.py tests/test_kernel.py; git diff --check",
+      "result": "41 adjacent tests passed; Ruff, compileall and diff check exited 0."
     }
   ],
   "unverified": "Real provider behavior, manual terminal usability, cross-platform local runtime, full local suite, HTTP loopback tests in this sandbox, packaging, tag, Release and upload were not run or not available. Exact-head CI and main readback remain pending.",
   "checkpoint": {
     "complete": true,
     "ready_for_integration": false,
-    "next_action": "Fresh-context standard review of the final candidate head, then use pocketchat_delivery.py for exact-candidate push/PR/CI and merge readback."
+    "next_action": "Fresh-context re-review of the final candidate head, then use pocketchat_delivery.py for exact-candidate push/PR/CI and merge readback."
   },
   "reviews": [
     {

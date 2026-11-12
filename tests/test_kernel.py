@@ -805,6 +805,24 @@ class ProviderStreamTests(unittest.TestCase):
         self.assertEqual(caught.exception.error_type, "incomplete_stream")
         self.assertTrue(caught.exception.retryable)
 
+    def test_tls_eof_before_terminal_marker_is_retryable(self):
+        import ssl
+
+        from pocketchat.provider import ProviderError, _stream_response
+
+        class TruncatedTls:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"partial"},'
+                       b'"finish_reason":""}]}\n')
+                raise ssl.SSLEOFError("unexpected EOF")
+
+        with self.assertRaises(ProviderError) as caught:
+            _stream_response(TruncatedTls(), "m", 200)
+        self.assertEqual(caught.exception.error_type, "incomplete_stream")
+        self.assertTrue(caught.exception.retryable)
+
     def test_terminal_finish_reason_survives_a_later_read_error(self):
         from http.client import IncompleteRead
 

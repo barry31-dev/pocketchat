@@ -418,7 +418,7 @@ def _stream_response(response, model: str, status_code: int,
             raw_line = next(iterator)
         except StopIteration:
             break
-        except (IncompleteRead, ConnectionResetError, socket.timeout) as exc:
+        except (IncompleteRead, OSError) as exc:
             if saw_terminal_marker or finish_reason:
                 break
             raise ProviderError(
