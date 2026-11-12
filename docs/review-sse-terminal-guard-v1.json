@@ -22,7 +22,7 @@
     {
       "severity": "major",
       "status": "fixed",
-      "reason": "Fresh-context static review found TLS and other OSError read failures escaping as unclassified io_error rather than retryable incomplete_stream. Catch OSError alongside IncompleteRead, preserving acceptance after a terminal marker, and add a discriminating ssl.SSLEOFError regression. The finding was fixed in the exact final head 1042d7b596c98f8ee4c2bdb93e40efca1c7cd473.",
+      "reason": "Author static review found TLS and other OSError read failures escaping as unclassified io_error rather than retryable incomplete_stream. Catch OSError alongside IncompleteRead, preserving acceptance after a terminal marker, and add a discriminating ssl.SSLEOFError regression. The behavior fix was made in 1042d7b596c98f8ee4c2bdb93e40efca1c7cd473; this later metadata-only candidate keeps that behavior unchanged.",
       "fingerprint": "sse-read-errors-not-normalized",
       "id": "SSE-READ-NORMALIZATION-1"
     }
@@ -131,19 +131,28 @@
       "result": "1650 discovered tests ran in 27.422s; 349 errors all with PermissionError [Errno 1] binding 127.0.0.1 in this sandbox, one skipped. This is an environment restriction, not a product assertion failure; full green suite remains unverified for this exact head."
     }
   ],
-  "unverified": "Real provider behavior, manual terminal usability, cross-platform local runtime, full local suite, HTTP loopback tests in this sandbox, packaging, tag, Release and upload were not run or not available. Exact-head CI and main readback remain pending. B-round 09:00 local full discovery was blocked by loopback bind; fresh-context final review, exact-head CI and main readback remain pending.",
+  "unverified": "Real provider behavior, manual terminal usability, cross-platform local runtime, full local suite, HTTP loopback tests in this sandbox, packaging, tag, Release and upload were not run or not available. Exact-head CI and main readback remain pending. Fresh-context final review remains pending; the two recorded rounds are author self-reviews, not independent approval.",
   "checkpoint": {
     "complete": true,
     "ready_for_integration": false,
-    "next_action": "Fresh-context review of exact final head 1042d7b596c98f8ee4c2bdb93e40efca1c7cd473 and its new-diff-only TLS EOF fix, then controlled push/PR/exact-head CI/merge readback with a valid live fleet token. Do not mark ready until that review has a non-PENDING decision."
+    "next_action": "Fresh-context review of the exact candidate head containing this review record and its new-diff-only TLS/OSError fix, then controlled push/PR/exact-head CI/merge readback with a valid live fleet token. Do not mark ready until that review has a non-PENDING decision."
   },
   "reviews": [
     {
       "round": 1,
       "reviewer": "author self-review",
       "decision": "PENDING",
-      "coverage": "Author self-review of the seven-path committed candidate plus TLS/OSError follow-up. Independent fresh-context review remains pending; no approval is claimed.",
+      "coverage": "Author self-review of the seven-path candidate before the TLS/OSError read-error hardening. Independent fresh-context review remains pending; no approval is claimed.",
       "findings": []
+    },
+    {
+      "round": 2,
+      "reviewer": "author self-review",
+      "decision": "PENDING",
+      "coverage": "Author static review of the new-diff-only TLS/OSError read-error fix and its discriminating regression. Independent fresh-context review remains pending; no approval is claimed.",
+      "findings": [
+        "SSE-READ-NORMALIZATION-1"
+      ]
     }
   ],
   "commit_or_candidate_sha": "self"
