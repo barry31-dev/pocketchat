@@ -19,6 +19,7 @@ evidence into guesswork:
 from __future__ import annotations
 
 import copy
+from http.client import IncompleteRead
 import json
 import re
 import socket
@@ -410,12 +411,29 @@ def _stream_response(response, model: str, status_code: int,
     first_reasoning_ms = None
     first_content_ms = None
     tool_fragments: Dict[int, Dict[str, Any]] = {}
-    for raw_line in response:
+    saw_terminal_marker = False
+    iterator = iter(response)
+    while True:
+        try:
+            raw_line = next(iterator)
+        except StopIteration:
+            break
+        except (IncompleteRead, OSError) as exc:
+            if saw_terminal_marker or finish_reason:
+                break
+            raise ProviderError(
+                "incomplete_stream",
+                "HTTP %d stream read failed before a terminal marker"
+                % status_code,
+                status_code=status_code,
+                retryable=True,
+            ) from exc
         line = raw_line.decode("utf-8", "replace").strip()
         if not line or line.startswith(":") or not line.startswith("data:"):
             continue
         data = line[5:].strip()
         if data == "[DONE]":
+            saw_terminal_marker = True
             break
         try:
             payload = json.loads(data)
@@ -473,6 +491,14 @@ def _stream_response(response, model: str, status_code: int,
                 saw_event = True
         if isinstance(choice.get("finish_reason"), str) and choice["finish_reason"]:
             finish_reason = choice["finish_reason"]
+    if not saw_terminal_marker and not finish_reason:
+        raise ProviderError(
+            "incomplete_stream",
+            "HTTP %d stream ended without [DONE] or a terminal finish_reason"
+            % status_code,
+            status_code=status_code,
+            retryable=True,
+        )
     if not saw_event:
         raise ProviderError(
             "malformed_response",

@@ -1,0 +1,206 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/provider.py",
+    "tests/test_kernel.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-sse-terminal-guard-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "approve",
+  "round_scope": "full",
+  "findings": [
+    {
+      "severity": "major",
+      "status": "fixed",
+      "reason": "Author static review found TLS and other OSError read failures escaping as unclassified io_error rather than retryable incomplete_stream. Catch OSError alongside IncompleteRead, preserving acceptance after a terminal marker, and add a discriminating ssl.SSLEOFError regression. The behavior fix was made in 1042d7b596c98f8ee4c2bdb93e40efca1c7cd473; this later metadata-only candidate keeps that behavior unchanged.",
+      "fingerprint": "sse-read-errors-not-normalized",
+      "id": "SSE-READ-NORMALIZATION-1"
+    }
+  ],
+  "slice": "PC-SSE-TERMINAL-GUARD-1",
+  "base_commit": "fd36213d772f62dbb49a8da87c0e9e5c1857e4bd",
+  "authority": {
+    "kind": "agent-delegated",
+    "decision": "PocketChat routine-development delegation 2026-11-09"
+  },
+  "goal": "Refuse a truncated OpenAI-compatible SSE stream instead of returning a completed turn with fabricated stop semantics.",
+  "not_doing": [
+    "No real-provider or manual-terminal claim",
+    "No tag, Release or package upload",
+    "No change to non-streaming response parsing"
+  ],
+  "done_when": "A truncated SSE stream without [DONE] or a terminal finish_reason raises retryable incomplete_stream before any completed response is returned; complete streams, tool-only streams, usage handling and existing response fields remain valid.",
+  "write_scope": [
+    "pocketchat/provider.py",
+    "tests/test_kernel.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-sse-terminal-guard-v1.json"
+  ],
+  "plan": [
+    "Reproduce a partial stream being returned as completed with stop.",
+    "Track [DONE] and terminal finish_reason separately and fail EOF as retryable incomplete_stream.",
+    "Cover parser and Session trace behavior, document the contract, run focused checks, then obtain independent review and deliver through the controlled product entry.",
+    "Harden stream iteration so an IncompleteRead/connection reset before a terminal marker becomes the same retryable incomplete_stream failure; a terminal finish_reason already observed remains accepted."
+  ],
+  "budget_stop": "One bounded correctness slice; stop on ownership conflict, unexpected file effects or a blocking review finding.",
+  "rollback": "Revert the terminal-marker check; no persisted session, trace or user file is migrated.",
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests.test_truncated_stream_is_refused_instead_of_fabricating_stop -v before implementation",
+      "result": "exit 1; ProviderError was not raised and the partial response would have been normalized as completed."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests.test_truncated_stream_is_refused_instead_of_fabricating_stop tests.test_kernel.ProviderStreamTests.test_session_records_truncated_stream_as_retryable_failure tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_is_accepted_without_done_marker -v",
+      "result": "3 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests tests.test_tool_calls tests.test_recovery_policy -v",
+      "result": "38 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff check --select E9,F pocketchat/provider.py tests/test_kernel.py; python3 -m compileall -q pocketchat/provider.py tests/test_kernel.py; git diff --check",
+      "result": "Ruff, compileall and diff check exited 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "blocked",
+      "command": "HTTP/loopback stream and request-snapshot tests",
+      "result": "Two existing HTTP tests errored before executing their assertions with PermissionError [Errno 1] from binding 127.0.0.1 in this sandbox. This is an environment restriction, not a product result."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests.test_stream_read_error_without_terminal_marker_is_retryable tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_survives_a_later_read_error tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_is_accepted_without_done_marker tests.test_kernel.ProviderStreamTests.test_truncated_stream_is_refused_instead_of_fabricating_stop -v",
+      "result": "4 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests tests.test_tool_calls tests.test_recovery_policy -q",
+      "result": "40 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_release_process_docs -v",
+      "result": "16 documentation-contract tests passed, exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests.test_tls_eof_before_terminal_marker_is_retryable tests.test_kernel.ProviderStreamTests.test_stream_read_error_without_terminal_marker_is_retryable tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_survives_a_later_read_error tests.test_kernel.ProviderStreamTests.test_terminal_finish_reason_is_accepted_without_done_marker tests.test_kernel.ProviderStreamTests.test_truncated_stream_is_refused_instead_of_fabricating_stop -v",
+      "result": "5 tests passed, exit 0 on macOS CPython 3.13.9."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_kernel.ProviderStreamTests tests.test_tool_calls tests.test_recovery_policy -q; ruff check --select E9,F pocketchat/provider.py tests/test_kernel.py; python3 -m compileall -q pocketchat/provider.py tests/test_kernel.py; git diff --check",
+      "result": "41 adjacent tests passed; Ruff, compileall and diff check exited 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.13 -B -m unittest [5 terminal-boundary tests + ProviderStreamTests + test_tool_calls + test_recovery_policy + test_release_process_docs] -q",
+      "result": "62 tests passed, exit 0 on macOS CPython 3.13.9 at exact head 1042d7b596c98f8ee4c2bdb93e40efca1c7cd473."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "blocked",
+      "command": "python3.13 -B -m unittest discover -s tests -v (exact final head)",
+      "result": "1650 discovered tests ran in 27.422s; 349 errors all with PermissionError [Errno 1] binding 127.0.0.1 in this sandbox, one skipped. This is an environment restriction, not a product assertion failure; full green suite remains unverified for this exact head."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_kernel.ProviderStreamHttpTests.test_truncated_http_stream_never_records_completed_response -v on original main before terminal guard",
+      "result": "1 test red: completed != failed, exit1. Real loopback HTTP EOF without terminal marker reproduces false success."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_kernel.ProviderStreamTests tests.test_kernel.ProviderStreamHttpTests tests.test_kernel.ProviderStreamSnapshotTests tests.test_tool_calls tests.test_recovery_policy tests.test_release_process_docs -v",
+      "result": "62 selected tests:61pass,1new-test expected wrong terminal event. Corrected only test to actual run.failed; affected test rerun0.027sOKexit0. Product code unchanged from recovered candidate."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest discover -s tests -v",
+      "result": "macOS Python3.12.13:1682tests56.189sOK,1skipped,exit0. This new run closes the prior environment-specific loopback/full-suite gap for this candidate only."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff check --select E9,F pocketchat/provider.py tests/test_kernel.py; Python AST parsing; git diff --check",
+      "result": "All passed; no new implementation changes beyond recovered terminal guard; added real HTTP refusal/snapshot/trace regression."
+    }
+  ],
+  "unverified": "Real paid provider behavior, manual terminal usability, cross-platform local runtime, wheel packaging, tag, Release and upload are not run for this slice. Exact-head CI/main integration follows the product PR and external readback; this source record was authored before that delivery. The new local1682-test run closes prior loopback/full-suite environment gaps for its actual input only.",
+  "checkpoint": {
+    "complete": true,
+    "ready_for_integration": true,
+    "next_action": "Controlled exact task-head push and PR CI; merge only after the current head checks succeed, then read back main. This checkpoint is recorded before integration, not a claim that it occurred."
+  },
+  "reviews": [
+    {
+      "round": 1,
+      "reviewer": "author self-review",
+      "decision": "PENDING",
+      "coverage": "Author self-review of the seven-path candidate before the TLS/OSError read-error hardening. Independent fresh-context review remains pending; no approval is claimed.",
+      "findings": []
+    },
+    {
+      "round": 2,
+      "reviewer": "author self-review",
+      "decision": "PENDING",
+      "coverage": "Author static review of the new-diff-only TLS/OSError read-error fix and its discriminating regression. Independent fresh-context review remains pending; no approval is claimed.",
+      "findings": [
+        "SSE-READ-NORMALIZATION-1"
+      ]
+    },
+    {
+      "round": 3,
+      "reviewer": "fresh-context independent agent",
+      "decision": "APPROVE",
+      "coverage": "Base fd36213d772f62dbb49a8da87c0e9e5c1857e4bd to recovered head3780e1254871a1ddae55f6e04235166e602ef0fc, seven-path full diff, required Session caller and additional uncommitted HTTP test. Independent reviewer ran nothing. Exact changed source/test bytes bound by candidate_file_sha256; later metadata/delivery head is not independently claimed reviewed.",
+      "findings": []
+    }
+  ],
+  "commit_or_candidate_sha": "self",
+  "recovery": {
+    "kind": "saved-candidate-continuation",
+    "recovered_candidate": "3780e1254871a1ddae55f6e04235166e602ef0fc",
+    "behavior_candidate": "1042d7b596c98f8ee4c2bdb93e40efca1c7cd473",
+    "implementation_reused": true,
+    "new_verification_date": "2026-11-14",
+    "new_checks": "One real HTTP truncation test plus previously unavailable loopback/full suite; no new provider or release authority."
+  },
+  "candidate_file_sha256": {
+    "pocketchat/provider.py": "3029aeb8d14a560f408f372913886d59221da23c3dcb0d1ed5a25b4ad909a095",
+    "tests/test_kernel.py": "bcc79fdfc5d770d3d684fb597709da0b5c9aa1d901967be8a423be556358eb8f",
+    "docs/provider-adapters.md": "eae2ab2338d91715eb21922d815114b49aac0c56a867b9f320f839e3656e8776",
+    "docs/provider-adapters.zh-CN.md": "04cd7c92bd8fc1aa7aba208d2dce49163cd6d497126625af6d5b82c7edb70963",
+    "docs/cli.md": "65ce0dd41e69c82d38d1067a8bea112952925f14a85db1c94fce88035cbcee79",
+    "docs/cli.zh-CN.md": "deb2cc3c36cd794ed1c4b70e5ec01ef24481937df734da2265dd9850e468ac68"
+  }
+}

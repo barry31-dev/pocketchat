@@ -728,6 +728,132 @@ class ProviderBoundaryTests(unittest.TestCase):
 
 
 class ProviderStreamTests(unittest.TestCase):
+    def test_truncated_stream_is_refused_instead_of_fabricating_stop(self):
+        from pocketchat.provider import ProviderError, _stream_response
+
+        class Truncated:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"partial"},'
+                       b'"finish_reason":""}]}\n')
+
+        with self.assertRaises(ProviderError) as caught:
+            _stream_response(Truncated(), "m", 200)
+        self.assertEqual(caught.exception.error_type, "incomplete_stream")
+        self.assertTrue(caught.exception.retryable)
+
+    def test_session_records_truncated_stream_as_retryable_failure(self):
+        from pocketchat.provider import ProviderAdapter, _stream_response
+        from pocketchat.session import Session
+
+        class TruncatedAdapter(ProviderAdapter):
+            name = "truncated-stream"
+
+            def build_payload(self, messages, config):
+                return {"model": config["model"], "messages": messages,
+                        "stream": False}
+
+            def complete(self, messages, config, api_key, on_delta=None,
+                         prepared_payload=None):
+                class Truncated:
+                    headers = {"Content-Type": "text/event-stream"}
+
+                    def __iter__(self):
+                        yield (b'data: {"choices":[{"delta":{"content":"partial"},'
+                               b'"finish_reason":""}]}\n')
+
+                return _stream_response(
+                    Truncated(), config["model"], 200, on_delta=on_delta)
+
+        config = {
+            "profile": "test", "model": "m",
+            "base_url": "http://example.invalid/v1", "api_key_env": "K",
+            "timeout_seconds": 5, "max_context_chars": 1000,
+            "summary_prefix_chars": 40, "requires_api_key": False,
+            "provider_adapter": TruncatedAdapter(),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            trace = Path(directory) / "trace.jsonl"
+            session = Session(config, trace, "run_truncated", api_key="k")
+            self.assertEqual(session.run(["hi"]), "failed")
+            events = [json.loads(line) for line in
+                      trace.read_text(encoding="utf-8").splitlines()]
+            self.assertNotIn("model.response.completed",
+                             [event["type"] for event in events])
+            failed = next(event for event in events
+                          if event["type"] == "model.response.failed")
+            self.assertEqual(failed["payload"]["error"]["type"],
+                             "incomplete_stream")
+            self.assertIs(failed["payload"]["retryable"], True)
+
+    def test_stream_read_error_without_terminal_marker_is_retryable(self):
+        from http.client import IncompleteRead
+
+        from pocketchat.provider import ProviderError, _stream_response
+
+        class TruncatedRead:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"partial"},'
+                       b'"finish_reason":""}]}\n')
+                raise IncompleteRead(b"partial")
+
+        with self.assertRaises(ProviderError) as caught:
+            _stream_response(TruncatedRead(), "m", 200)
+        self.assertEqual(caught.exception.error_type, "incomplete_stream")
+        self.assertTrue(caught.exception.retryable)
+
+    def test_tls_eof_before_terminal_marker_is_retryable(self):
+        import ssl
+
+        from pocketchat.provider import ProviderError, _stream_response
+
+        class TruncatedTls:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"partial"},'
+                       b'"finish_reason":""}]}\n')
+                raise ssl.SSLEOFError("unexpected EOF")
+
+        with self.assertRaises(ProviderError) as caught:
+            _stream_response(TruncatedTls(), "m", 200)
+        self.assertEqual(caught.exception.error_type, "incomplete_stream")
+        self.assertTrue(caught.exception.retryable)
+
+    def test_terminal_finish_reason_survives_a_later_read_error(self):
+        from http.client import IncompleteRead
+
+        from pocketchat.provider import _stream_response
+
+        class TerminalThenReadError:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"complete"},'
+                       b'"finish_reason":"stop"}]}\n')
+                raise IncompleteRead(b"complete")
+
+        result = _stream_response(TerminalThenReadError(), "m", 200)
+        self.assertEqual(result["content"], "complete")
+        self.assertEqual(result["finish_reason"], "stop")
+
+    def test_terminal_finish_reason_is_accepted_without_done_marker(self):
+        from pocketchat.provider import _stream_response
+
+        class TerminalWithoutDone:
+            headers = {"Content-Type": "text/event-stream"}
+
+            def __iter__(self):
+                yield (b'data: {"choices":[{"delta":{"content":"complete"},'
+                       b'"finish_reason":"stop"}]}\n')
+
+        result = _stream_response(TerminalWithoutDone(), "m", 200)
+        self.assertEqual(result["content"], "complete")
+        self.assertEqual(result["finish_reason"], "stop")
+
     def test_stream_records_time_to_first_token(self):
         from pocketchat.provider import _stream_response
         import time as _time
@@ -942,6 +1068,49 @@ class ProviderStreamTests(unittest.TestCase):
             result["time_to_first_reasoning_ms"])
 
 class ProviderStreamHttpTests(unittest.TestCase):
+    def test_truncated_http_stream_never_records_completed_response(self):
+        from pocketchat.session import Session
+
+        class TruncatedHandler(BaseHTTPRequestHandler):
+            request_body = None
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                TruncatedHandler.request_body = json.loads(self.rfile.read(length))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(
+                    b'data: {"choices":[{"delta":{"content":"partial"},"finish_reason":""}]}\n\n')
+                self.wfile.flush()
+                self.close_connection = True
+
+            def log_message(self, *args):
+                pass
+
+        stub = hp.StubHTTPServer(TruncatedHandler)
+        self.addCleanup(stub.close)
+        config = {"base_url": "http://127.0.0.1:%d/v1" % stub.port,
+                  "model": "m", "api_key_env": "K", "timeout_seconds": 5,
+                  "max_context_chars": 1000, "summary_prefix_chars": 40}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = root / "traces" / "run.jsonl"
+            session = Session(config, trace, "run_http_truncated", api_key="k")
+            seen = []
+            session.on_delta = lambda kind, text: seen.append((kind, text))
+            self.assertEqual(session.run(["hi"]), "failed")
+            self.assertEqual(seen, [("content", "partial")])
+            snapshot = json.loads(session.request_snapshots[0].read_text())
+            self.assertEqual(snapshot["request"], TruncatedHandler.request_body)
+            self.assertIs(snapshot["request"]["stream"], True)
+            events = [json.loads(line) for line in trace.read_text().splitlines()]
+            self.assertNotIn("model.response.completed", [e["type"] for e in events])
+            failure = next(e for e in events if e["type"] == "model.response.failed")
+            self.assertEqual(failure["payload"]["error"]["type"], "incomplete_stream")
+            self.assertIs(failure["payload"]["retryable"], True)
+            self.assertEqual(events[-1]["type"], "run.failed")
+
     def test_streamed_trace_has_ttft_and_nonstreamed_trace_does_not(self):
         from pocketchat.provider import OpenAICompatibleAdapter
         from pocketchat.session import Session
