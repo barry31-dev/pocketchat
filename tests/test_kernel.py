@@ -1068,6 +1068,49 @@ class ProviderStreamTests(unittest.TestCase):
             result["time_to_first_reasoning_ms"])
 
 class ProviderStreamHttpTests(unittest.TestCase):
+    def test_truncated_http_stream_never_records_completed_response(self):
+        from pocketchat.session import Session
+
+        class TruncatedHandler(BaseHTTPRequestHandler):
+            request_body = None
+
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                TruncatedHandler.request_body = json.loads(self.rfile.read(length))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.end_headers()
+                self.wfile.write(
+                    b'data: {"choices":[{"delta":{"content":"partial"},"finish_reason":""}]}\n\n')
+                self.wfile.flush()
+                self.close_connection = True
+
+            def log_message(self, *args):
+                pass
+
+        stub = hp.StubHTTPServer(TruncatedHandler)
+        self.addCleanup(stub.close)
+        config = {"base_url": "http://127.0.0.1:%d/v1" % stub.port,
+                  "model": "m", "api_key_env": "K", "timeout_seconds": 5,
+                  "max_context_chars": 1000, "summary_prefix_chars": 40}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trace = root / "traces" / "run.jsonl"
+            session = Session(config, trace, "run_http_truncated", api_key="k")
+            seen = []
+            session.on_delta = lambda kind, text: seen.append((kind, text))
+            self.assertEqual(session.run(["hi"]), "failed")
+            self.assertEqual(seen, [("content", "partial")])
+            snapshot = json.loads(session.request_snapshots[0].read_text())
+            self.assertEqual(snapshot["request"], TruncatedHandler.request_body)
+            self.assertIs(snapshot["request"]["stream"], True)
+            events = [json.loads(line) for line in trace.read_text().splitlines()]
+            self.assertNotIn("model.response.completed", [e["type"] for e in events])
+            failure = next(e for e in events if e["type"] == "model.response.failed")
+            self.assertEqual(failure["payload"]["error"]["type"], "incomplete_stream")
+            self.assertIs(failure["payload"]["retryable"], True)
+            self.assertEqual(events[-1]["type"], "run.failed")
+
     def test_streamed_trace_has_ttft_and_nonstreamed_trace_does_not(self):
         from pocketchat.provider import OpenAICompatibleAdapter
         from pocketchat.session import Session
