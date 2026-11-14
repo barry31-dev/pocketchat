@@ -1,0 +1,80 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/provider.py",
+    "tests/test_provider_http_boundary.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-http-response-boundary-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 0,
+  "round_decision": "pending",
+  "round_scope": "full",
+  "findings": [],
+  "slice": "PC-HTTP-RESPONSE-BOUNDARY-1",
+  "base_commit": "c84a3f691cacbc0d11e8c59a565878fab8421841",
+  "authority": {
+    "kind": "agent-delegated",
+    "decision": "PocketChat routine-development delegation 2026-11-09"
+  },
+  "goal": "Keep interrupted non-streaming provider HTTP exchanges inside the existing failed-turn and trace contract rather than escaping as raw HTTP exceptions. Preserve complete responses, error semantics, credentials and existing retry ownership.",
+  "not_doing": [
+    "No SSE terminal-rule redesign",
+    "No provider-local automatic retries, new tools or paid calls",
+    "No tags, Releases or package uploads"
+  ],
+  "done_when": "Real loopback HTTP red regressions reproduce short fixed-length JSON, broken chunks and disconnect before headers; normalized failures terminate Session with model.response.failed and run.failed, never completed. Complete and malformed JSON controls retain existing behavior. Focused tests, fresh-context review, exact-head CI/main readback and AIKanban fixed evidence close delivery.",
+  "write_scope": [
+    "pocketchat/provider.py",
+    "tests/test_provider_http_boundary.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-http-response-boundary-v1.json"
+  ],
+  "plan": [
+    "Write real HTTP failure regressions for short valid JSON, broken chunks, and disconnect before headers; observe raw exceptions before implementation.",
+    "Normalize response-body HTTP protocol failures to retryable incomplete_response and pre-header HTTP failures to retryable connection_error without reflecting remote bytes. Preserve HTTP status and existing timeout/HTTPError semantics.",
+    "Run focused provider, Session, retry and documentation checks; independently review the exact diff.",
+    "Controlled push/PR, exact-head CI, merge and main readback; archive fixed task/test/delivery evidence through AIKanban without changing legacy verification authority."
+  ],
+  "budget_stop": "One bounded correctness slice; preserve checkpoint on external failure; at most three review rounds.",
+  "rollback_next": "Revert the isolated commit if needed; later select the next approved user-result package.",
+  "evidence": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_provider_http_boundary -v (before implementation)",
+      "result": "macOS CPython 3.12.13: 7 tests; expected red, 2 failures and 4 errors. Short fixed-length and broken chunked reads raised raw IncompleteRead; Session missed failed-response events; pre-header disconnect was non-retryable io_error. Exit 1."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_provider_http_boundary -v",
+      "result": "7 tests passed in 0.116s, exit 0. Actual loopback HTTP covers short valid JSON, broken chunked, pre-header disconnect, Session terminal trace, complete fixed/chunked/close-delimited bodies, complete malformed JSON and truncated 401."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_kernel tests.test_tool_calls tests.test_recovery_policy tests.test_release_process_docs -q",
+      "result": "100 adjacent tests passed in 4.686s, exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff check --select E9,F pocketchat/provider.py tests/test_provider_http_boundary.py; git diff --check",
+      "result": "Both exited 0."
+    }
+  ],
+  "unverified": "No real paid provider, manual TUI, arbitrary HTTP attack coverage, package release, tags or uploads.",
+  "reviews": []
+}

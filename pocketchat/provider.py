@@ -19,7 +19,7 @@ evidence into guesswork:
 from __future__ import annotations
 
 import copy
-from http.client import IncompleteRead
+from http.client import HTTPException, IncompleteRead
 import json
 import re
 import socket
@@ -332,7 +332,16 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
                     response.headers.get("Content-Type") or ""):
                 return _stream_response(response, config["model"], status_code,
                                         on_delta=on_delta)
-            raw = response.read()
+            try:
+                raw = response.read()
+            except HTTPException as exc:
+                # Do not parse partial bytes or reflect peer-controlled framing.
+                raise ProviderError(
+                    "incomplete_response",
+                    "HTTP %d response body was interrupted" % status_code,
+                    status_code=status_code,
+                    retryable=True,
+                ) from exc
     except urllib.error.HTTPError as exc:
         raise _http_error(exc, api_key)
     except socket.timeout:
@@ -351,6 +360,11 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
         raise ProviderError(
             "connection_error", "could not reach provider: %s" % reason, retryable=True
         )
+    except HTTPException as exc:
+        # Includes RemoteDisconnected (also an OSError) before headers arrive.
+        raise ProviderError(
+            "connection_error", "provider HTTP exchange failed", retryable=True
+        ) from exc
     except OSError as exc:
         raise ProviderError("io_error", "request failed: %s" % exc)
 

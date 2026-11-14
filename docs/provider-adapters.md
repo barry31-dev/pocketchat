@@ -56,6 +56,16 @@ explicit `[DONE]` marker or a non-empty terminal `finish_reason`. EOF before
 either is refused as retryable `incomplete_stream`; a partial answer is never
 recorded as a completed turn.
 
+Non-streaming JSON is accepted only after its HTTP framing completes. A short
+`Content-Length` body or broken chunked transfer fails as retryable
+`incomplete_response`, even when the received prefix is valid JSON. An HTTP
+protocol failure before response headers (including a disconnected peer) fails
+as retryable `connection_error`. Error text does not echo partial payloads or
+remote framing. Complete malformed JSON remains non-retryable
+`malformed_response`; HTTP error statuses and timeout classification are
+unchanged. The adapter does not retry; only the configured Session recovery
+policy may retry a request, which does not prove the provider did no work.
+
 ## Session integration
 
 A session reads `config["provider_adapter"]` when present; otherwise it uses
