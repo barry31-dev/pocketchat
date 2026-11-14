@@ -325,15 +325,35 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
         },
     )
 
+    check = config.get('_transport_check')
+    if check is not None:
+        check()
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
+            if check is not None:
+                check()
             status_code = int(getattr(response, "status", 0) or 0)
             if on_delta is not None and "text/event-stream" in (
                     response.headers.get("Content-Type") or ""):
                 return _stream_response(response, config["model"], status_code,
-                                        on_delta=on_delta)
+                                        on_delta=on_delta, transport_check=check)
             try:
-                raw = response.read()
+                if check is None:
+                    raw = response.read()
+                else:
+                    chunks = []
+                    total = 0
+                    while True:
+                        check()
+                        chunk = response.read1(65536)
+                        if not chunk:
+                            break
+                        total += len(chunk)
+                        if total > 2 * 1024 * 1024:
+                            raise ProviderError('response_too_large', 'Office response exceeds its byte limit.')
+                        chunks.append(chunk)
+                    check()
+                    raw = b''.join(chunks)
             except socket.timeout:
                 raise
             except (HTTPException, OSError) as exc:
@@ -406,7 +426,7 @@ def _usage_count(usage: Dict[str, Any], key: str) -> int:
 
 
 def _stream_response(response, model: str, status_code: int,
-                    on_delta=None) -> Dict[str, Any]:
+                    on_delta=None, transport_check=None) -> Dict[str, Any]:
     """Read one OpenAI-compatible SSE response into the normal response shape.
 
     A streamed response is still one request and one normalized result. The
@@ -430,8 +450,12 @@ def _stream_response(response, model: str, status_code: int,
     saw_terminal_marker = False
     iterator = iter(response)
     while True:
+        if transport_check is not None:
+            transport_check()
         try:
             raw_line = next(iterator)
+            if transport_check is not None:
+                transport_check()
         except StopIteration:
             break
         except (IncompleteRead, OSError) as exc:

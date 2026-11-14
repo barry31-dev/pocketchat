@@ -2,12 +2,13 @@
 const $ = id => document.getElementById(id);
 let csrf = '', current = null, selected = new Set(), report = false, revision = null, activeRun = null, polling = null;
 let conversations = [], lastSubmission = null;
+const receiptKey = 'pocketchat.pending-request.v1';
 const node = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
 function notice(message = '') { $('notice').textContent = message; }
 async function api(path, body) {
   const response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : {'Content-Type':'application/json','X-CSRF-Token':csrf}, body: body === undefined ? undefined : JSON.stringify(body)});
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Request failed.');
+  if (!response.ok) { const e=new Error(data.error || 'Request failed.');e.status=response.status;throw e; }
   return data;
 }
 function markdown(parent, content) {
@@ -23,7 +24,7 @@ function markdown(parent, content) {
   }
 }
 function busy(value) { $('send').disabled = value; $('stop').hidden = !value; $('new-chat').disabled = value; $('upload').disabled = value; }
-function setReport(value, old = null) { report = value; revision = old; $('report-toggle').setAttribute('aria-pressed', String(value)); $('revision-label').textContent = old ? 'Revising a saved version' : ''; $('prompt').placeholder = value ? 'What should this report cover?' : 'Ask anything, or tell me what you need…'; }
+function setReport(value, old = null) { report = value; revision = old; $('report-toggle').setAttribute('aria-pressed', String(value)); $('revision-label').textContent = old ? 'Revising version ' + ((current?.artifacts.length || 0) - (current?.artifacts.findIndex(a=>a.id===old) ?? 0)) : ''; $('prompt').placeholder = value ? 'What should this report cover?' : 'Ask anything, or tell me what you need…'; }
 async function refreshList() {
   conversations = (await api('/api/conversations')).items;
   renderList();
@@ -70,7 +71,7 @@ async function download(cid,aid,format) {
   const url=URL.createObjectURL(await response.blob()),a=node('a');a.href=url;a.download=`report-${aid.slice(0,8)}.${format}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 async function openConversation(cid) {
-  if(activeRun && current?.id!==cid)throw new Error('Wait for this request to finish before switching conversations.');
+  if((activeRun||lastSubmission) && current?.id!==cid)throw new Error('Wait for this request to finish before switching conversations.');
   selected=new Set();setReport(false);const c=await api('/api/conversations/'+cid);renderConversation(c);
   const running=c.runs.find(r=>['running','stopping'].includes(r.status));
   if(running)watch(running.id);
@@ -90,23 +91,46 @@ function watch(rid) {
     let preview=$('stream-preview');if(!preview){preview=node('div',undefined,'message streaming');preview.id='stream-preview';$('messages').append(preview);}preview.textContent=r.preview || 'Thinking…';
     if(['running','stopping'].includes(r.status)){polling=setTimeout(poll,350);return;}
     activeRun=null;busy(false);$('pending').hidden=true;preview.remove();renderConversation(await api('/api/conversations/'+r.conversation_id));
+    if(r.status==='completed' && r.request.intent==='report') { const saved=current.artifacts.find(a=>a.run_id===r.id);if(saved)setReport(true,saved.id); }
+    lastSubmission=null;sessionStorage.removeItem(receiptKey);
     if(r.status!=='completed')showFailure(r);else notice('');await refreshList();
   }catch(e){notice(e.message+' Status is unknown; reconnect before retrying.');polling=setTimeout(poll,2000);}};poll();
 }
+function uncertainSubmission(error) {
+  busy(true);$('stop').hidden=true;notice(error.message + ' The outcome is unknown. Recover the same request before sending anything else.');
+  const recover=node('button','Recover request');recover.onclick=()=>dispatchPending();$('notice').append(' ',recover);
+}
+async function dispatchPending() {
+  if(!lastSubmission)return;
+  try {
+    const {cid,body}=lastSubmission;
+    const r=await api('/api/conversations/'+cid+'/runs',body);
+    $('prompt').value='';$('consent').checked=false;notice();watch(r.id);
+  }catch(e){
+    if([400,403,404,413,415].includes(e.status)){lastSubmission=null;sessionStorage.removeItem(receiptKey);busy(false);notice(e.message);}
+    else uncertainSubmission(e);
+  }
+}
 $('composer').onsubmit=async event=>{event.preventDefault();notice();try{
+  if(lastSubmission){await dispatchPending();return;}
+  if(!$('consent').checked)throw new Error('Confirm sending this conversation and selected material to the provider.');
   const cid=await ensureConversation();
-  const body={prompt:$('prompt').value,intent:report?'report':'chat',source_ids:[...selected],revision_id:revision,request_id:crypto.randomUUID(),consent:$('consent').checked};
-  lastSubmission={cid,body};busy(true);const r=await api('/api/conversations/'+cid+'/runs',body);$('prompt').value='';$('consent').checked=false;watch(r.id);
+  const body={prompt:$('prompt').value,intent:report?'report':'chat',source_ids:[...selected],revision_id:revision,request_id:crypto.randomUUID(),consent:true};
+  lastSubmission={cid,body};sessionStorage.setItem(receiptKey,JSON.stringify(lastSubmission));busy(true);await dispatchPending();
 }catch(e){busy(false);notice(e.message);}};
 $('stop').onclick=()=>api('/api/runs/'+activeRun+'/stop',{}).catch(e=>notice(e.message));
-$('new-chat').onclick=()=>{if(activeRun)return;current=null;selected=new Set();setReport(false);$('messages').replaceChildren();$('sources').replaceChildren();$('artifacts').replaceChildren();$('rename').textContent='New conversation';notice();renderList();$('prompt').focus();};
+$('new-chat').onclick=()=>{if(activeRun||lastSubmission)return;current=null;selected=new Set();setReport(false);$('messages').replaceChildren();$('sources').replaceChildren();$('artifacts').replaceChildren();$('rename').textContent='New conversation';notice();renderList();$('prompt').focus();};
 $('rename').onclick=async()=>{if(!current)return;const title=window.prompt('Conversation title',current.title);if(title===null)return;try{renderConversation(await api('/api/conversations/'+current.id+'/rename',{title}));await refreshList();}catch(e){notice(e.message);}};
 $('search').oninput=renderList;$('report-toggle').onclick=()=>setReport(!report);
 $('weekly').onclick=()=>{setReport(true);$('prompt').value='Create a concise weekly report from the selected material. Include progress, risks and next steps, with source references.';$('prompt').focus();};
 for(const b of document.querySelectorAll('[data-prompt]'))b.onclick=()=>{$('prompt').value=b.dataset.prompt;$('prompt').focus();};
 $('upload').onchange=async()=>{try{const cid=await ensureConversation();for(const file of $('upload').files){if(file.size>12*1024)throw new Error('Each source must be at most 12 KiB.');const text=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());const s=await api('/api/conversations/'+cid+'/sources',{name:file.name,text});selected.add(s.id);}renderConversation(await api('/api/conversations/'+cid));}catch(e){notice(e.message);}finally{$('upload').value='';}};
 $('close-preview').onclick=()=>$('report-preview').close();
-async function boot() {const data=await api('/api/bootstrap');csrf=data.csrf;$('model').textContent=data.model;$('provider').textContent=new URL(data.provider).origin;$('connect').close();await refreshList();if(conversations.length)await openConversation(conversations[0].id);}
+async function boot() {const data=await api('/api/bootstrap');csrf=data.csrf;$('model').textContent=data.model;$('provider').textContent=new URL(data.provider).origin;$('connect').close();await refreshList();
+  const saved=sessionStorage.getItem(receiptKey);
+  if(saved){lastSubmission=JSON.parse(saved);renderConversation(await api('/api/conversations/'+lastSubmission.cid));uncertainSubmission(new Error('A previous request needs receipt recovery.'));}
+  else if(conversations.length)await openConversation(conversations[0].id);
+}
 $('connect-button').onclick=async event=>{event.preventDefault();try{await api('/api/login',{token:$('token').value});$('token').value='';await boot();}catch(e){$('connect-error').textContent=e.message;}};
 (async()=>{try{const token=location.hash.slice(1);if(token){history.replaceState(null,'',location.pathname);await api('/api/login',{token});}await boot();}catch(e){$('connect-error').textContent=e.message;$('connect').showModal();}})();
 window.addEventListener('beforeunload',()=>{if(polling)clearTimeout(polling);});

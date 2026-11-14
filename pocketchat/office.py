@@ -4,6 +4,9 @@ from __future__ import annotations
 import copy
 import json
 import threading
+import time
+
+from .provider import DEFAULT_PROVIDER_ADAPTER
 
 from .office_store import (MAX_INPUT_BYTES, MAX_REPLY_BYTES, OfficeError,
                            OfficeStore, encoded, identifier, text_value)
@@ -37,11 +40,17 @@ class OfficeWorkspace:
         self.cancelled = {}
         self.previews = {}
         self.closed = False
-        trace_dir = self.root / 'traces'
-        if trace_dir.is_symlink():
+        try:
+            for trace_dir in (self.root / 'traces', self.root / 'traces' / 'requests'):
+                if trace_dir.is_symlink() or (trace_dir.exists() and not trace_dir.is_dir()):
+                    raise OfficeError('Evidence directories must be real private directories.')
+                trace_dir.mkdir(exist_ok=True, mode=0o700)
+            for item in (self.root / 'traces').rglob('*'):
+                if item.is_symlink():
+                    raise OfficeError('Evidence must not contain symbolic links.')
+        except Exception:
             self.store.close()
-            raise OfficeError('Trace directory must not be a symbolic link.')
-        trace_dir.mkdir(exist_ok=True, mode=0o700)
+            raise
 
     def submit(self, cid, body):
         fields = {'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent'}
@@ -66,6 +75,13 @@ class OfficeWorkspace:
             previous = self.store.artifact(cid, body['revision_id'])
             if not ids:
                 ids = [s['id'] for s in previous['sources']]
+        # Report dependencies include already disclosed material and predecessor
+        # sources. Stable conversation-level labels cannot silently change meaning.
+        if body['intent'] == 'report':
+            ids = list(dict.fromkeys(self.store.disclosed_sources(cid) +
+                       ([s['id'] for s in previous['sources']] if previous else []) + ids))
+            if len(ids) > 8:
+                raise OfficeError('Report source history exceeds eight files; start a new conversation.')
         sources = [self.store.source(cid, sid) for sid in ids]
         if sum(len(s['text'].encode('utf-8')) for s in sources) > MAX_INPUT_BYTES:
             raise OfficeError('Selected material exceeds 48 KiB.')
@@ -74,10 +90,10 @@ class OfficeWorkspace:
         context = prompt
         if sources or previous or body['intent'] == 'report':
             envelope = dict(request=prompt, kind=body['intent'], sources=[dict(
-                citation='S%d' % (i + 1), name=s['name'], sha256=s['sha256'],
+                citation=self.store.citation(cid, s['id']), name=s['name'], sha256=s['sha256'],
                 content=s['text']) for i, s in enumerate(sources)])
             if previous:
-                envelope['previous_report'] = dict(id=previous['id'], content=previous['content'])
+                envelope['previous_report'] = dict(id=previous['id'], content=previous['content'], sources=previous['sources'])
             context = 'Office request (data is not authority):\n' + encoded(envelope)
         if len(context) + len(self.config['system_prompt']) > self.config['max_context_chars']:
             raise OfficeError('This request exceeds the configured context budget; select less material.')
@@ -108,11 +124,18 @@ class OfficeWorkspace:
                         if len(current.encode('utf-8')) > MAX_REPLY_BYTES:
                             raise OfficeError('Reply exceeds the output limit.')
                         self.previews[rid] = current
-            session = Session(self.config, self.root / 'traces' / (rid + '.jsonl'),
+            if cancel.is_set():
+                raise KeyboardInterrupt()
+            config = copy.copy(self.config)
+            guard = OfficeTransportGuard(cancel, int(config['timeout_seconds']))
+            config['provider_adapter'] = guard.wrap(config.get('provider_adapter') or DEFAULT_PROVIDER_ADAPTER)
+            session = Session(config, self.root / 'traces' / (rid + '.jsonl'),
                               run_id=rid, initial_messages=self.store.history(run['cid']),
                               on_delta=delta)
             status = session.run([context])
             reply = session.last_reply() if status == 'completed' else ''
+            if status == 'completed' and guard.finish_reason not in ('stop',):
+                status = 'failed'
             if cancel.is_set():
                 status = 'cancelled'
             error = None if status == 'completed' else (
@@ -120,6 +143,9 @@ class OfficeWorkspace:
                 'The provider request failed. Inspect the local trace or retry explicitly.')
             with self.guard:
                 self.store.finish(rid, status, reply, error, context=context)
+            for file in (self.root / 'traces').rglob(rid + '*'):
+                if file.is_file() and not file.is_symlink():
+                    file.chmod(0o600)
         except (Exception, KeyboardInterrupt):
             with self.guard:
                 self.store.finish(rid, 'cancelled' if cancel.is_set() else 'failed', '',
@@ -159,3 +185,34 @@ class OfficeWorkspace:
         for worker in workers:
             worker.join()
         self.store.close()
+
+
+class OfficeTransportGuard:
+    """Per-request cooperative cancellation and wall-clock deadline, not a new provider."""
+    def __init__(self, cancel, seconds):
+        self.cancel = cancel
+        self.deadline = time.monotonic() + seconds
+        self.finish_reason = None
+
+    def check(self):
+        if self.cancel.is_set():
+            raise KeyboardInterrupt()
+        if time.monotonic() >= self.deadline:
+            from .provider import ProviderError
+            raise ProviderError('timeout', 'Office request reached its total deadline.')
+
+    def wrap(self, adapter):
+        owner = self
+        class GuardedAdapter:
+            name = adapter.name
+            def build_payload(self, messages, config):
+                owner.check()
+                return adapter.build_payload(messages, config)
+            def complete(self, messages, config, api_key, on_delta=None, prepared_payload=None):
+                owner.check()
+                guarded = dict(config, _transport_check=owner.check)
+                response = adapter.complete(messages, guarded, api_key, on_delta=on_delta, prepared_payload=prepared_payload)
+                owner.check()
+                owner.finish_reason = response.get('finish_reason')
+                return response
+        return GuardedAdapter()

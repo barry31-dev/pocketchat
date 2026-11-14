@@ -100,3 +100,64 @@ class OfficeTests(unittest.TestCase):
         self.send('Shorten', 'report', [], old, 'request-002')
         new = self.app.store.get(self.cid)['artifacts'][0]['id']
         self.assertEqual(self.app.store.artifact(self.cid,new)['sources'], self.app.store.artifact(self.cid,old)['sources'])
+
+    def test_truncated_reply_is_not_a_complete_report(self):
+        self.adapter.responses = [dict(text_response('Unfinished'), finish_reason='length')]
+        r = self.send('report','report')
+        self.assertEqual(r['status'],'failed')
+        self.assertEqual(self.app.store.get(self.cid)['artifacts'],[])
+
+    def test_source_ids_stay_stable_through_changed_revision_selection(self):
+        a=self.app.store.add_source(self.cid,'a.txt','A facts')
+        b=self.app.store.add_source(self.cid,'b.txt','B facts')
+        self.send('First','report',[a['id']])
+        aid=self.app.store.get(self.cid)['artifacts'][0]['id']
+        self.send('Revise','report',[b['id']],aid,'request-002')
+        envelope=json.loads(self.adapter.calls[-1][-1]['content'].split('\n',1)[1])
+        self.assertIn('sources',envelope['previous_report'])
+        mapping={s['name']:s['citation'] for s in envelope['sources']}
+        self.assertEqual(mapping['a.txt'],'S1')
+        self.assertEqual(mapping['b.txt'],'S2')
+
+    def test_report_inherits_previously_disclosed_sources(self):
+        s=self.app.store.add_source(self.cid,'notes.txt','12')
+        self.send('Discuss',sources=[s['id']])
+        self.send('Report from those notes','report',key='request-002')
+        aid=self.app.store.get(self.cid)['artifacts'][0]['id']
+        self.assertEqual(self.app.store.artifact(self.cid,aid)['sources'][0]['id'],s['id'])
+
+
+class OfficeTransportTests(unittest.TestCase):
+    def test_cancel_before_send_and_heartbeat_deadline(self):
+        import time
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from pocketchat.office import OfficeTransportGuard
+        from pocketchat.provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
+        cancel = threading.Event()
+        cancel.set()
+        guard=OfficeTransportGuard(cancel,1)
+        config=profile_config(load_config(Path('examples/config.json')))
+        with self.assertRaises(KeyboardInterrupt):
+            guard.wrap(DEFAULT_PROVIDER_ADAPTER).complete([dict(role='user',content='Hi')],config,'')
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self,*args): pass
+            def do_POST(self):
+                self.rfile.read(int(self.headers['Content-Length']))
+                self.send_response(200)
+                self.send_header('Content-Type','text/event-stream')
+                self.end_headers()
+                try:
+                    for _ in range(40):
+                        self.wfile.write(b': heartbeat\n\n');self.wfile.flush();time.sleep(.05)
+                except (BrokenPipeError,ConnectionResetError): pass
+        server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        try:
+            config['base_url']='http://127.0.0.1:%d/v1'%server.server_port
+            cancel.clear();guard=OfficeTransportGuard(cancel,1)
+            start=time.monotonic()
+            with self.assertRaises(ProviderError):
+                guard.wrap(DEFAULT_PROVIDER_ADAPTER).complete([dict(role='user',content='Hi')],config,'',on_delta=lambda *x:None)
+            self.assertLess(time.monotonic()-start,2)
+        finally:
+            server.shutdown();server.server_close()

@@ -9,7 +9,14 @@ const assert = require('node:assert/strict');
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(process.env.OFFICE_URL);
   await page.getByText('offline-fixture',{exact:true}).waitFor();
+  let lostOnce = false;
+  await page.route('**/api/conversations/*/runs', async route => {
+    if (!lostOnce) { lostOnce=true; await route.fetch(); await route.abort('failed'); }
+    else await route.continue();
+  });
   await page.locator('#prompt').fill('Hello');await page.locator('#consent').check();await page.locator('#send').click();
+  await page.getByRole('button',{name:'Recover request',exact:true}).waitFor({timeout:3000});
+  await page.getByRole('button',{name:'Recover request',exact:true}).click();
   await page.locator('.message.assistant').filter({hasText:'Hello!'}).waitFor();
   await page.locator('#upload').setInputFiles({name:'work-notes.txt',mimeType:'text/plain',buffer:Buffer.from('Completed 12 customer follow-ups. Prepare the handover.')});
   await page.locator('.source').filter({hasText:'work-notes.txt'}).waitFor();
@@ -22,6 +29,8 @@ const assert = require('node:assert/strict');
   await page.reload();await page.waitForFunction(()=>document.querySelectorAll('.artifact').length===2);
   assert.equal(await page.locator('.message').count(),6);
   await page.screenshot({path:process.env.OFFICE_OUTPUT+'/desktop.png'});
+  await page.setViewportSize({width:900,height:844});
+  assert.equal(await page.locator('.materials').isVisible(),true);
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:process.env.OFFICE_OUTPUT+'/mobile.png',fullPage:true});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.deepEqual(errors,[]);

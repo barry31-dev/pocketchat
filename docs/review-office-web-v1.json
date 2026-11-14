@@ -25,7 +25,8 @@
     "docs/office-web.zh-CN.md",
     "docs/review-office-web-v1.json",
     "docs/handovers/2026-11-14-office-web.md",
-    "docs/slice-queue.md"
+    "docs/slice-queue.md",
+    "pocketchat/provider.py"
   ],
   "categories": [
     "docs",
@@ -34,14 +35,98 @@
   ],
   "tier": "high",
   "review_depth": "deep",
-  "rounds": 0,
+  "rounds": 1,
   "round_decision": "review",
   "round_scope": "full",
-  "findings": [],
+  "findings": [
+    {
+      "id": "OFFICE-R1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-1",
+      "reason": "lost POST receipt created a new request ID"
+    },
+    {
+      "id": "OFFICE-R2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-2",
+      "reason": "heartbeat SSE did not observe stop/deadline"
+    },
+    {
+      "id": "OFFICE-R3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-3",
+      "reason": "report source lineage relabeling/omission"
+    },
+    {
+      "id": "OFFICE-R4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-4",
+      "reason": "linked request snapshot directory escaped private root"
+    },
+    {
+      "id": "OFFICE-R5",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-5",
+      "reason": "successive revision retained old predecessor"
+    },
+    {
+      "id": "OFFICE-R6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-6",
+      "reason": "truncated response became complete artifact"
+    },
+    {
+      "id": "OFFICE-R7",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-7",
+      "reason": "middle viewport hid office controls"
+    }
+  ],
   "candidate_base": "a19ce4e1f8f5dc80bcb43a86d1739d78c36cd677",
   "slice_contract": "docs/office-web.md",
-  "status": "implementation_pending",
-  "verification": [],
-  "reviews": [],
-  "unverified_scope": "No paid provider or formal release; no OCR/PDF/DOCX input/XLSX/PPTX output, arbitrary shell, multi-agent, cloud accounts or background automation."
+  "status": "review_fixes_in_progress",
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.9 focused store/controller/web/export tests",
+      "result": "Initial20 tests passed,1optionalextra skip; original red import failures,macOS temp alias and test field-name corrections retained in private logs."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.12 python-docx readback and render_docx.py",
+      "result": "RealDOCX readback and one-page render inspected; not allOffice applications or arbitrarypagination."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Playwright Chrome offline browser fixture",
+      "result": "Chat/upload/report/revision/Word/reload passed;desktop screenshot inspected;390pxnooverflow but full-page tiled capture unreliable,viewport-only checked separately."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "pip wheel . --no-deps --no-build-isolation",
+      "result": "Initialcandidate wheel included allthree packaged web assets; changedcandidate requiresnewpackagingcheck."
+    }
+  ],
+  "reviews": [
+    {
+      "round": 1,
+      "candidate": "7d9573e",
+      "reviewer": "Independent fresh-context reviewer",
+      "decision": "request_changes",
+      "coverage": "Full27-file diff, relevant Session/provider/trace contracts; explicit auth/framing, lifecycle, provenance and rollback review. Seven findings with narrow repros; no author suite repetition."
+    }
+  ],
+  "unverified_scope": "No paid provider or formal release; no OCR/PDF/DOCX input/XLSX/PPTX output, arbitrary shell, multi-agent, cloud accounts or background automation.",
+  "candidate": "7d9573e"
 }

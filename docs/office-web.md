@@ -78,3 +78,22 @@ remove the new entry; existing CLI workspaces remain untouched. Never downgrade
 or delete the browser workspace to make a test pass. Runtime state belongs
 outside Git. Actual commands/results and unverified boundaries are maintained
 in the review record and same-batch handover, not claimed by this plan.
+
+## Review hardening
+
+Report citation labels are stable within a conversation. A revision includes
+its predecessor's source map, and reports explicitly pin previously disclosed
+source dependencies rather than relabeling old citations as new files. This
+can reach the eight-source limit; start a fresh conversation instead of dropping
+provenance. The source manifest identifies supplied material, not a fact check.
+
+Unknown POST receipt recovery reuses the same request ID, including reload in
+the same browser tab. An explicit subsequent report revision targets the latest
+completed version. Truncated or filtered output stays a failed receipt rather
+than a completed downloadable report. Partial text remains in that receipt.
+
+The office-only transport guard checks before send, after headers and after each
+SSE line/read block against cancellation and a total deadline. Silent blocking
+I/O remains bounded by the configured socket timeout; a server that sends
+heartbeat lines cannot keep the workspace alive indefinitely. The default CLI
+transport has no new guard unless the host explicitly supplies one.

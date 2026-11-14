@@ -41,7 +41,7 @@ def render_docx(content, sources):
         doc.add_heading('Source manifest', level=2)
         doc.add_paragraph('These are the supplied source versions, not an independent fact check.')
         for i, source in enumerate(sources, 1):
-            doc.add_paragraph('[S%d] %s\nSHA-256: %s' % (i, source['name'], source['sha256']))
+            doc.add_paragraph('[%s] %s\nSHA-256: %s' % (source.get('citation', 'S%d' % i), source['name'], source['sha256']))
     stream = io.BytesIO()
     doc.save(stream)
     return stream.getvalue()

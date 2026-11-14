@@ -183,6 +183,21 @@ class OfficeStore:
                 raise OfficeError('Source not found in this conversation.', 404)
             return row
 
+    def disclosed_sources(self, cid):
+        with self.lock:
+            ids = []
+            for row in self.db.execute("SELECT payload FROM runs WHERE cid=? AND status='completed' ORDER BY rowid", (cid,)):
+                for sid in json.loads(row['payload'])['source_ids']:
+                    if sid not in ids:
+                        ids.append(sid)
+            return ids
+
+    def citation(self, cid, sid):
+        with self.lock:
+            self.source(cid, sid)
+            ids = [r[0] for r in self.db.execute('SELECT id FROM sources WHERE cid=? ORDER BY rowid', (cid,))]
+            return 'S%d' % (ids.index(sid) + 1)
+
     def artifact(self, cid, aid):
         with self.lock:
             row = self._row('artifacts', aid)
@@ -234,6 +249,6 @@ class OfficeStore:
                 self.db.executemany('INSERT INTO messages(cid,role,content,context,run_id) VALUES (?,?,?,?,?)', [(r['cid'], 'user', p['prompt'], context or p['prompt'], rid), (r['cid'], 'assistant', reply, reply, rid)])
                 if p['intent'] == 'report':
                     sources = [self.source(r['cid'], s) for s in p['source_ids']]
-                    manifest = [dict(id=s['id'], name=s['name'], sha256=s['sha256']) for s in sources]
+                    manifest = [dict(id=s['id'], name=s['name'], sha256=s['sha256'], citation=self.citation(r['cid'], s['id'])) for s in sources]
                     self.db.execute('INSERT INTO artifacts VALUES (?,?,?,?,?,?,?)', (uuid4().hex, r['cid'], rid, reply, encoded(manifest), p.get('revision_id'), time.time()))
-            self.db.execute('UPDATE runs SET status=?,reply=?,error=? WHERE id=?', (status, reply if status == 'completed' else '', error, rid))
+            self.db.execute('UPDATE runs SET status=?,reply=?,error=? WHERE id=?', (status, reply[:MAX_REPLY_BYTES], error, rid))

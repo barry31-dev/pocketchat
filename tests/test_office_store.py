@@ -63,3 +63,14 @@ class StoreTests(unittest.TestCase):
     def test_second_workspace_writer_refused(self):
         with self.assertRaises(OfficeError):
             OfficeStore(self.root)
+
+    def test_reject_linked_request_directory_on_reopen(self):
+        from pocketchat.office import OfficeWorkspace
+        from pocketchat.config import load_config, profile_config
+        self.store.close()
+        (self.root/'traces').mkdir()
+        outside=Path(self.tmp.name).resolve()/'outside'
+        outside.mkdir()
+        (self.root/'traces'/'requests').symlink_to(outside,target_is_directory=True)
+        with self.assertRaises(OfficeError):
+            OfficeWorkspace(self.root,profile_config(load_config(Path('examples/config.json'))))
