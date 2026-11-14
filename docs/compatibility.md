@@ -1,5 +1,16 @@
 # Compatibility and deprecation policy (v1.0)
 
+## Additive local office entry (2026-11-14)
+
+`pocketchat web --config FILE --data-dir DIRECTORY [--profile NAME] [--port N]`
+is an additive literal-loopback entry. It uses an independent private SQLite
+workspace (user_version 1), not a new interpretation of CLI sessions or traces.
+Existing commands and stable JSON remain unchanged. Optional `office` dependencies
+do not become base-install requirements. Its authenticated browser API is an
+internal version-1 surface, not a promised general remote API. See
+[the complete slice contract](office-web.md).
+
+
 PocketChat is a CLI-only product. This page is the compatibility promise for
 the `v1.0.x` line; it does not promise behavior that is outside the CLI.
 

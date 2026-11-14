@@ -160,6 +160,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--quiet", action="store_true",
                         help="suppress agent replies and goodbye")
     subparsers = parser.add_subparsers(dest="command")
+    web = subparsers.add_parser("web", help="open a private local chat and office workspace")
+    web.add_argument("--config", type=Path, required=True, help="provider configuration file")
+    web.add_argument("--profile", default=None, help="configured provider profile")
+    web.add_argument("--data-dir", type=Path, required=True, help="private browser workspace directory")
+    web.add_argument("--port", type=int, default=0, help="loopback port (0 chooses an available port)")
+
 
     def add_common(sub: argparse.ArgumentParser,
                    hide: Iterable[str] = ()) -> None:
@@ -917,6 +923,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command is None:
         args.command = "agent"
         args.as_json = False
+    if args.command == "web":
+        from .office_web import run_web
+        return run_web(args)
     if args.command == "init":
         return _cmd_init(args)
     if args.command == "doctor":

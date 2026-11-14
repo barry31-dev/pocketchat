@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — local office workspace
+
+- Add authenticated loopback browser chat with selected text material, explicit
+  provider disclosure, versioned report revisions, optional DOCX export, durable
+  conversations and bounded cancellation. Existing CLI commands remain intact.
+- The offline browser fixture is not real-provider quality or release evidence.
+
+
 All notable changes to `pocketchat` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 

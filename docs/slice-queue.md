@@ -1,5 +1,15 @@
 # Slice queue
 
+## Approved chat-first office slice (2026-11-14)
+
+`PC-OFFICE-WEB-1`: the maintainer approved retention of chat/CLI plus a local
+browser entry and selected-material → report → revision → DOCX → reopen.
+[office-web.md](office-web.md) owns the exact implementation/completion contract;
+[review record](review-office-web-v1.json) owns exclusive paths and evidence.
+Complex coding and multi-agent work are not the current product mainline.
+Existing delivery/history rows stay intact; this approval is not a release.
+
+
 > Scope: the **current** approval state of product slices. A row here says a
 > slice is approved to be worked on; it does not say the work is done, and it
 > is not a publication authorization.

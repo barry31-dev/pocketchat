@@ -5,11 +5,12 @@
 > publication ledger. This page is the process source for this package and
 > is intended to travel with the public repository.
 >
-> Version: 2026-10-29. Applies to the CLI-only product.
+> Version: 2026-11-14. Applies to the CLI and the approved local office entry.
 
 ## 1. Operating model
 
-PocketChat is a single-user, local-first CLI. The durable asset is evidence:
+PocketChat is a single-user, local-first chat assistant. The CLI remains supported;
+the bounded local office entry is specified in [office-web.md](office-web.md). The durable asset is evidence:
 the trace, request snapshot, session, comparison and release artifact must
 allow a later reader to answer what was sent, what came back and what remains
 unverified.
@@ -72,14 +73,15 @@ The goal is testable. "Improve the agent" is not a goal; "record a stable
 
 ### 2.2 Product boundary
 
-The current product is CLI-only. The following are not implicit features of a
+The CLI and the explicitly approved local office slice are current development scope.
+The following are not implicit features of a
 change and require a roadmap plus slice-queue decision before implementation:
 
 - general-purpose tool calling, file access beyond the explicit local tools,
   shell execution, sandbox or approval gates;
 - multi-agent orchestration, delegation, automatic planning or auto-selection;
 - memory, skills, MCP, cron or background jobs;
-- Web UI, local API, desktop application, account system or remote service.
+- Web/local API outside the approved office slice, desktop application, account system or remote service.
 
 A future capability does not become current because a test, a branch or a
 mock makes it possible. Update the roadmap first; then implement one slice.
