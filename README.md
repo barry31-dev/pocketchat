@@ -5,7 +5,7 @@ see [release-1.2.md](docs/release-1.2.md). Publication facts are owned by the
 [release ledger](docs/release-ledger.md); source and offline fixture results do
 not certify a real provider or manual file-terminal acceptance.
 
-`pocketchat` is a small single-user CLI chat agent. It is **not** a general
+`pocketchat` is a small single-user, local-first chat and office assistant with a CLI. It is **not** a general
 agent: it has no code execution, no shell and no unbounded tool surface. Its
 optional local tools are explicit, allowlisted and workspace-confined. It holds
 a multi-turn conversation with a model you configure and writes a trace that
@@ -15,6 +15,22 @@ The trace is the point. Everything else here exists so that when someone asks
 "what did the model actually see, and what did it actually answer", there is a
 file to open instead of a memory to trust.
 
+## Unreleased: local chat and office workspace
+
+Keep ordinary chat and create versioned reports from selected TXT, Markdown or
+CSV material, then revise and download Word files in the same conversation.
+
+```bash
+python -m pip install '.[office]'
+pocketchat web --config ./pocketchat.json --data-dir ~/.pocketchat/office
+```
+
+Open the private launch link printed in the terminal. Keep it secret. Word export
+uses the optional `python-docx` dependency; ordinary chat and Markdown need no
+extra dependency. Local-first does not mean the configured model is offline.
+See [limits, permissions and recovery](docs/office-web.md). Offline fixture
+results do not establish real-model quality or formal release.
+
 ## Unreleased: project guidance continuity
 
 Explicitly save and accept project guidance, reopen with a current-config next-turn preview, and retire guidance without rewriting old evidence. Fixed instructions survive layered compaction. Run `python3 examples/project-context-demo.py` for the offline real-CLI journey, or see [project context](docs/project-context.md). No real-model or formal-release claim.
@@ -23,8 +39,8 @@ Explicitly save and accept project guidance, reopen with a current-config next-t
 
 - No general-purpose tool calling. Optional local tools are limited to
   allowlisted reads, create-only writes and read-only memory search.
-- No web UI, local server product, or packaged desktop app. There is no cloud
-  service, account system or sync.
+- The optional browser workspace binds only to local loopback. No remote server,
+  packaged desktop app, cloud service, account system or sync.
 - No vector retrieval or automatic long-term memory. Local memory is explicit
   and is never silently injected into prompts.
 - No unbounded retries. Optional retry/fallback is bounded and recorded.

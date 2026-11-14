@@ -325,15 +325,23 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
         },
     )
 
+    check = config.get('_transport_check')
+    if check is not None:
+        check()
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
+            if check is not None:
+                check()
             status_code = int(getattr(response, "status", 0) or 0)
             if on_delta is not None and "text/event-stream" in (
                     response.headers.get("Content-Type") or ""):
                 return _stream_response(response, config["model"], status_code,
-                                        on_delta=on_delta)
+                                        on_delta=on_delta, transport_check=check)
             try:
-                raw = response.read()
+                if check is None:
+                    raw = response.read()
+                else:
+                    raw = b''.join(_guarded_chunks(response, check))
             except socket.timeout:
                 raise
             except (HTTPException, OSError) as exc:
@@ -345,6 +353,13 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
                     retryable=True,
                 ) from exc
     except urllib.error.HTTPError as exc:
+        if check is not None:
+            # Error bodies are neither needed for office UI nor trusted/bounded.
+            # Never consume an attacker-controlled trickle just to make a label.
+            exc.close()
+            check()
+            raise ProviderError('http_error', 'Provider returned HTTP %d' % exc.code,
+                                status_code=exc.code, retryable=False)
         raise _http_error(exc, api_key)
     except socket.timeout:
         raise ProviderError(
@@ -371,6 +386,45 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
         raise ProviderError("io_error", "request failed: %s" % exc)
 
     return _parse_response(raw, status_code, config, api_key)
+
+
+def _guarded_chunks(response, check):
+    """Office-only read1 loop: bounded bytes, checks per receive, framing proof."""
+    raw_length = response.headers.get('Content-Length')
+    expected = None
+    if raw_length is not None:
+        try:
+            expected = int(raw_length)
+        except ValueError as exc:
+            raise ProviderError('invalid_response', 'Invalid content length.') from exc
+        if expected < 0 or expected > 2 * 1024 * 1024:
+            raise ProviderError('response_too_large', 'Office response exceeds its byte limit.')
+    total = 0
+    while True:
+        check()
+        chunk = response.read1(65536)
+        check()
+        if not chunk:
+            if expected is not None and total != expected:
+                raise ProviderError('incomplete_response', 'HTTP body ended before its declared length.')
+            return
+        total += len(chunk)
+        if total > 2 * 1024 * 1024:
+            raise ProviderError('response_too_large', 'Office response exceeds its byte limit.')
+        yield chunk
+
+
+def _guarded_lines(response, check):
+    pending = b''
+    for chunk in _guarded_chunks(response, check):
+        pending += chunk
+        if len(pending) > 256 * 1024:
+            raise ProviderError('response_too_large', 'Office stream line exceeds its byte limit.')
+        while b'\n' in pending:
+            line, pending = pending.split(b'\n', 1)
+            yield line + b'\n'
+    if pending:
+        yield pending
 
 
 def _http_error(exc: urllib.error.HTTPError,
@@ -406,7 +460,7 @@ def _usage_count(usage: Dict[str, Any], key: str) -> int:
 
 
 def _stream_response(response, model: str, status_code: int,
-                    on_delta=None) -> Dict[str, Any]:
+                    on_delta=None, transport_check=None) -> Dict[str, Any]:
     """Read one OpenAI-compatible SSE response into the normal response shape.
 
     A streamed response is still one request and one normalized result. The
@@ -428,10 +482,14 @@ def _stream_response(response, model: str, status_code: int,
     first_content_ms = None
     tool_fragments: Dict[int, Dict[str, Any]] = {}
     saw_terminal_marker = False
-    iterator = iter(response)
+    iterator = iter(response) if transport_check is None else _guarded_lines(response, transport_check)
     while True:
+        if transport_check is not None:
+            transport_check()
         try:
             raw_line = next(iterator)
+            if transport_check is not None:
+                transport_check()
         except StopIteration:
             break
         except (IncompleteRead, OSError) as exc:

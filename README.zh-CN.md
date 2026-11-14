@@ -1,5 +1,21 @@
 # pocketchat
 
+## 开发中：聊天与普通办公网页
+
+保留原 CLI 和普通聊天，新增仅监听本机的网页入口。在同一段对话中选择文本资料、生成周报、
+按反馈修订并下载 Word；旧报告版本和会话保留，重开可以接续。
+
+```bash
+python -m pip install '.[office]'
+pocketchat web --config ./pocketchat.json --data-dir ~/.pocketchat/office
+```
+
+打开终端打印的私有链接，不要分享其中的令牌。本地优先不代表模型不出网，发送前会提示
+当前模型端点及资料授权。限制与恢复见 [办公网页契约](docs/office-web.zh-CN.md)。
+后文旧 CLI-only 表述不再限制本次明确批准的本地网页切片；不引入远程服务或多 Agent。
+离线演示不等于真实模型效果已验收，也不是正式发布。
+
+
 v1.2 源码候选准备与精确产物验收见[发布候选说明](docs/release-1.2.zh-CN.md)。
 发布事实只看[发布台账](docs/release-ledger.md)；源码和离线 fixture 成功不认证真实
 provider 或人工文件终端验收。

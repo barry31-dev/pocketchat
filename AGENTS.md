@@ -10,7 +10,9 @@
 
 ## 1. What this product is
 
-`pocketchat` is a small single-user, local-first CLI chat agent. The durable
+`pocketchat` is a small single-user, local-first chat and office assistant.
+The existing CLI remains supported. The 2026-11-14 approved browser/office slice
+is bounded by [office-web.md](docs/office-web.md); it is not a coding-agent roadmap. The durable
 asset is evidence: the trace, request snapshot, session, comparison and release
 artifact must let a later reader answer what was sent, what came back and what
 remains unverified.
@@ -28,7 +30,7 @@ roadmap plus slice decision before implementation:
   shell execution, sandbox or approval gates;
 - multi-agent orchestration, delegation, automatic planning or auto-selection;
 - memory, skills, MCP, cron or background jobs;
-- Web UI, local API, desktop application, account system or remote service.
+- Web/local API outside the approved office slice, desktop application, account system or remote service.
 
 ## 2. Rules that may not be violated
 

@@ -1,0 +1,206 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "README.md",
+    "README.zh-CN.md",
+    "docs/agent-development-master-plan.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/development-and-release.md",
+    "docs/handovers/2026-11-14-office-web.md",
+    "docs/office-web.md",
+    "docs/office-web.zh-CN.md",
+    "docs/review-office-web-v1.json",
+    "docs/slice-queue.md",
+    "examples/office-demo.py",
+    "pocketchat/cli.py",
+    "pocketchat/office.py",
+    "pocketchat/office_docx.py",
+    "pocketchat/office_static/app.js",
+    "pocketchat/office_static/index.html",
+    "pocketchat/office_static/style.css",
+    "pocketchat/office_store.py",
+    "pocketchat/office_web.py",
+    "pocketchat/provider.py",
+    "pyproject.toml",
+    "tests/office_browser.cjs",
+    "tests/test_office.py",
+    "tests/test_office_docx.py",
+    "tests/test_office_store.py",
+    "tests/test_office_web.py",
+    "tests/test_skeleton.py"
+  ],
+  "categories": [
+    "instructions",
+    "generated-blocks",
+    "links",
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "OFFICE-R1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-1",
+      "reason": "lost POST receipt created a new request ID"
+    },
+    {
+      "id": "OFFICE-R2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-2",
+      "reason": "heartbeat SSE did not observe stop/deadline"
+    },
+    {
+      "id": "OFFICE-R3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-3",
+      "reason": "report source lineage relabeling/omission"
+    },
+    {
+      "id": "OFFICE-R4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-4",
+      "reason": "linked request snapshot directory escaped private root"
+    },
+    {
+      "id": "OFFICE-R5",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-5",
+      "reason": "successive revision retained old predecessor"
+    },
+    {
+      "id": "OFFICE-R6",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-6",
+      "reason": "truncated response became complete artifact"
+    },
+    {
+      "id": "OFFICE-R7",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-review-7",
+      "reason": "middle viewport hid office controls"
+    },
+    {
+      "id": "OFFICE-R8",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-short-framed-response",
+      "reason": "New red loopback short body was accepted; guarded read1 now verifies declared Content-Length at EOF."
+    }
+  ],
+  "candidate_base": "a19ce4e1f8f5dc80bcb43a86d1739d78c36cd677",
+  "slice_contract": "docs/office-web.md",
+  "status": "approved",
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.9 focused store/controller/web/export tests",
+      "result": "Initial20 tests passed,1optionalextra skip; original red import failures,macOS temp alias and test field-name corrections retained in private logs."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.12 python-docx readback and render_docx.py",
+      "result": "RealDOCX readback and one-page render inspected; not allOffice applications or arbitrarypagination."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Playwright Chrome offline browser fixture",
+      "result": "Chat/upload/report/revision/Word/reload passed;desktop screenshot inspected;390pxnooverflow but full-page tiled capture unreliable,viewport-only checked separately."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "pip wheel . --no-deps --no-build-isolation",
+      "result": "Initialcandidate wheel included allthree packaged web assets; changedcandidate requiresnewpackagingcheck."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.9 tests.test_agent tests.test_repl tests.test_cli_json",
+      "result": "112existingchat/CLIchecks passed20.817s; first attempt named three nonexistent modules and is retained as failed discovery, not product failure."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Round2 adversarial transport, original-wire recovery and old-schema refusal tests",
+      "result": "Originalfour targetedrepros failed;fixedfourpass2.551s.Oldschema1refusalpreservesDBbytes.Currentworkspacev2explicitlyrefusesoldunreleasedformat."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.9 -m unittest office/store/web/docx/provider/session group",
+      "result": "Finalcode49tests6.474sexit0,oneoptionalDOCXskip;Python3.12DOCXseparate2tests0.067sexit0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Playwright Chrome schema2 offline fixture including dropped POST receipt and medium-width layout",
+      "result": "Chat/source/report/revision/DOCX/reload passed;actual3providerrequests,6messages,2artifacts;900pxcontrolsvisible,390pxnohorizontaloverflow,noJavaScripterrors.Allownedservers/browserprocessesclosed."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Optional-dependency package build and clean no-dependency install",
+      "result": "FinalcodewheelSHA25610b565c1dffd1f4766bab6ace327bda3d48b3019678298442a5abab5949a3489;earlierbehaviorcandidatecleaninstallwebhelp/assets/typedmissingextra verified.Noformalrelease."
+    },
+    {
+      "source_type": "external CI",
+      "status": "verified",
+      "command": "PR68 exact head b3c4662 check readback",
+      "result": "All7checksSUCCESS across Ubuntu/macOS/WindowsPython3.9/3.13 plusrelease-smoke. Finalrecordcommitneeds itsownCI beforemerge."
+    }
+  ],
+  "reviews": [
+    {
+      "round": 1,
+      "candidate": "7d9573e",
+      "reviewer": "Independent fresh-context reviewer",
+      "decision": "request_changes",
+      "coverage": "Full27-file diff, relevant Session/provider/trace contracts; explicit auth/framing, lifecycle, provenance and rollback review. Seven findings with narrow repros; no author suite repetition."
+    },
+    {
+      "round": 2,
+      "candidate": "225b695",
+      "additional_candidate": "ce5a699",
+      "reviewer": "Independent fresh-context reviewer",
+      "decision": "request_changes",
+      "coverage": "Newdiff and R1-R7followup;R4-R7closed;R1 receipt normalized after history drift,R2 unbounded error/no-newline bodies,R3 schema1citationcompatibility remained;newR8shortContent-Length."
+    },
+    {
+      "round": 3,
+      "base": "ce5a699",
+      "candidate": "b3c4662",
+      "reviewer": "Independent fresh-context reviewer",
+      "decision": "approve",
+      "coverage": "All8newdiff files, related security/recovery/compatibility;R1,R2,R3,R8closed,R4-R7remainclosed.No new blocker.No duplicate fullsuite."
+    }
+  ],
+  "unverified_scope": "Real provider factual/report quality, all Office applications, real-world workload usability and formal tag/Release/package upload. Old unreleased schema1 is refused without migration; no erasure of previous data. No automated email or arbitrary execution.",
+  "candidate": "b3c46621a528a1c7d8fddf6757a98b3ecd7a6701",
+  "open_findings": 0,
+  "technical_signoff": {
+    "authority": "maintainer-delegated routine technical review",
+    "reviewer": "agent",
+    "date": "2026-11-14",
+    "decision": "approved",
+    "scope": "Exactcodecandidate; security, recovery and rollback reviewed. Keep oldschema1directory; schema2neverrelabellshistoricalcitations."
+  },
+  "actual_review_depth": "deep: extra security/recovery/rollback review performed beyond the mechanical medium classification",
+  "metadata_finalization": "Record-only changes after approved b3c4662; code/test/behavior blobs unchanged. Three rounds complete, no fourth full review; mechanical reconsider/new-diff-only marker is not an unresolved finding. Mechanical fields generated and validated with shared review_record; schema projected to product-owned spelling for public clean-room boundary."
+}
