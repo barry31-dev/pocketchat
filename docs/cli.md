@@ -618,7 +618,7 @@ physical request ordinals and backoff; when the primary budget is exhausted,
 own budget and is not a chain. A streamed response that ends without `[DONE]`
 or a terminal `finish_reason` fails as retryable `incomplete_stream`; partial
 content is not recorded as a completed turn. A non-streaming short body or
-broken chunked transfer fails as retryable `incomplete_response`; an HTTP
+broken chunked transfer or body-read connection reset fails as retryable `incomplete_response`; an HTTP
 protocol failure before response headers is retryable `connection_error`.
 These failures retain the request snapshot and failed-response/run trace, not a
 partial completed reply. Only the configured recovery policy retries them;

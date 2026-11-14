@@ -15,10 +15,18 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 0,
-  "round_decision": "pending",
+  "rounds": 1,
+  "round_decision": "review",
   "round_scope": "full",
-  "findings": [],
+  "findings": [
+    {
+      "id": "HTTP-BODY-RESET-1",
+      "severity": "major",
+      "status": "fixed",
+      "reason": "Independent real TCP RST probe found body ConnectionResetError remained non-retryable io_error. Catch body-read OSError after a timeout passthrough; a real RST then complete response now uses exactly two configured attempts and preserves both snapshots and failure/success events. Focused TLS EOF/timeout mock also distinguishes the catch order.",
+      "fingerprint": "nonstreaming-body-rst-classified-nonretryable-io_error"
+    }
+  ],
   "slice": "PC-HTTP-RESPONSE-BOUNDARY-1",
   "base_commit": "c84a3f691cacbc0d11e8c59a565878fab8421841",
   "authority": {
@@ -73,8 +81,41 @@
       "status": "verified",
       "command": "ruff check --select E9,F pocketchat/provider.py tests/test_provider_http_boundary.py; git diff --check",
       "result": "Both exited 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B - [two new body-reset regression tests against a4db650]",
+      "result": "2 tests, 2 expected failures, exit1: real TCP RST and mocked TLS EOF were io_error, not incomplete_response. Socket timeout control retained timeout."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_provider_http_boundary.ProviderBodyResetTests -v; rerun only corrected RST terminal-event assertion",
+      "result": "TLS/timeout case passed. RST recovery and evidence assertions passed, but initial test expected nonexistent run.completed rather than existing run.finished. Corrected that assertion only; exact affected test passed0.023s exit0. No server cleanup errors."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_provider_http_boundary.ProviderHttpBoundaryTests tests.test_kernel.ProviderBoundaryTests tests.test_kernel.ProviderStreamTests tests.test_recovery_policy tests.test_release_process_docs -q; ruff; git diff --check",
+      "result": "50 affected tests passed0.153s exit0 after expanding body catch; Ruff/diff0. Earlier unrelated passing tests were not rerun."
     }
   ],
   "unverified": "No real paid provider, manual TUI, arbitrary HTTP attack coverage, package release, tags or uploads.",
-  "reviews": []
+  "reviews": [
+    {
+      "round": 1,
+      "candidate": "a4db650481470c7700acdd89a2e2716ef4bd88f4",
+      "reviewer": "Independent fresh-context agent",
+      "decision": "request_changes",
+      "coverage": "All seven changed files and provider/Session/recovery/security/compatibility contracts; one independently run real TCP RST probe failed the intended retry classification.",
+      "findings": [
+        "HTTP-BODY-RESET-1"
+      ]
+    }
+  ],
+  "checkpoint": {
+    "complete": false,
+    "next_action": "Review only the RST catch-order/test/docs delta, then controlled candidate push; exact-head CI/main and evidence archive remain pending."
+  }
 }

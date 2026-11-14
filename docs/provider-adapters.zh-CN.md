@@ -45,7 +45,7 @@ Provider 未报告 usage 时用零表示，绝不估算。新增 `usage_reported
 拒绝，绝不把半截回答记录成完成回合。
 
 非流式 JSON 必须等 HTTP 帧完整接收后才能接受。`Content-Length` 正文不足或
-chunked 传输损坏时，以可重试的 `incomplete_response` 失败，即使已收前缀本身
+chunked 传输损坏或正文读取阶段连接重置时，以可重试的 `incomplete_response` 失败，即使已收前缀本身
 是合法 JSON。响应头到达前的 HTTP 协议失败（包括对端断连）以可重试的
 `connection_error` 失败；错误文本不回显部分正文或远端帧内容。完整但无效的
 JSON 仍为不可重试的 `malformed_response`；HTTP 错误状态和超时分类不变。

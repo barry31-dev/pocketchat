@@ -507,7 +507,7 @@ schema `"2"` profile 可声明 `retry_max_attempts`（1-5，默认 1）、
 写 `fallback.activated`，标明源/目标 profile；fallback 有独立预算，不允许链式
 fallback。流式响应若未以 `[DONE]` 或终止 `finish_reason` 结束，会以可重试的
 `incomplete_stream` 失败，半截内容不会被记录成完成回合。非流式正文不足或
-chunked 传输损坏以可重试的 `incomplete_response` 失败；响应头前的 HTTP 协议
+chunked 传输损坏或正文读取阶段连接重置以可重试的 `incomplete_response` 失败；响应头前的 HTTP 协议
 失败以可重试的 `connection_error` 失败。保留请求快照、失败响应和 run trace，
 不把部分回复写成完成。只有已配置的恢复策略才重试；可重试不证明服务端未执行。
 backoff 或请求中取消会

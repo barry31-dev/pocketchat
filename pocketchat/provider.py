@@ -334,7 +334,9 @@ def complete(messages: List[Dict[str, str]], config: Dict[str, Any],
                                         on_delta=on_delta)
             try:
                 raw = response.read()
-            except HTTPException as exc:
+            except socket.timeout:
+                raise
+            except (HTTPException, OSError) as exc:
                 # Do not parse partial bytes or reflect peer-controlled framing.
                 raise ProviderError(
                     "incomplete_response",

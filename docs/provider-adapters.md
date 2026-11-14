@@ -57,7 +57,7 @@ either is refused as retryable `incomplete_stream`; a partial answer is never
 recorded as a completed turn.
 
 Non-streaming JSON is accepted only after its HTTP framing completes. A short
-`Content-Length` body or broken chunked transfer fails as retryable
+`Content-Length` body, broken chunked transfer or connection reset during body reading fails as retryable
 `incomplete_response`, even when the received prefix is valid JSON. An HTTP
 protocol failure before response headers (including a disconnected peer) fails
 as retryable `connection_error`. Error text does not echo partial payloads or

@@ -126,3 +126,121 @@ class ProviderHttpBoundaryTests(unittest.TestCase):
         self.assertEqual(failure.exception.error_type, "unauthorized")
         self.assertEqual(failure.exception.status_code, 401)
         self.assertFalse(failure.exception.retryable)
+
+
+class ProviderBodyResetTests(unittest.TestCase):
+    def test_body_reset_uses_configured_retry_with_separate_evidence(self):
+        """Synchronize a real TCP RST after response headers, without stubbing I/O."""
+        import http.client
+        import socket
+        import struct
+        import threading
+        from unittest import mock
+
+        reading = threading.Event()
+        stopped = threading.Event()
+        requests = []
+        server_errors = []
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(2)
+        listener.settimeout(0.1)
+        self.addCleanup(listener.close)
+        body = b'{"choices":[{"message":{"content":"recovered"},"finish_reason":"stop"}]}'
+
+        def serve():
+            try:
+                while len(requests) < 2 and not stopped.is_set():
+                    try:
+                        connection, _ = listener.accept()
+                    except socket.timeout:
+                        continue
+                    with connection:
+                        connection.settimeout(3)
+                        incoming = b""
+                        while b"\r\n\r\n" not in incoming:
+                            part = connection.recv(4096)
+                            if not part:
+                                raise RuntimeError("request headers ended early")
+                            incoming += part
+                        headers, received = incoming.split(b"\r\n\r\n", 1)
+                        length = next(int(line.split(b":", 1)[1]) for line in headers.split(b"\r\n")
+                                      if line.lower().startswith(b"content-length:"))
+                        while len(received) < length:
+                            part = connection.recv(4096)
+                            if not part:
+                                raise RuntimeError("request body ended early")
+                            received += part
+                        requests.append(json.loads(received))
+                        first = len(requests) == 1
+                        size = len(body) + (20 if first else 0)
+                        connection.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                                           b"Content-Length: %d\r\nConnection: close\r\n\r\n" % size + body)
+                        if first:
+                            if not reading.wait(3):
+                                raise RuntimeError("client never began response body read")
+                            connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER,
+                                                  struct.pack("ii", 1, 0))
+            except Exception as exc:
+                server_errors.append(exc)
+
+        thread = threading.Thread(target=serve, daemon=True)
+        thread.start()
+        def stop():
+            stopped.set()
+            thread.join(4)
+        self.addCleanup(stop)
+        original_read = http.client.HTTPResponse.read
+        raw_errors = []
+        def read(response, *args, **kwargs):
+            reading.set()
+            try:
+                return original_read(response, *args, **kwargs)
+            except ConnectionResetError:
+                raw_errors.append("ConnectionResetError")
+                raise
+
+        config = {"base_url": "http://127.0.0.1:%d/v1" % listener.getsockname()[1],
+                  "model": "m", "api_key_env": "K", "timeout_seconds": 3,
+                  "max_context_chars": 1000, "summary_prefix_chars": 40,
+                  "retry_max_attempts": 2, "retry_backoff_ms": 0}
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+                http.client.HTTPResponse, "read", read):
+            trace = Path(directory) / "run.jsonl"
+            session = Session(config, trace, "run_rst", api_key="synthetic-secret")
+            status = session.run(["hi"])
+            events = [json.loads(line) for line in trace.read_text().splitlines()]
+            failures = [e for e in events if e["type"] == "model.response.failed"]
+            self.assertEqual(len(failures), 1)
+            self.assertEqual(failures[0]["payload"]["error"]["type"], "incomplete_response")
+            self.assertIs(failures[0]["payload"]["retryable"], True)
+            self.assertEqual(raw_errors, ["ConnectionResetError"])
+            self.assertEqual(status, "completed")
+            self.assertEqual(len(requests), 2)
+            self.assertEqual(len(session.request_snapshots), 2)
+            self.assertEqual([e["type"] for e in events].count("retry.attempt"), 1)
+            self.assertEqual([e["type"] for e in events].count("model.response.completed"), 1)
+            self.assertEqual(events[-1]["type"], "run.finished")
+            self.assertNotIn("synthetic-secret", trace.read_text())
+        stop()
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(server_errors, [])
+
+    def test_tls_body_eof_is_incomplete_but_timeout_keeps_its_class(self):
+        import socket
+        import ssl
+        from unittest import mock
+        config = {"base_url": "http://127.0.0.1/v1", "model": "m"}
+        for error, expected in ((ssl.SSLEOFError(8, "peer-secret"), "incomplete_response"),
+                                (socket.timeout("peer-secret"), "timeout")):
+            with self.subTest(expected=expected):
+                response = mock.MagicMock()
+                response.status = 200
+                response.read.side_effect = error
+                with mock.patch("urllib.request.urlopen") as opener:
+                    opener.return_value.__enter__.return_value = response
+                    with self.assertRaises(ProviderError) as failure:
+                        complete([{"role": "user", "content": "hi"}], config, "k")
+                self.assertEqual(failure.exception.error_type, expected)
+                self.assertTrue(failure.exception.retryable)
+                self.assertNotIn("peer-secret", str(failure.exception))
