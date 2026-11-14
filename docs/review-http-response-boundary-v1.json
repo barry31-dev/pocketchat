@@ -15,7 +15,7 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 1,
+  "rounds": 2,
   "round_decision": "review",
   "round_scope": "full",
   "findings": [
@@ -92,7 +92,7 @@
       "source_type": "local run (V)",
       "status": "verified",
       "command": "python3.12 -B -m unittest tests.test_provider_http_boundary.ProviderBodyResetTests -v; rerun only corrected RST terminal-event assertion",
-      "result": "TLS/timeout case passed. RST recovery and evidence assertions passed, but initial test expected nonexistent run.completed rather than existing run.finished. Corrected that assertion only; exact affected test passed0.023s exit0. No server cleanup errors."
+      "result": "TLS/timeout case passed. RST recovery and evidence assertions passed, but initial test expected nonexistent run.completed rather than existing run.finished. Corrected that assertion only; exact affected test passed0.024s exit0. No server cleanup errors."
     },
     {
       "source_type": "local run (V)",
@@ -112,10 +112,23 @@
       "findings": [
         "HTTP-BODY-RESET-1"
       ]
+    },
+    {
+      "round": 2,
+      "base": "a4db650481470c7700acdd89a2e2716ef4bd88f4",
+      "candidate": "b24b21b7dd269b3303d7dc6e7ea92fbb0c141fd5",
+      "reviewer": "Independent fresh-context agent (same bounded review thread)",
+      "decision": "approve",
+      "coverage": "New diff only across all seven files. Verified catch ordering, fixed error text, retry ownership, real-RST test synchronization/cleanup, TLS/timeout distinction and bilingual contracts. HTTP-BODY-RESET-1 closed; no new findings. This review was static; no tests repeated.",
+      "findings": []
     }
   ],
   "checkpoint": {
     "complete": false,
-    "next_action": "Review only the RST catch-order/test/docs delta, then controlled candidate push; exact-head CI/main and evidence archive remain pending."
-  }
+    "ready_for_integration": true,
+    "next_action": "Controlled final metadata-candidate push; wait exact-head CI, merge with SHA guard, read back main and archive results. No release.",
+    "unverified": "Real provider and manual TUI; release/installation not run. Local RST is macOS only; CI supplies separate platform evidence."
+  },
+  "candidate": "b24b21b7dd269b3303d7dc6e7ea92fbb0c141fd5",
+  "metadata_finalization": "This record-only commit follows approved b24b21b. Source, tests and behavioral docs are byte-identical to that reviewed candidate; public PR head identifies final metadata SHA."
 }
