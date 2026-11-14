@@ -9,6 +9,12 @@ browser entry and selected-material → report → revision → DOCX → reopen.
 Complex coding and multi-agent work are not the current product mainline.
 Existing delivery/history rows stay intact; this approval is not a release.
 
+The maintainer requested a written browser/CLI foundation expansion plan on
+2026-11-14. The [chat and office roadmap](chat-office-roadmap.zh-CN.md) owns the
+proposed four-package order and acceptance cases. It is a planning document,
+not a new ready row, implementation completion or permission to revive coding,
+multi-agent or remote-service work. Existing contracts and history remain intact.
+
 
 > Scope: the **current** approval state of product slices. A row here says a
 > slice is approved to be worked on; it does not say the work is done, and it

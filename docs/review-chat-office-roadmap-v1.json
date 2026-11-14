@@ -1,0 +1,47 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/chat-office-roadmap.zh-CN.md",
+    "docs/agent-development-master-plan.zh-CN.md",
+    "docs/slice-queue.md",
+    "docs/review-chat-office-roadmap-v1.json",
+    "docs/handovers/2026-11-14-chat-office-roadmap.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "candidate_base": "997978d241391a5670d5b4dfe1d07b1da79e83e3",
+  "scope": "Documentation-only roadmap and navigation updates; no implementation or task activation.",
+  "reviewed_documents": [
+    {
+      "path": "docs/chat-office-roadmap.zh-CN.md",
+      "sha256": "0a5f9bb4e12c6e95f9861246a219aa3620be65b45a6495294edbf2168fcaf1cb"
+    },
+    {
+      "path": "docs/agent-development-master-plan.zh-CN.md",
+      "sha256": "f4e76d0c6e8146521d04fad54f8a573e4d47c4fc33b616925c898abc66153c33"
+    },
+    {
+      "path": "docs/slice-queue.md",
+      "sha256": "f7678635fbbcb372feae06b8a901472de74511ecd2dc2fa475401841de8972ac"
+    },
+    {
+      "path": "docs/handovers/2026-11-14-chat-office-roadmap.md",
+      "sha256": "1e174370d903494e42b81cd7bdafaf2ee0de24df4339c2542ef724d4311dfbdf"
+    }
+  ],
+  "reviewed_evidence": [
+    "2026-11-14: the maintainer requested a written browser/CLI ordinary chat and office expansion plan, excluding multi-agent and coding work.",
+    "Fresh-context automated QUICK review under the existing routine technical delegation covered all 300 lines of the new roadmap, the changed master-plan and queue pointers with context, and the complete handover. Zero actionable findings. Related process, compatibility, security, office-store lock, web authentication, CLI and Word-export implementation were sampled statically; this is not an implementation audit.",
+    "CPython 3.9.6 static document checks: all 17 changed/new relative Markdown links resolve; P1-P4 and A01-A14 are complete and ordered; all five P1 checkpoints remain unchecked; proposed commands are explicitly not current commands.",
+    "Existing queue content from its Row contract onward and the historical master plan from its historical baseline onward are byte-identical to the base. No new ready row was added.",
+    "The review-record builder generated and validated exact five-path coverage, docs classification and low/quick review depth. Product-owned schema naming is preserved. Review metadata is checked separately from the independent four-document review."
+  ],
+  "unverified_scope": "Documentation only. No local tests, build, browser/terminal journey, provider call, parser/rendering or format-quality validation. Candidate CI and main integration are future delivery readbacks, not implied by this record. No implementation, scheduler changes, formal release, tag or package upload."
+}
