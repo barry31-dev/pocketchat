@@ -97,3 +97,7 @@ SSE line/read block against cancellation and a total deadline. Silent blocking
 I/O remains bounded by the configured socket timeout; a server that sends
 heartbeat lines cannot keep the workspace alive indefinitely. The default CLI
 transport has no new guard unless the host explicitly supplies one.
+
+Browser workspace schema 2 rejects the unreleased schema-1 development workspace.
+Keep the old directory intact and use a fresh directory; no automatic migration
+or citation relabeling is performed. Current schema-2 reopen retains all versions.

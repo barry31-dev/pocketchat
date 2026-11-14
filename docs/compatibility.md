@@ -4,10 +4,10 @@
 
 `pocketchat web --config FILE --data-dir DIRECTORY [--profile NAME] [--port N]`
 is an additive literal-loopback entry. It uses an independent private SQLite
-workspace (user_version 1), not a new interpretation of CLI sessions or traces.
+workspace (user_version 2), not a new interpretation of CLI sessions or traces.
 Existing commands and stable JSON remain unchanged. Optional `office` dependencies
 do not become base-install requirements. Its authenticated browser API is an
-internal version-1 surface, not a promised general remote API. See
+internal surface, not a promised general remote API. See
 [the complete slice contract](office-web.md).
 
 
@@ -149,3 +149,7 @@ required. `/files cancel` invalidates unconfirmed actions without rewriting appl
 receipts. Secure descriptor-dependent operations refuse unsupported runtimes;
 ordinary chat remains available. Exact candidate verification and the separate
 real-provider/manual artifact requirements are described in [release-1.2.md](release-1.2.md).
+
+Browser workspace schema 2 rejects the unreleased schema-1 development workspace.
+Keep the old directory intact and use a fresh directory; no automatic migration
+or citation relabeling is performed. Current schema-2 reopen retains all versions.

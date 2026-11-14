@@ -74,3 +74,15 @@ class StoreTests(unittest.TestCase):
         (self.root/'traces'/'requests').symlink_to(outside,target_is_directory=True)
         with self.assertRaises(OfficeError):
             OfficeWorkspace(self.root,profile_config(load_config(Path('examples/config.json'))))
+
+    def test_unreleased_old_schema_is_refused_without_rewriting(self):
+        import sqlite3
+        import hashlib
+        self.store.close()
+        path=self.root/'office.sqlite'
+        db=sqlite3.connect(path)
+        db.execute('PRAGMA user_version=1')
+        db.commit();db.close()
+        before=hashlib.sha256(path.read_bytes()).hexdigest()
+        with self.assertRaises(OfficeError):OfficeStore(self.root)
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),before)

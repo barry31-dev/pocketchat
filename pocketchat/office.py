@@ -53,6 +53,12 @@ class OfficeWorkspace:
             raise
 
     def submit(self, cid, body):
+        # Snapshot-dependent normalization and admission share the same lock as
+        # completion; retries consult the original wire before reading new state.
+        with self.guard:
+            return self._submit(cid, body)
+
+    def _submit(self, cid, body):
         fields = {'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent'}
         if not isinstance(body, dict) or set(body) != fields:
             raise OfficeError('Invalid message fields.')
@@ -68,6 +74,10 @@ class OfficeWorkspace:
             identifier(sid)
         if len(ids) != len(set(ids)):
             raise OfficeError('Duplicate source selection.')
+        wire = {k: copy.deepcopy(v) for k, v in body.items() if k not in ('request_id', 'consent')}
+        receipt = self.store.receipt(cid, body['request_id'], wire)
+        if receipt is not None:
+            return self.status(receipt['id'])
         previous = None
         if body['revision_id'] is not None:
             if body['intent'] != 'report':
@@ -86,7 +96,7 @@ class OfficeWorkspace:
         if sum(len(s['text'].encode('utf-8')) for s in sources) > MAX_INPUT_BYTES:
             raise OfficeError('Selected material exceeds 48 KiB.')
         payload = dict(prompt=prompt, intent=body['intent'], source_ids=ids,
-                       revision_id=body['revision_id'])
+                       revision_id=body['revision_id'], wire=wire)
         context = prompt
         if sources or previous or body['intent'] == 'report':
             envelope = dict(request=prompt, kind=body['intent'], sources=[dict(

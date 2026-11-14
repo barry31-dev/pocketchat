@@ -36,7 +36,7 @@
   ],
   "tier": "high",
   "review_depth": "deep",
-  "rounds": 1,
+  "rounds": 2,
   "round_decision": "review",
   "round_scope": "full",
   "findings": [
@@ -88,6 +88,13 @@
       "status": "fixed",
       "fingerprint": "office-review-7",
       "reason": "middle viewport hid office controls"
+    },
+    {
+      "id": "OFFICE-R8",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "office-short-framed-response",
+      "reason": "New red loopback short body was accepted; guarded read1 now verifies declared Content-Length at EOF."
     }
   ],
   "candidate_base": "a19ce4e1f8f5dc80bcb43a86d1739d78c36cd677",
@@ -123,6 +130,12 @@
       "status": "verified",
       "command": "Python3.9 tests.test_agent tests.test_repl tests.test_cli_json",
       "result": "112existingchat/CLIchecks passed20.817s; first attempt named three nonexistent modules and is retained as failed discovery, not product failure."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Round2 adversarial transport, original-wire recovery and old-schema refusal tests",
+      "result": "Originalfour targetedrepros failed;fixedfourpass2.551s.Oldschema1refusalpreservesDBbytes.Currentworkspacev2explicitlyrefusesoldunreleasedformat."
     }
   ],
   "reviews": [
@@ -132,8 +145,16 @@
       "reviewer": "Independent fresh-context reviewer",
       "decision": "request_changes",
       "coverage": "Full27-file diff, relevant Session/provider/trace contracts; explicit auth/framing, lifecycle, provenance and rollback review. Seven findings with narrow repros; no author suite repetition."
+    },
+    {
+      "round": 2,
+      "candidate": "225b695",
+      "additional_candidate": "ce5a699",
+      "reviewer": "Independent fresh-context reviewer",
+      "decision": "request_changes",
+      "coverage": "Newdiff and R1-R7followup;R4-R7closed;R1 receipt normalized after history drift,R2 unbounded error/no-newline bodies,R3 schema1citationcompatibility remained;newR8shortContent-Length."
     }
   ],
   "unverified_scope": "No paid provider or formal release; no OCR/PDF/DOCX input/XLSX/PPTX output, arbitrary shell, multi-agent, cloud accounts or background automation.",
-  "candidate": "7d9573e"
+  "candidate": "ce5a699"
 }

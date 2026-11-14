@@ -94,7 +94,7 @@ class OfficeStore:
             self.db.row_factory = sqlite3.Row
             os.chmod(self.root / 'office.sqlite', 0o600)
             version = self.db.execute('PRAGMA user_version').fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 2):
                 raise OfficeError('Unsupported office workspace version.')
             self.db.executescript('''
                 CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, title TEXT, created REAL);
@@ -105,7 +105,7 @@ class OfficeStore:
                     content TEXT, context TEXT, run_id TEXT);
                 CREATE TABLE IF NOT EXISTS artifacts(id TEXT PRIMARY KEY, cid TEXT, run_id TEXT UNIQUE,
                     content TEXT, sources TEXT, predecessor TEXT, created REAL);
-                PRAGMA user_version=1;
+                PRAGMA user_version=2;
             ''')
             with self.db:
                 self.db.execute("UPDATE runs SET status='unknown', error='Interrupted before completion; inspect before retrying.' WHERE status IN ('running','stopping')")
@@ -205,6 +205,16 @@ class OfficeStore:
                 raise OfficeError('Report not found in this conversation.', 404)
             row['sources'] = json.loads(row['sources'])
             return row
+
+    def receipt(self, cid, request_id, wire):
+        with self.lock:
+            row = self.db.execute('SELECT * FROM runs WHERE request_id=?', (identifier(request_id),)).fetchone()
+            if row is None:
+                return None
+            payload = json.loads(row['payload'])
+            if row['cid'] != cid or payload.get('wire') != wire:
+                raise OfficeError('Request ID is already bound to different content.', 409)
+            return dict(row)
 
     def begin(self, cid, request_id, payload):
         identifier(request_id)

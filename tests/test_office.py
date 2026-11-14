@@ -161,3 +161,59 @@ class OfficeTransportTests(unittest.TestCase):
             self.assertLess(time.monotonic()-start,2)
         finally:
             server.shutdown();server.server_close()
+
+
+class OfficeReviewRecoveryTests(OfficeTests):
+    def test_same_wire_receipt_survives_later_disclosed_sources(self):
+        a=self.app.store.add_source(self.cid,'a.txt','A')
+        self.send('First','report',[a['id']])
+        b=self.app.store.add_source(self.cid,'b.txt','B')
+        self.send('Discuss',sources=[b['id']],key='request-002')
+        replay=self.send('First','report',[a['id']])
+        self.assertEqual(replay['status'],'completed')
+        self.assertEqual(len(self.adapter.calls),2)
+
+
+class OfficeTransportAdversarialTests(unittest.TestCase):
+    def test_no_newline_sse_is_deadline_bounded(self):
+        self.probe('trickle')
+
+    def test_error_body_is_not_read_unbounded(self):
+        self.probe('error')
+
+    def test_short_content_length_never_completes(self):
+        self.probe('short')
+
+    def probe(self, mode):
+        import time
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from pocketchat.office import OfficeTransportGuard
+        from pocketchat.provider import DEFAULT_PROVIDER_ADAPTER, ProviderError
+        stop=threading.Event()
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self,*args): pass
+            def do_POST(self):
+                self.rfile.read(int(self.headers['Content-Length']))
+                self.send_response(500 if mode=='error' else 200)
+                self.send_header('Content-Type','text/event-stream' if mode=='trickle' else 'application/json')
+                body=json.dumps({'choices':[{'message':{'content':'partial'},'finish_reason':'stop'}]}).encode()
+                if mode=='short':self.send_header('Content-Length',str(len(body)+100))
+                self.end_headers()
+                if mode=='short':self.wfile.write(body);return
+                try:
+                    for _ in range(70):
+                        if stop.is_set():break
+                        self.wfile.write(b'x');self.wfile.flush();time.sleep(.05)
+                except (BrokenPipeError,ConnectionResetError):pass
+        server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        config=profile_config(load_config(Path('examples/config.json')))
+        config['base_url']='http://127.0.0.1:%d/v1'%server.server_port
+        guard=OfficeTransportGuard(threading.Event(),1)
+        start=time.monotonic()
+        try:
+            with self.assertRaises(ProviderError):
+                guard.wrap(DEFAULT_PROVIDER_ADAPTER).complete([dict(role='user',content='Hi')],config,'',on_delta=lambda *a:None)
+            self.assertLess(time.monotonic()-start,2)
+        finally:
+            stop.set();server.shutdown();server.server_close()
