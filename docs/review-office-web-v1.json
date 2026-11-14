@@ -36,9 +36,9 @@
   ],
   "tier": "high",
   "review_depth": "deep",
-  "rounds": 2,
+  "rounds": 3,
   "round_decision": "review",
-  "round_scope": "full",
+  "round_scope": "new-diff",
   "findings": [
     {
       "id": "OFFICE-R1",
@@ -99,7 +99,7 @@
   ],
   "candidate_base": "a19ce4e1f8f5dc80bcb43a86d1739d78c36cd677",
   "slice_contract": "docs/office-web.md",
-  "status": "review_fixes_in_progress",
+  "status": "approved",
   "verification": [
     {
       "source_type": "local run (V)",
@@ -136,6 +136,30 @@
       "status": "verified",
       "command": "Round2 adversarial transport, original-wire recovery and old-schema refusal tests",
       "result": "Originalfour targetedrepros failed;fixedfourpass2.551s.Oldschema1refusalpreservesDBbytes.Currentworkspacev2explicitlyrefusesoldunreleasedformat."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.9 -m unittest office/store/web/docx/provider/session group",
+      "result": "Finalcode49tests6.474sexit0,oneoptionalDOCXskip;Python3.12DOCXseparate2tests0.067sexit0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Playwright Chrome schema2 offline fixture including dropped POST receipt and medium-width layout",
+      "result": "Chat/source/report/revision/DOCX/reload passed;actual3providerrequests,6messages,2artifacts;900pxcontrolsvisible,390pxnohorizontaloverflow,noJavaScripterrors.Allownedservers/browserprocessesclosed."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Optional-dependency package build and clean no-dependency install",
+      "result": "FinalcodewheelSHA25610b565c1dffd1f4766bab6ace327bda3d48b3019678298442a5abab5949a3489;earlierbehaviorcandidatecleaninstallwebhelp/assets/typedmissingextra verified.Noformalrelease."
+    },
+    {
+      "source_type": "external CI",
+      "status": "verified",
+      "command": "PR68 exact head b3c4662 check readback",
+      "result": "All7checksSUCCESS across Ubuntu/macOS/WindowsPython3.9/3.13 plusrelease-smoke. Finalrecordcommitneeds itsownCI beforemerge."
     }
   ],
   "reviews": [
@@ -153,8 +177,24 @@
       "reviewer": "Independent fresh-context reviewer",
       "decision": "request_changes",
       "coverage": "Newdiff and R1-R7followup;R4-R7closed;R1 receipt normalized after history drift,R2 unbounded error/no-newline bodies,R3 schema1citationcompatibility remained;newR8shortContent-Length."
+    },
+    {
+      "round": 3,
+      "base": "ce5a699",
+      "candidate": "b3c4662",
+      "reviewer": "Independent fresh-context reviewer",
+      "decision": "approve",
+      "coverage": "All8newdiff files, related security/recovery/compatibility;R1,R2,R3,R8closed,R4-R7remainclosed.No new blocker.No duplicate fullsuite."
     }
   ],
-  "unverified_scope": "No paid provider or formal release; no OCR/PDF/DOCX input/XLSX/PPTX output, arbitrary shell, multi-agent, cloud accounts or background automation.",
-  "candidate": "ce5a699"
+  "unverified_scope": "Real provider factual/report quality, all Office applications, real-world workload usability and formal tag/Release/package upload. Old unreleased schema1 is refused without migration; no erasure of previous data. No automated email or arbitrary execution.",
+  "candidate": "b3c46621a528a1c7d8fddf6757a98b3ecd7a6701",
+  "open_findings": 0,
+  "technical_signoff": {
+    "authority": "maintainer-delegated routine technical review",
+    "reviewer": "agent",
+    "date": "2026-11-14",
+    "decision": "approved",
+    "scope": "Exactcodecandidate; security, recovery and rollback reviewed. Keep oldschema1directory; schema2neverrelabellshistoricalcitations."
+  }
 }
