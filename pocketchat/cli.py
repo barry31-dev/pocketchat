@@ -2890,7 +2890,7 @@ def _cmd_context(args: argparse.Namespace) -> int:
             args.session, budget_chars=args.budget,
             keep_recent=args.keep_recent, pending_prompt=args.prompt,
             config=selected)
-    except (SessionFileError, ContextBudgetExceeded, ConfigError, ValueError) as exc:
+    except (SessionFileError, ContextBudgetExceeded, ConfigError, OSError, ValueError) as exc:
         if args.as_json:
             _print_json_error("context", str(exc))
         else:

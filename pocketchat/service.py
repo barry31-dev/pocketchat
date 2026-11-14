@@ -379,6 +379,8 @@ def context_preview(target, sessions_dir: str = "sessions",
     if resolved is None:
         raise SessionFileError("no such session: %s" % target)
     session, trace = _resolve_pair(resolved)
+    if next_turn and trace is not None:
+        trace = trace.resolve()
     messages = read_context_messages(session)
     pending = []
     if pending_prompt is not None:

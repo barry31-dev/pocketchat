@@ -22,10 +22,25 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 0,
+  "rounds": 1,
   "round_decision": "review",
   "round_scope": "full",
-  "findings": [],
+  "findings": [
+    {
+      "id": "PROJECT-TRACE-ALIAS-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "next-preview-trace-alias-recall-root",
+      "reason": "Independent static review found trace aliases retain lexical location after finding the original session. New real symlink regression reproduced a different recalled context; next-turn preview resolves its trace before choosing the Session workspace."
+    },
+    {
+      "id": "PROJECT-CONFIG-IO-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "next-preview-config-io-json-refusal",
+      "reason": "Independent real CLI directory-config probe produced exit1traceback. New directory-process and mockedPermissionError regressions failed then passed after routing OSError through existing context JSON exit2 refusal."
+    }
+  ],
   "slice": "PC-PROJECT-CONTEXT-1",
   "base_commit": "1c695160642a1c1824497fd905227c7372b25d7f",
   "authority": {
@@ -101,12 +116,30 @@
       "status": "verified",
       "command": "ruff check --select E9,F [five changed Python files]; git diff --check; changed Markdown local-link check",
       "result": "Ruff and diff checks passed; local links checked below at this candidate."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_project_context.ProjectRecallRootTests.test_trace_symlink_preview_uses_the_recorded_session_workspace tests.test_project_context.ProjectConfigRefusalTests -v",
+      "result": "Beforefix3tests:2failures1errorexit1. Afterfixall3passed;realtracealiasparity,realprocessdirectoryconfigexit2JSON,andmockedPermissionErrorJSON. Ruff/diffpassed. No broadergreensrepeated."
     }
   ],
-  "reviews": [],
+  "reviews": [
+    {
+      "round": 1,
+      "candidate": "7656466bf4102343d31845ac16612be9af0a1dba",
+      "reviewer": "Independent fresh-context agent",
+      "decision": "request_changes",
+      "coverage": "Full14pathdiff plus narrow session/config/projection/memory/trace/CLI/security/contracts.1realCLIprobe verifieddirectoryI/Oescape;tracealiasfindingwasstatic. No author greens repeated.",
+      "findings": [
+        "PROJECT-TRACE-ALIAS-1",
+        "PROJECT-CONFIG-IO-1"
+      ]
+    }
+  ],
   "unverified": "No real provider reasoning quality, secure erasure of old conversations/traces, semantic search, automatic memory acceptance, new tools, MCP dispatch, paid keys, tags Releases or package uploads.",
   "checkpoint": {
     "complete": false,
-    "next_action": "Fresh-context review of the14-path user-result package, then exact candidate push/CI/main and fixed AIKanban evidence archive."
+    "next_action": "Review only trace alias/config I/O fixes and regressions, then final metadata/head CI and main readback."
   }
 }

@@ -230,3 +230,52 @@ class ProjectRecallRootTests(unittest.TestCase):
             preview = context_preview(path, workspace=observer_root, pending_prompt="patches", config=config)
             self.assertEqual(preview["memory_recall"]["selected_count"], 1)
             self.assertIn(item["memory_id"], json.dumps(preview["preview_messages"]))
+
+    def test_trace_symlink_preview_uses_the_recorded_session_workspace(self):
+        from pocketchat.memory_migration import propose_v2_record, accept_v2_record
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            store = Path(".pocketchat/memory.v2.jsonl")
+            item = propose_v2_record(root, store, "patches canonical guidance", workspace_id="project-a",
+                                     proposed_by="operator")
+            accept_v2_record(root, store, item["memory_id"], "operator", verification_status="not_required")
+            config = dict(model="m", base_url="http://127.0.0.1:1/v1", api_key_env="K", timeout_seconds=2,
+                          max_context_chars=24000, summary_prefix_chars=40, context_projection_enabled=True,
+                          context_projection_max_bytes=65536, memory_recall_enabled=True,
+                          memory_recall_store=str(store), memory_recall_workspace_id="project-a",
+                          provider_adapter=RecordingAdapter())
+            path = root / "sessions" / "project.jsonl"
+            trace = root / "traces" / "project.jsonl"
+            session = Session(config, trace, session_path=path, api_key="synthetic-project-key-123")
+            self.assertEqual(session.run(["patches"]), "completed")
+            observer = root / "observer"
+            (observer / "traces").mkdir(parents=True)
+            alias = observer / "traces" / "alias.jsonl"
+            alias.symlink_to(trace)
+            preview = context_preview(alias, workspace=observer, pending_prompt="patches", config=config)
+            direct = context_preview(path, workspace=root, pending_prompt="patches", config=config)
+            self.assertEqual(preview["preview_messages"], direct["preview_messages"])
+            self.assertEqual(preview["memory_recall"]["selected_count"], 1)
+
+
+class ProjectConfigRefusalTests(unittest.TestCase):
+    def test_directory_config_is_a_process_json_refusal(self):
+        import subprocess
+        import sys
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, "-B", "-m", "pocketchat", "context", "not-read",
+                                     "--prompt", "continue", "--config", directory, "--json"],
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertFalse(json.loads(result.stdout)["ok"])
+            self.assertEqual(json.loads(result.stdout)["error"], "context")
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_permission_denied_config_is_a_json_refusal(self):
+        with mock.patch("pocketchat.cli.load_config", side_effect=PermissionError("fixture denied")):
+            result = hp.run_cli(("context", "not-read", "--prompt", "continue", "--config", "denied.json",
+                                 "--json"), Path.cwd())
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(json.loads(result.stdout)["message"], "fixture denied")
+        self.assertNotIn("Traceback", result.stderr)
