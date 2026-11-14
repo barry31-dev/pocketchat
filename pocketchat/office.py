@@ -226,7 +226,7 @@ class OfficeWorkspace:
         with self.guard:
             r = self.store.run(rid)
             p = json.loads(r['payload'])
-            return dict(id=r['id'], conversation_id=r['cid'], status=r['status'],
+            return dict(id=r['id'], request_id=r['request_id'], conversation_id=r['cid'], status=r['status'],
                         reply=r['reply'], error=r['error'], request=p,
                         preview=self.previews.get(rid, ''))
 

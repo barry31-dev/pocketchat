@@ -25,6 +25,12 @@ TABLES = {
 }
 
 
+def table_columns(version):
+    if version == 3:
+        return dict(TABLES, conversations=TABLES['conversations'] + ('archived',))
+    return TABLES
+
+
 def _json(raw):
     try:
         return decode_json_bytes(raw, MAX_BACKUP_BYTES, 24, 1000000)
@@ -50,13 +56,13 @@ def validate(raw):
         raise OfficeError('Unsupported office backup version.')
     data = doc['data']
     _require(isinstance(data, dict) and set(data) == {'database_version', 'tables'})
-    if type(data['database_version']) is not int or data['database_version'] != 2:
+    if type(data['database_version']) is not int or data['database_version'] not in (2, 3):
         raise OfficeError('Unsupported office database version.')
     _require(hashlib.sha256(encoded(data).encode('utf-8')).hexdigest() == doc['sha256'])
     tables = data['tables']
     _require(isinstance(tables, dict) and set(tables) == set(TABLES))
     maps = {}
-    for table, columns in TABLES.items():
+    for table, columns in table_columns(data['database_version']).items():
         rows = tables[table]
         _require(isinstance(rows, list) and len(rows) <= 100000)
         maps[table] = {}
@@ -69,7 +75,9 @@ def validate(raw):
             _require(row['id'] not in maps[table])
             maps[table][row['id']] = row
             for key, value in row.items():
-                if key == 'created':
+                if key == 'archived':
+                    _require(type(value) is int and value in (0, 1))
+                elif key == 'created':
                     _require(type(value) in (int, float) and 0 <= value < 1e12)
                 elif key not in ('id', 'predecessor', 'error'):
                     _require(isinstance(value, str) and len(value.encode('utf-8')) <= MAX_BACKUP_BYTES)
@@ -185,7 +193,7 @@ def snapshot(store):
             copy.row_factory = sqlite3.Row
             data = dict(database_version=copy.execute('PRAGMA user_version').fetchone()[0],
                         tables={name: [dict(r) for r in copy.execute('SELECT ' + ','.join(columns) + ' FROM ' + name + ' ORDER BY rowid')]
-                                for name, columns in TABLES.items()})
+                                for name, columns in table_columns(copy.execute('PRAGMA user_version').fetchone()[0]).items()})
     raw = encoded(dict(schema_version=SCHEMA, data=data,
                        sha256=hashlib.sha256(encoded(data).encode('utf-8')).hexdigest())).encode('utf-8')
     validate(raw)
@@ -255,7 +263,11 @@ def restore(raw, destination):
         store = OfficeStore(Path(tmp).resolve() / 'workspace')
         try:
             with store.db:
-                for name, columns in TABLES.items():
+                if data['database_version'] == 2:
+                    store.db.execute('DROP TABLE conversations')
+                    store.db.execute('CREATE TABLE conversations(id TEXT PRIMARY KEY,title TEXT,created REAL)')
+                    store.db.execute('PRAGMA user_version=2')
+                for name, columns in table_columns(data['database_version']).items():
                     query = 'INSERT INTO ' + name + '(' + ','.join(columns) + ') VALUES (' + ','.join('?' for _ in columns) + ')'
                     store.db.executemany(query, [[row[k] for k in columns] for row in data['tables'][name]])
         finally:
@@ -290,3 +302,38 @@ def restore(raw, destination):
                 os.close(directory)
     return dict(conversations=len(data['tables']['conversations']),
                 sha256=hashlib.sha256(raw).hexdigest(), bytes=len(raw))
+
+
+def upgrade(store):
+    """Explicit schema-2 upgrade; preserve a validated durable backup first."""
+    with store.lock:
+        version = store.db.execute('PRAGMA user_version').fetchone()[0]
+        if version == 3:
+            return dict(database_version=3, upgraded=False)
+        if version != 2:
+            raise OfficeError('Unsupported office workspace version.')
+        raw = snapshot(store)
+        digest = hashlib.sha256(raw).hexdigest()
+        name = 'office-v2-before-upgrade-' + digest + '.json'
+        target = store.root / name
+        if target.exists() or target.is_symlink():
+            if read_file(target) != raw:
+                raise OfficeError('Existing upgrade backup does not match; workspace unchanged.')
+        else:
+            write_new(target, raw)
+        if read_file(target) != raw:
+            raise OfficeError('Upgrade backup readback failed; workspace unchanged.')
+        # Readback is not a directory-entry durability barrier. Sync both new
+        # and reused backup names before changing the database; failure is retryable.
+        with parent_directory(target) as (parent, _):
+            os.fsync(parent)
+        # Explicit BEGIN: sqlite DDL must share the version update transaction.
+        store.db.execute('BEGIN IMMEDIATE')
+        try:
+            store.db.execute('ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
+            store.db.execute('PRAGMA user_version=3')
+            store.db.commit()
+        except BaseException:
+            store.db.rollback()
+            raise
+        return dict(database_version=3, upgraded=True, backup=name, sha256=digest)

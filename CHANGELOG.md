@@ -2,6 +2,11 @@
 
 ## Unreleased — local office workspace
 
+- Add literal message search with exact hit navigation, reversible conversation
+  archives, workspace/conversation-isolated browser drafts and a backed-up explicit
+  schema-2-to-3 upgrade. The CLI shares search/archive/restore/upgrade with the
+  browser owner. P1 model choice and the interactive entrance remain unfinished.
+
 - Add the P1 foundation: shared authenticated `office` CLI for chat, text material,
   report/revision and exact-version exports; content-bound send confirmation,
   receipt recovery and data-only backup/new-directory restore. Preserve the

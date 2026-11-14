@@ -346,7 +346,7 @@ action. See [file work](file-work.md#session-readpropose-checkpoint).
 ## Office data backup v1
 
 `pocketchat-office-backup.v1` is a bounded logical snapshot, **not a copy of the
-whole workspace directory**. `data.database_version` is 2; `data.tables` contains
+whole workspace directory**. `data.database_version` is 2 or 3; `data.tables` contains
 ordered `conversations`, `sources`, `runs`, `messages` and `artifacts` rows.
 `sha256` hashes UTF-8 canonical JSON of `data` (sorted keys, compact separators,
 non-ASCII preserved). It detects accidental changes, not authenticity/encryption.
@@ -364,8 +364,18 @@ are refused; the original workspace is not opened by restore or changed.
 The snapshot preserves request IDs/receipts, source citation ordering, report
 versions and references. Confirmed CLI receipts additionally retain a
 `confirmation` digest and `model_snapshot` (`model`, `provider`) in the existing
-run payload. This is additive data in office schema 2; no storage upgrade is
-performed by this checkpoint.
+run payload. These payload additions are supported in both database versions.
+Schema 3 adds an integer `archived` field (only 0 or 1) to each conversation;
+message IDs and the remaining table shapes are unchanged.
+
+New workspaces use schema 3. Existing schema 2 workspaces remain at version 2
+until `office upgrade` or the browser **Back up & upgrade** action. The owner
+first writes a validated, mode-0600 `office-v2-before-upgrade-SHA256.json` in the
+private workspace, reads its exact bytes back and syncs the parent directory, then adds the column and changes
+the version in one transaction. Failure preserves the old schema or rolls the
+transaction back; it never deletes the backup. A matching backup from an interrupted
+upgrade may be reused; different bytes or unsafe paths are refused. Backups restore into a new directory at their recorded schema version;
+version-2 conversations remain unarchived until an explicit upgrade. Older implementations refuse schema 3 rather than downgrading.
 
 Excluded: raw traces/request snapshot files, config/credential stores, service
 and browser tokens, browser-local unsent/pending UI state and external exports.
@@ -374,3 +384,12 @@ contain secrets: the backup is **not secret-free** or encrypted. A restore never
 re-executes a request, imports a model configuration or claims secure deletion.
 Keep the original directory if raw evidence is needed. Future storage upgrades
 must first create and verify their own version-appropriate backup.
+
+Message search `message_id` and conversation message `id` are opaque decimal
+strings, not JSON numbers; they identify the exact saved message without
+JavaScript integer rounding. Backup row IDs retain their integer format.
+
+Message allocation is explicitly ordered. A workspace whose integer message IDs
+cannot fit another user/assistant pair refuses new requests before sending; old
+receipts, reads and backups remain available. This is not proof of physical
+power-loss recovery on every filesystem.

@@ -112,7 +112,30 @@ ownership refuses, never silently starts another writer. `office backup` connect
 to the live owner; restore always targets a new directory. See the explicit
 [data-only backup exclusions](formats.md#office-data-backup-v1).
 
-This is the **foundation checkpoint of P1, not completion of P1**. Body search /
-hit navigation, archive/restore, unsent-draft recovery, configured-model switching,
-non-destructive edit/regenerate and the interactive office entrance remain next.
+This is **not completion of P1**. Configured-model switching, non-destructive
+edit/regenerate and the interactive office entrance remain next.
 Existing report creation/revision and browser receipt recovery are reused.
+
+## Daily conversations
+
+Search finds conversation titles and literal message-body matches. Choose a message
+match to open its conversation and focus the exact saved message. Results are plain
+text, limited to 100; **Archived conversations** changes both list and search scope.
+**Archive** hides without deleting; **Restore** makes it writable again. Read and
+version export remain available while archived. Older workspaces show **Back up &
+upgrade**; its verified backup is kept inside the private workspace before schema 3.
+
+Unsent drafts (message, report intent, selected material and predecessor) are saved
+in this browser tab, separately for each workspace and conversation, including a
+new-conversation draft. Switching or refreshing restores the matching draft but
+never consent. Closing the tab may discard drafts. Browser drafts are not CLI
+drafts, are not in workspace backups, and never count as sent history. Pending
+request recovery has a separate workspace-bound record; refresh does not resend.
+
+Draft edits revoke consent. Upload, archive, rename and new-conversation creation
+hold a short UI action lock; delayed responses cannot replace another conversation's
+composer. Sending snapshots content before any asynchronous creation and refuses
+if that draft changes before dispatch. Legacy unbound tab receipts show **Check
+saved receipt**: this only reads and verifies the saved request in the selected
+workspace, never replays it. A missing/mismatched receipt remains blocked; discarding
+removes only the tab record after an explicit warning, not the server request.

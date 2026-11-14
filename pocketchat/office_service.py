@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 from .json_input import JSONInputError, decode_json_bytes
 from .office import OfficeWorkspace
-from .office_backup import MAX_BACKUP_BYTES, read_file, snapshot, write_new
+from .office_backup import MAX_BACKUP_BYTES, read_file, snapshot, upgrade, write_new
 from .office_docx import render_docx
 from .office_store import OfficeError, encoded
 
@@ -79,7 +79,17 @@ def dispatch(app, path, method, body=None):
         return status, value, content_type, extra or headers
     if path == '/api/bootstrap' and method == 'GET':
         return result(dict(model=app.config.get('model'), provider=app.config.get('base_url'),
-                           max_source_bytes=12 * 1024))
+                           max_source_bytes=12 * 1024, workspace_id=workspace_id(app.root),
+                           database_version=app.store.db.execute('PRAGMA user_version').fetchone()[0]))
+    if path == '/api/upgrade' and method == 'POST':
+        exact(body, [])
+        with app.guard:
+            return result(upgrade(app.store))
+    if path == '/api/search' and method == 'POST':
+        exact(body, ['query', 'archived'])
+        return result(app.store.search(body['query'], body['archived']))
+    if path == '/api/conversations/archived' and method == 'GET':
+        return result({'items': app.store.list(archived=True)})
     if path == '/api/backup' and method == 'POST':
         exact(body, [])
         with app.guard:
@@ -94,6 +104,9 @@ def dispatch(app, path, method, body=None):
         if len(parts) == 3 and method == 'GET':
             return result(app.store.get(cid))
         if len(parts) == 4 and method == 'POST':
+            if parts[3] == 'archive':
+                with app.guard:
+                    return result(app.store.archive(cid, exact(body, ['archived'])['archived']))
             if parts[3] == 'rename':
                 return result(app.store.rename(cid, exact(body, ['title'])['title']))
             if parts[3] == 'sources':

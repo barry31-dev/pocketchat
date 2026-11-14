@@ -94,10 +94,10 @@ class OfficeStore:
             self.db.row_factory = sqlite3.Row
             os.chmod(self.root / 'office.sqlite', 0o600)
             version = self.db.execute('PRAGMA user_version').fetchone()[0]
-            if version not in (0, 2):
+            if version not in (0, 2, 3):
                 raise OfficeError('Unsupported office workspace version.')
             self.db.executescript('''
-                CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, title TEXT, created REAL);
+                CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, title TEXT, created REAL, archived INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY, cid TEXT, name TEXT, text TEXT, sha256 TEXT);
                 CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, cid TEXT, request_id TEXT UNIQUE,
                     payload TEXT, status TEXT, reply TEXT, error TEXT, created REAL);
@@ -105,8 +105,9 @@ class OfficeStore:
                     content TEXT, context TEXT, run_id TEXT);
                 CREATE TABLE IF NOT EXISTS artifacts(id TEXT PRIMARY KEY, cid TEXT, run_id TEXT UNIQUE,
                     content TEXT, sources TEXT, predecessor TEXT, created REAL);
-                PRAGMA user_version=2;
             ''')
+            if version == 0:
+                self.db.execute('PRAGMA user_version=3')
             with self.db:
                 self.db.execute("UPDATE runs SET status='unknown', error='Interrupted before completion; inspect before retrying.' WHERE status IN ('running','stopping')")
         except Exception:
@@ -134,25 +135,74 @@ class OfficeStore:
             if self.db.execute('SELECT count(*) FROM conversations').fetchone()[0] >= 200:
                 raise OfficeError('Conversation limit reached.', 409)
             cid = uuid4().hex
-            self.db.execute('INSERT INTO conversations VALUES (?,?,?)', (cid, title, time.time()))
+            self.db.execute('INSERT INTO conversations(id,title,created) VALUES (?,?,?)', (cid, title, time.time()))
             return self.get(cid)
 
     def rename(self, cid, title):
         title = text_value(title, 240, 'Title')
         with self.lock, self.db:
-            self._row('conversations', cid)
+            self.writable(cid)
             self.db.execute('UPDATE conversations SET title=? WHERE id=?', (title, cid))
             return self.get(cid)
 
-    def list(self):
+    def writable(self, cid):
         with self.lock:
-            return [dict(r) for r in self.db.execute('SELECT * FROM conversations ORDER BY created DESC')]
+            if self._row('conversations', cid).get('archived', 0):
+                raise OfficeError('Restore the archived conversation before changing it.', 409)
+
+    def list(self, archived=False):
+        if type(archived) is not bool:
+            raise OfficeError('Archive filter must be a boolean.')
+        with self.lock:
+            rows = [dict(r) for r in self.db.execute('SELECT * FROM conversations ORDER BY created DESC')]
+            return [dict(r, archived=bool(r.get('archived', 0))) for r in rows
+                    if bool(r.get('archived', 0)) == archived]
+
+    def archive(self, cid, archived):
+        if type(archived) is not bool:
+            raise OfficeError('Archive state must be a boolean.')
+        with self.lock, self.db:
+            self._row('conversations', cid)
+            if self.db.execute('PRAGMA user_version').fetchone()[0] != 3:
+                raise OfficeError('Upgrade the workspace with a backup before archiving.', 409)
+            if self.db.execute("SELECT 1 FROM runs WHERE cid=? AND status IN ('running','stopping')", (cid,)).fetchone():
+                raise OfficeError('Wait for the active request before archiving.', 409)
+            self.db.execute('UPDATE conversations SET archived=? WHERE id=?', (int(archived), cid))
+            return self.get(cid)
+
+    def search(self, query, archived=False):
+        query = text_value(query, 240, 'Search query').casefold()
+        with self.lock:
+            visible = {c['id']: c for c in self.list(archived)}
+            hits = []
+            for m in self.db.execute('SELECT id,cid,role,content FROM messages ORDER BY id'):
+                if m['cid'] not in visible:
+                    continue
+                offset = m['content'].casefold().find(query)
+                if offset < 0:
+                    continue
+                if len(hits) == 100:
+                    return dict(items=hits, truncated=True)
+                # casefold may expand a character (ß -> ss). Translate the
+                # folded offset back before slicing the original saved text.
+                consumed = 0
+                original_offset = 0
+                for original_offset, character in enumerate(m['content']):
+                    consumed += len(character.casefold())
+                    if consumed > offset:
+                        break
+                start = max(0, original_offset - 60)
+                hits.append(dict(conversation_id=m['cid'], title=visible[m['cid']]['title'],
+                                 message_id=str(m['id']), role=m['role'],
+                                 excerpt=m['content'][start:start + 240]))
+            return dict(items=hits, truncated=False)
 
     def get(self, cid):
         with self.lock:
             c = self._row('conversations', cid)
+            c['archived'] = bool(c.get('archived', 0))
             c['sources'] = [dict(r) for r in self.db.execute('SELECT id,name,sha256,length(CAST(text AS BLOB)) AS bytes FROM sources WHERE cid=? ORDER BY rowid', (cid,))]
-            c['messages'] = [dict(r) for r in self.db.execute('SELECT role,content,run_id FROM messages WHERE cid=? ORDER BY id', (cid,))]
+            c['messages'] = [dict(r, id=str(r['id'])) for r in self.db.execute('SELECT id,role,content,run_id FROM messages WHERE cid=? ORDER BY id', (cid,))]
             c['artifacts'] = [dict(r) for r in self.db.execute('SELECT id,run_id,predecessor,created FROM artifacts WHERE cid=? ORDER BY rowid DESC', (cid,))]
             c['runs'] = [dict(r) for r in self.db.execute('SELECT id,status,error,created FROM runs WHERE cid=? ORDER BY rowid DESC LIMIT 20', (cid,))]
             return c
@@ -169,7 +219,7 @@ class OfficeStore:
         text_value(text, MAX_SOURCE_BYTES, 'Source')
         digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
         with self.lock, self.db:
-            self._row('conversations', cid)
+            self.writable(cid)
             if self.db.execute('SELECT count(*) FROM sources WHERE cid=?', (cid,)).fetchone()[0] >= 64:
                 raise OfficeError('Source limit reached.', 409)
             sid = uuid4().hex
@@ -216,6 +266,12 @@ class OfficeStore:
                 raise OfficeError('Request ID is already bound to different content.', 409)
             return dict(row)
 
+    def _next_message_ids(self):
+        last = self.db.execute('SELECT COALESCE(MAX(id),0) FROM messages').fetchone()[0]
+        if last > 2**63 - 3:
+            raise OfficeError('Message IDs exhausted; this workspace cannot accept new messages.', 409)
+        return last + 1, last + 2
+
     def begin(self, cid, request_id, payload):
         identifier(request_id)
         body = encoded(payload)
@@ -226,10 +282,12 @@ class OfficeStore:
                 if old['cid'] != cid or old['payload'] != body:
                     raise OfficeError('Request ID is already bound to different content.', 409)
                 return dict(old)
+            self.writable(cid)
             if self.db.execute("SELECT 1 FROM runs WHERE status IN ('running','stopping')").fetchone():
                 raise OfficeError('A request is still running. Wait for its final status.', 409)
             if self.db.execute('SELECT count(*) FROM runs WHERE cid=?', (cid,)).fetchone()[0] >= 250:
                 raise OfficeError('Conversation request limit reached.', 409)
+            self._next_message_ids()
             rid = uuid4().hex
             self.db.execute('INSERT INTO runs VALUES (?,?,?,?,?,?,?,?)', (rid, cid, request_id, body, 'running', '', None, time.time()))
             return self.run(rid)
@@ -256,7 +314,8 @@ class OfficeStore:
                 status, reply, error = 'cancelled', '', 'Stopped by the user.'
             p = json.loads(r['payload'])
             if status == 'completed':
-                self.db.executemany('INSERT INTO messages(cid,role,content,context,run_id) VALUES (?,?,?,?,?)', [(r['cid'], 'user', p['prompt'], context or p['prompt'], rid), (r['cid'], 'assistant', reply, reply, rid)])
+                user_id, assistant_id = self._next_message_ids()
+                self.db.executemany('INSERT INTO messages(id,cid,role,content,context,run_id) VALUES (?,?,?,?,?,?)', [(user_id, r['cid'], 'user', p['prompt'], context or p['prompt'], rid), (assistant_id, r['cid'], 'assistant', reply, reply, rid)])
                 if p['intent'] == 'report':
                     sources = [self.source(r['cid'], s) for s in p['source_ids']]
                     manifest = [dict(id=s['id'], name=s['name'], sha256=s['sha256'], citation=self.citation(r['cid'], s['id'])) for s in sources]

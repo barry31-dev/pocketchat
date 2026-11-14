@@ -244,7 +244,7 @@ task-record/policy/plan 身份、时间、执行状态及逐项 bytes/SHA-256。
 ## Office 数据备份 v1
 
 `pocketchat-office-backup.v1` 是最大 32 MiB 的**逻辑数据快照，不是整个目录备份**。
-`data.database_version=2`；`data.tables` 顺序保存会话、资料、运行回执、消息及文档版本。
+`data.database_version` 为 2 或 3；`data.tables` 顺序保存会话、资料、运行回执、消息及文档版本。
 `sha256` 对 `data` 的 UTF-8、键排序、紧凑且保留非 ASCII 的 JSON 求摘要。
 摘要检查不是签名、身份认证或加密。
 
@@ -253,9 +253,22 @@ task-record/policy/plan 身份、时间、执行状态及逐项 bytes/SHA-256。
 每会话原有限额，再新建 0700 目录；发布数据库全过程持有目标工作区写锁。
 只用固定 schema 和 SQL 参数，不执行备份里的 SQL。现有目录／文件、链接、坏摘要及
 未知版本均拒绝，原工作区不改动。来源顺序、版本和 request ID 保留，不重放模型调用。
-新 CLI 回执可在原 schema-2 payload 中附加 `confirmation` 及 `model_snapshot`，本次不升级数据库。
+CLI 回执在两版 payload 中均可附加 `confirmation` 及 `model_snapshot`。schema 3 仅给会话新增
+`archived` 整数字段（只接受 0 或 1），消息 ID 和其他表形状不变。
+
+新建工作区使用 schema 3；既有 schema 2 不静默升级。显式 `office upgrade` 或网页
+**Back up & upgrade** 会先在私有工作区写入 0600 的 `office-v2-before-upgrade-SHA256.json`，
+校验、回读字节并同步备份父目录后才在一个事务中加列、改版本。失败不删除备份；中断留下的完全相同备份可复用，
+不同字节或不安全路径拒绝。备份恢复到新目录时保留记录中的 schema 版本；旧版会话在显式升级前仍不启用归档；
+旧实现应拒绝 schema 3，不降级。
 
 **排除**原始 trace／请求快照文件、配置／凭据存储、服务与浏览器令牌、浏览器本地草稿和
 待恢复 UI 状态、工作区外导出物。恢复了回执不代表重建了原始 trace；需要原始证据时
 保留原目录。用户资料可能自带秘密，因此备份不是“已脱敏／无秘密”，也不提供加密、
 安全擦除或自动导入模型配置。未来存储升级仍需先做对应版本的备份及恢复验证。
+
+消息搜索的 `message_id` 与会话消息 `id` 是不透明十进制字符串，
+不是 JSON 数字，避免浏览器整数舍入；备份表中的消息 ID 仍为整数。
+
+消息 ID 按序分配；若无法再容纳一对用户／助手消息，新请求在发送前拒绝，旧回执、读取和
+备份仍可用。目录同步故障注入不等于验证所有文件系统的真实断电恢复。

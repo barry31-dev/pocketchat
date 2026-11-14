@@ -182,3 +182,148 @@ class BackupTests(unittest.TestCase):
         with patch.object(office_backup.os, 'fdopen', side_effect=lambda *a, **kw: ObservedStream(fdopen(*a, **kw))):
             self.restore(raw)
         self.assertEqual(checked, [True])
+
+    @unittest.skipUnless(SECURE_IO, "requires no-follow descriptor I/O")
+    def test_archive_roundtrip_and_invalid_flag_refusal(self):
+        self.store.archive(self.cid, True)
+        raw = self.backup()
+        self.restore(raw)
+        restored = OfficeStore(self.base / 'restored')
+        self.addCleanup(restored.close)
+        self.assertTrue(restored.get(self.cid)['archived'])
+        doc = json.loads(raw)
+        doc['data']['tables']['conversations'][0]['archived'] = 2
+        doc['sha256'] = hashlib.sha256(encoded(doc['data']).encode()).hexdigest()
+        with self.assertRaises(OfficeError):
+            self.restore(encoded(doc).encode(), 'bad-archive')
+
+    @unittest.skipUnless(SECURE_IO, "requires no-follow descriptor I/O")
+    def test_explicit_upgrade_keeps_validated_old_backup_and_restores_it(self):
+        from pocketchat import office_backup
+        # Rebuild precisely the legacy conversation table, independent of fresh defaults.
+        self.store.db.executescript('''
+            ALTER TABLE conversations RENAME TO old_conversations;
+            CREATE TABLE conversations(id TEXT PRIMARY KEY,title TEXT,created REAL);
+            INSERT INTO conversations SELECT id,title,created FROM old_conversations;
+            DROP TABLE old_conversations;
+            PRAGMA user_version=2;
+        ''')
+        self.store.close()
+        self.store = OfficeStore(self.base / 'original')
+        self.addCleanup(self.store.close)
+        self.assertEqual(self.store.db.execute('PRAGMA user_version').fetchone()[0], 2)
+        with self.assertRaises(OfficeError):
+            self.store.archive(self.cid, True)
+        before = office_backup.snapshot(self.store)
+        result = office_backup.upgrade(self.store)
+        self.assertEqual(result['database_version'], 3)
+        self.assertEqual((self.store.root / result['backup']).read_bytes(), before)
+        self.assertEqual(office_backup.validate(before)['database_version'], 2)
+        self.assertEqual((self.store.root / result['backup']).stat().st_mode & 0o777, 0o600)
+        self.restore(before)
+        restored = OfficeStore(self.base / 'restored')
+        self.addCleanup(restored.close)
+        self.assertEqual(restored.get(self.cid), self.store.get(self.cid))
+        self.assertEqual(restored.db.execute('PRAGMA user_version').fetchone()[0], 2)
+        self.assertNotIn('archived', [r[1] for r in restored.db.execute('PRAGMA table_info(conversations)')])
+        self.assertEqual(office_backup.snapshot(restored), before)
+        self.assertEqual(office_backup.upgrade(self.store), {'database_version': 3, 'upgraded': False})
+
+    @unittest.skipUnless(SECURE_IO, "requires no-follow descriptor I/O")
+    def test_failed_upgrade_backup_preserves_legacy_schema_and_contents(self):
+        from unittest.mock import patch
+        from pocketchat import office_backup
+        self.store.db.executescript('''
+            ALTER TABLE conversations RENAME TO old_conversations;
+            CREATE TABLE conversations(id TEXT PRIMARY KEY,title TEXT,created REAL);
+            INSERT INTO conversations SELECT id,title,created FROM old_conversations;
+            DROP TABLE old_conversations;
+            PRAGMA user_version=2;
+        ''')
+        before = self.backup()
+        with patch.object(office_backup, 'write_new', side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):
+                office_backup.upgrade(self.store)
+        self.assertEqual(self.backup(), before)
+        self.assertEqual(self.store.db.execute('PRAGMA user_version').fetchone()[0], 2)
+
+
+    def _check_upgrade_directory_sync_failure_and_retry(self, reuse):
+        import stat
+        from unittest.mock import patch
+        from pocketchat import office_backup
+        self.store.db.executescript('''
+            ALTER TABLE conversations RENAME TO old_conversations;
+            CREATE TABLE conversations(id TEXT PRIMARY KEY,title TEXT,created REAL);
+            INSERT INTO conversations SELECT id,title,created FROM old_conversations;
+            DROP TABLE old_conversations;
+            PRAGMA user_version=2;
+        ''')
+        before = self.backup()
+        target = self.store.root / ('office-v2-before-upgrade-' + hashlib.sha256(before).hexdigest() + '.json')
+        if reuse:
+            office_backup.write_new(target, before)
+        database = (self.store.root / 'office.sqlite').read_bytes()
+        fsync = os.fsync
+        failed = []
+
+        def fail_directory(fd):
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                failed.append(fd)
+                self.assertEqual(self.store.db.execute('PRAGMA user_version').fetchone()[0], 2)
+                self.assertNotIn('archived', [r[1] for r in self.store.db.execute('PRAGMA table_info(conversations)')])
+                raise OSError('directory sync failed')
+            return fsync(fd)
+
+        with patch.object(office_backup.os, 'fsync', side_effect=fail_directory):
+            with self.assertRaises(OfficeError):
+                office_backup.upgrade(self.store)
+        self.assertEqual(len(failed), 1)
+        self.assertEqual(self.backup(), before)
+        self.assertEqual((self.store.root / 'office.sqlite').read_bytes(), database)
+        self.assertEqual(self.store.db.execute('PRAGMA user_version').fetchone()[0], 2)
+        self.assertFalse(self.store.db.in_transaction)
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+        synced = []
+
+        def sync_directory(fd):
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                self.assertEqual(self.store.db.execute('PRAGMA user_version').fetchone()[0], 2)
+                self.assertNotIn('archived', [r[1] for r in self.store.db.execute('PRAGMA table_info(conversations)')])
+                synced.append(fd)
+            return fsync(fd)
+
+        with patch.object(office_backup.os, 'fsync', side_effect=sync_directory):
+            result = office_backup.upgrade(self.store)
+        self.assertEqual(len(synced), 1)
+        self.assertTrue(result['upgraded'])
+        self.assertEqual(result['database_version'], 3)
+        self.assertEqual(target.read_bytes(), before)
+
+    @unittest.skipUnless(SECURE_IO, 'requires no-follow descriptor I/O')
+    def test_new_upgrade_backup_directory_sync_failure_preserves_schema_and_retries(self):
+        self._check_upgrade_directory_sync_failure_and_retry(reuse=False)
+
+    @unittest.skipUnless(SECURE_IO, 'requires no-follow descriptor I/O')
+    def test_reused_upgrade_backup_directory_sync_failure_preserves_schema_and_retries(self):
+        self._check_upgrade_directory_sync_failure_and_retry(reuse=True)
+
+    @unittest.skipUnless(SECURE_IO, 'requires no-follow descriptor I/O')
+    def test_max_message_ids_roundtrip_as_integers_and_refuse_only_new_requests(self):
+        from pocketchat import office_backup
+        with self.store.db:
+            self.store.db.execute('UPDATE messages SET id=id+?', (2**63 - 5,))
+        raw = self.backup()
+        ids = [m['id'] for m in office_backup.validate(raw)['tables']['messages']]
+        self.assertEqual(ids, list(range(2**63 - 4, 2**63)))
+        self.assertTrue(all(type(mid) is int for mid in ids))
+        self.restore(raw)
+        restored = OfficeStore(self.base / 'restored')
+        self.addCleanup(restored.close)
+        self.assertEqual(restored.get(self.cid), self.store.get(self.cid))
+        prior = restored.begin(self.cid, 'request-first', self.body)
+        self.assertEqual(prior['status'], 'completed')
+        with self.assertRaises(OfficeError):
+            restored.begin(self.cid, 'overflow-request', self.body)
+        self.assertEqual(office_backup.snapshot(restored), raw)

@@ -851,6 +851,12 @@ exact loopback instance; otherwise it takes the exclusive workspace lock.
 ```bash
 pocketchat office --data-dir PRIVATE_DIR conversations create --title "Weekly work"
 pocketchat office --data-dir PRIVATE_DIR conversations list
+pocketchat office --data-dir PRIVATE_DIR conversations list --archived
+pocketchat office --data-dir PRIVATE_DIR search --query "budget"
+pocketchat office --data-dir PRIVATE_DIR search --query "budget" --archived
+pocketchat office --data-dir PRIVATE_DIR conversations archive --conversation CID
+pocketchat office --data-dir PRIVATE_DIR conversations restore --conversation CID
+pocketchat office --data-dir PRIVATE_DIR upgrade
 pocketchat office --data-dir PRIVATE_DIR conversations show --conversation CID
 pocketchat office --data-dir PRIVATE_DIR conversations rename --conversation CID --title "Week 2"
 pocketchat office --data-dir PRIVATE_DIR materials add --conversation CID --file notes.md
@@ -895,3 +901,27 @@ Native discovery and explicit file import/export/restore require no-follow,
 directory-descriptor I/O (currently macOS/Linux). They fail closed when unavailable;
 there is no insecure Windows fallback. Existing browser/legacy CLI behavior is
 unchanged. Protect content-bearing previews, backups and exported documents.
+
+### Office daily conversation operations
+
+`search` matches message bodies literally with Unicode case folding, not regular
+expressions or SQL wildcards. Queries are bounded to 240 UTF-8 bytes. Results
+contain `conversation_id`, stable decimal-string `message_id`, title, role and a bounded
+excerpt; at most 100 matches are returned with an explicit `truncated` flag.
+Default list/search shows active conversations; `--archived` shows only archives.
+Archive is reversible and never deletes messages, materials, receipts or reports.
+Archived conversations may be read/exported and their original receipts recovered,
+but must be restored before rename, material import or a new model request. An
+active request prevents archive. `conversations restore` restores visibility;
+the top-level `restore --from` instead creates a new workspace from a backup.
+
+Schema-2 users must explicitly run `upgrade` before archive. It requires no model,
+uses the current writer, keeps a validated pre-upgrade backup inside the private
+workspace and is idempotent on schema 3. See [backup format](formats.md#office-data-backup-v1).
+
+Message search `message_id` and conversation message `id` are opaque decimal
+strings, not JSON numbers; they identify the exact saved message without
+JavaScript integer rounding. Backup row IDs retain their integer format.
+
+Office run receipts additionally expose their original `request_id` for read-only
+receipt matching; this does not change the original request or call the provider.
