@@ -840,3 +840,58 @@ remaining 1.2 artifact, provider, manual, authority and publication gates. It do
 invoke a provider, read the wheel or source tree, publish or write. Complete
 returns 0; pending/unknown/blocked return 1; refused input returns 2. See
 [the observation contract](release-preflight.md).
+
+## Office — shared browser/CLI workspace (P1 foundation)
+
+`office` is separate from legacy `chat`, `agent`, `run` and their JSONL files.
+Place workspace options **before** the office subcommand. No command starts a
+background server. If `web` owns the directory, the CLI authenticates to that
+exact loopback instance; otherwise it takes the exclusive workspace lock.
+
+```bash
+pocketchat office --data-dir PRIVATE_DIR conversations create --title "Weekly work"
+pocketchat office --data-dir PRIVATE_DIR conversations list
+pocketchat office --data-dir PRIVATE_DIR conversations show --conversation CID
+pocketchat office --data-dir PRIVATE_DIR conversations rename --conversation CID --title "Week 2"
+pocketchat office --data-dir PRIVATE_DIR materials add --conversation CID --file notes.md
+pocketchat office --data-dir PRIVATE_DIR --json report create --conversation CID --prompt "Draft a report" --source SID --request-id REQUEST_ID
+# Review the returned model, provider, history, message and material selection.
+# Repeat those exact arguments with --confirm CONFIRMATION_SHA to send.
+pocketchat office --data-dir PRIVATE_DIR chat --conversation CID --prompt "Hello" --request-id ANOTHER_ID
+pocketchat office --data-dir PRIVATE_DIR report revise --conversation CID --version VERSION_ID --prompt "Shorten it" --request-id REVISION_REQUEST_ID
+pocketchat office --data-dir PRIVATE_DIR runs show --run RUN_ID
+pocketchat office --data-dir PRIVATE_DIR runs stop --run RUN_ID
+pocketchat office --data-dir PRIVATE_DIR export --conversation CID --version VERSION_ID --format md --out report.md
+pocketchat office --data-dir PRIVATE_DIR export --conversation CID --version VERSION_ID --format docx --out report.docx
+pocketchat office --data-dir PRIVATE_DIR backup --out backup.json
+pocketchat office --data-dir NEW_PRIVATE_DIR restore --from backup.json
+```
+
+`chat` and `report` without `--confirm` only preview; they do not call the model.
+Repeat `--source SID` to select more material. The hash binds the exact request
+ID/content, normalized sources/predecessor, current history and model config.
+Changes invalidate it. Keep the ID, arguments and original hash until the final
+receipt is known: replaying them recovers the original run, including after
+restart, rather than calling the provider twice. A different payload with the
+same ID is refused. `unknown` is never automatically replayed. Poll `runs show`
+after `runs stop`; `stopping` is not a terminated worker.
+
+An offline writer needs `--config CONFIG [--profile NAME]` before `chat`/`report`.
+When connected, the server owns config: CLI overrides are refused rather than
+silently ignored. Read/import/export/backup/restore require no provider config.
+This checkpoint supplies single-request commands, not an interactive office REPL.
+
+`--json` emits one `pocketchat-office-cli.v1` object with `ok` plus `result` or
+`error`; command failures keep stderr empty. Exit 0: success or unsent preview;
+1: known failed/cancelled/unknown run or interrupted wait; 2: refusal/config/input
+or unknown transport outcome. Argument-parser usage errors retain normal argparse
+stderr/exit 2. Progress is not mixed into JSON. Human mode prints replies or a
+readable result, and errors on stderr. Results never include discovery tokens.
+
+Output is create-only, mode 0600; no overwrite flag exists. Materials remain
+bounded TXT/Markdown/CSV, not PDF/DOCX input. DOCX output needs the existing
+`office` extra. Backup details and exclusions are in [formats.md](formats.md).
+Native discovery and explicit file import/export/restore require no-follow,
+directory-descriptor I/O (currently macOS/Linux). They fail closed when unavailable;
+there is no insecure Windows fallback. Existing browser/legacy CLI behavior is
+unchanged. Protect content-bearing previews, backups and exported documents.

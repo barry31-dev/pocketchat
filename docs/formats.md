@@ -342,3 +342,35 @@ proposal's trace `tool.call.completed` payload records
 absent because the stable trace enum has no pending classification. A later
 trusted file action must have its own evidence; model completion is not that
 action. See [file work](file-work.md#session-readpropose-checkpoint).
+
+## Office data backup v1
+
+`pocketchat-office-backup.v1` is a bounded logical snapshot, **not a copy of the
+whole workspace directory**. `data.database_version` is 2; `data.tables` contains
+ordered `conversations`, `sources`, `runs`, `messages` and `artifacts` rows.
+`sha256` hashes UTF-8 canonical JSON of `data` (sorted keys, compact separators,
+non-ASCII preserved). It detects accidental changes, not authenticity/encryption.
+
+The live owner uses SQLite's online backup into a temporary in-memory database
+under its mutation lock. Running/stopping requests refuse backup. The database
+size and encoded JSON are capped at 32 MiB. Restoring validates version, closed
+fields, IDs, source hashes, ownership references, complete message/report pairs,
+acyclic predecessor chains and existing per-conversation quotas before creating
+a new mode-0700 destination. Imported strings are bound SQL values, never schema
+or commands. Publication holds the target's exclusive writer lock. Existing
+workspaces/files, symbolic links, malformed/unknown formats and hash mismatches
+are refused; the original workspace is not opened by restore or changed.
+
+The snapshot preserves request IDs/receipts, source citation ordering, report
+versions and references. Confirmed CLI receipts additionally retain a
+`confirmation` digest and `model_snapshot` (`model`, `provider`) in the existing
+run payload. This is additive data in office schema 2; no storage upgrade is
+performed by this checkpoint.
+
+Excluded: raw traces/request snapshot files, config/credential stores, service
+and browser tokens, browser-local unsent/pending UI state and external exports.
+A restored receipt is not a reconstructed raw trace. User material may itself
+contain secrets: the backup is **not secret-free** or encrypted. A restore never
+re-executes a request, imports a model configuration or claims secure deletion.
+Keep the original directory if raw evidence is needed. Future storage upgrades
+must first create and verify their own version-appropriate backup.

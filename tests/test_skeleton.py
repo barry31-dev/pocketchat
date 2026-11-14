@@ -208,7 +208,7 @@ class StableV1ContractTests(unittest.TestCase):
         self.assertEqual(sorted(commands), sorted([
             "init", "doctor", "run", "chat", "agent", "show", "context", "tool", "memory", "delegate", "export",
             "branch", "checkpoint", "rewind", "task", "profile", "compare", "replay",
-            "workspace", "history", "evidence", "web",
+            "workspace", "history", "evidence", "web", "office",
             "search", "diff", "select", "index",
         ]))
 

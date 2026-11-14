@@ -240,3 +240,22 @@ task-record/policy/plan 身份、时间、执行状态及逐项 bytes/SHA-256。
 单独记录 `file_change_status=proposed` 与 `change_id`，不写 generic effect 字段，因为稳定 trace enum
 没有 pending 分类。后续可信文件动作需要自己的证据，模型完成不等于该动作。
 详见[文件工作](file-work.zh-CN.md#session-readpropose-检查点)。
+
+## Office 数据备份 v1
+
+`pocketchat-office-backup.v1` 是最大 32 MiB 的**逻辑数据快照，不是整个目录备份**。
+`data.database_version=2`；`data.tables` 顺序保存会话、资料、运行回执、消息及文档版本。
+`sha256` 对 `data` 的 UTF-8、键排序、紧凑且保留非 ASCII 的 JSON 求摘要。
+摘要检查不是签名、身份认证或加密。
+
+当前写入者持锁，用 SQLite online backup 取得一致快照；在飞／停止中请求拒绝备份。
+恢复先检查版本、封闭字段、ID、资料摘要、同会话引用、完成消息／报告对、无环版本链和
+每会话原有限额，再新建 0700 目录；发布数据库全过程持有目标工作区写锁。
+只用固定 schema 和 SQL 参数，不执行备份里的 SQL。现有目录／文件、链接、坏摘要及
+未知版本均拒绝，原工作区不改动。来源顺序、版本和 request ID 保留，不重放模型调用。
+新 CLI 回执可在原 schema-2 payload 中附加 `confirmation` 及 `model_snapshot`，本次不升级数据库。
+
+**排除**原始 trace／请求快照文件、配置／凭据存储、服务与浏览器令牌、浏览器本地草稿和
+待恢复 UI 状态、工作区外导出物。恢复了回执不代表重建了原始 trace；需要原始证据时
+保留原目录。用户资料可能自带秘密，因此备份不是“已脱敏／无秘密”，也不提供加密、
+安全擦除或自动导入模型配置。未来存储升级仍需先做对应版本的备份及恢复验证。

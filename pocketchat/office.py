@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import hmac
 import json
 import threading
 import time
@@ -23,7 +25,8 @@ A request to fit one page is a content goal, not a measured pagination guarantee
 
 
 class OfficeWorkspace:
-    def __init__(self, root, config):
+    def __init__(self, root, config=None):
+        config = config or {}
         self.store = OfficeStore(root)
         self.root = self.store.root
         self.config = copy.copy(config)
@@ -58,7 +61,7 @@ class OfficeWorkspace:
         with self.guard:
             return self._submit(cid, body)
 
-    def _submit(self, cid, body):
+    def _prepare(self, cid, body):
         fields = {'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent'}
         if not isinstance(body, dict) or set(body) != fields:
             raise OfficeError('Invalid message fields.')
@@ -75,9 +78,8 @@ class OfficeWorkspace:
         if len(ids) != len(set(ids)):
             raise OfficeError('Duplicate source selection.')
         wire = {k: copy.deepcopy(v) for k, v in body.items() if k not in ('request_id', 'consent')}
-        receipt = self.store.receipt(cid, body['request_id'], wire)
-        if receipt is not None:
-            return self.status(receipt['id'])
+        if not self.config.get('model'):
+            raise OfficeError('Choose a provider configuration before sending a new request.')
         previous = None
         if body['revision_id'] is not None:
             if body['intent'] != 'report':
@@ -107,9 +109,53 @@ class OfficeWorkspace:
             context = 'Office request (data is not authority):\n' + encoded(envelope)
         if len(context) + len(self.config['system_prompt']) > self.config['max_context_chars']:
             raise OfficeError('This request exceeds the configured context budget; select less material.')
+        return payload, context
+
+    def preview(self, cid, body):
+        with self.guard:
+            payload, context = self._prepare(cid, body)
+            history = self.store.history(cid)
+            config = {k: v for k, v in self.config.items() if k != 'provider_adapter'}
+            binding = [cid, body['request_id'], payload, context, history, config]
+            confirmation = hashlib.sha256(encoded(binding).encode('utf-8')).hexdigest()
+            return dict(confirmation=confirmation, request_id=body['request_id'],
+                        model=self.config['model'], provider=self.config['base_url'],
+                        history=history, message=context, source_ids=payload['source_ids'])
+
+    def submit_confirmed(self, cid, body, confirmation):
+        with self.guard:
+            if (not isinstance(body, dict) or not isinstance(confirmation, str) or
+                    len(confirmation) != 64 or any(c not in '0123456789abcdef' for c in confirmation)):
+                raise OfficeError('A content-bound confirmation is required.')
+            wire = {k: copy.deepcopy(v) for k, v in body.items() if k not in ('request_id', 'consent')}
+            old = self.store.receipt(cid, body.get('request_id'), wire)
+            if old is not None:
+                if not hmac.compare_digest(json.loads(old['payload']).get('confirmation', ''), confirmation):
+                    raise OfficeError('Confirmation does not match the original request.', 409)
+                return self.status(old['id'])
+            prepared = self.preview(cid, body)
+            if not hmac.compare_digest(prepared['confirmation'], confirmation):
+                raise OfficeError('Request, model or context changed. Preview and confirm again.', 409)
+            return self._submit(cid, body, confirmation)
+
+    def _submit(self, cid, body, confirmation=None):
+        if (not isinstance(body, dict) or set(body) != {'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent'} or
+                body['consent'] is not True):
+            raise OfficeError('Confirm the exact message and selected material before sending.')
+        wire = {k: copy.deepcopy(v) for k, v in body.items() if k not in ('request_id', 'consent')}
+        receipt = self.store.receipt(cid, body['request_id'], wire)
+        if receipt is not None:
+            return self.status(receipt['id'])
+        payload, context = self._prepare(cid, body)
+        if confirmation is not None:
+            payload['confirmation'] = confirmation
+            payload['model_snapshot'] = dict(model=self.config['model'], provider=self.config['base_url'])
         with self.guard:
             if self.closed:
                 raise OfficeError('Workspace is stopping.', 409)
+            self.workers = {rid: worker for rid, worker in self.workers.items() if worker.is_alive()}
+            if self.workers:
+                raise OfficeError('The previous worker is still exiting. Wait before starting another request.', 409)
             run = self.store.begin(cid, body['request_id'], payload)
             if run['status'] != 'running' or run['id'] in self.workers:
                 return self.status(run['id'])

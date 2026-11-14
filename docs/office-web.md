@@ -101,3 +101,18 @@ transport has no new guard unless the host explicitly supplies one.
 Browser workspace schema 2 rejects the unreleased schema-1 development workspace.
 Keep the old directory intact and use a fresh directory; no automatic migration
 or citation relabeling is performed. Current schema-2 reopen retains all versions.
+
+## P1 foundation: connect from the CLI
+
+An additive [office CLI](cli.md#office--shared-browsercli-workspace-p1-foundation)
+can operate on this server's conversations, material and exact report versions.
+Native clients use a separate private workspace-bound bearer discovery file;
+browser cookie, same-origin and CSRF checks are retained. Stale/untrusted
+ownership refuses, never silently starts another writer. `office backup` connects
+to the live owner; restore always targets a new directory. See the explicit
+[data-only backup exclusions](formats.md#office-data-backup-v1).
+
+This is the **foundation checkpoint of P1, not completion of P1**. Body search /
+hit navigation, archive/restore, unsent-draft recovery, configured-model switching,
+non-destructive edit/regenerate and the interactive office entrance remain next.
+Existing report creation/revision and browser receipt recovery are reused.

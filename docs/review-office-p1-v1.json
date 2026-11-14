@@ -1,0 +1,181 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/formats.md",
+    "docs/formats.zh-CN.md",
+    "docs/handovers/2026-11-14-office-p1.md",
+    "docs/office-web.md",
+    "docs/office-web.zh-CN.md",
+    "docs/review-office-p1-v1.json",
+    "docs/security.md",
+    "pocketchat/cli.py",
+    "pocketchat/office.py",
+    "pocketchat/office_backup.py",
+    "pocketchat/office_cli.py",
+    "pocketchat/office_service.py",
+    "pocketchat/office_web.py",
+    "tests/office_p1_browser.cjs",
+    "tests/test_office.py",
+    "tests/test_office_backup.py",
+    "tests/test_office_cli.py",
+    "tests/test_office_service.py",
+    "tests/test_skeleton.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "RESTORE-LOCK",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "restore-lock",
+      "reason": "Destination publication did not hold the workspace writer lock; exclusive-create and flock now cover SQLite publication; rival writer red regression and independent contention probe close it."
+    },
+    {
+      "id": "RESTORE-CYCLE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "restore-cycle",
+      "reason": "Rehashed predecessor cycles were accepted; explicit acyclic traversal rejects them before destination creation."
+    },
+    {
+      "id": "RESTORE-QUOTA",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "restore-quota",
+      "reason": "Per-conversation quotas were omitted on restore; source64/run250 bounds now validated."
+    },
+    {
+      "id": "NATIVE-PROOF",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "native-proof",
+      "reason": "Stale port could echo workspace identity and receive a bearer/body; every connection now proves a fresh nonce HMAC before any secret/content and the same socket has automatic reconnect disabled."
+    },
+    {
+      "id": "CONFIRM-TYPE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "confirm-type",
+      "reason": "Non-ASCII confirmation caused uncaught TypeError; exact64lowercasehex validation now yields JSON refusal before compare_digest."
+    },
+    {
+      "id": "DISCOVERY-TYPE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "discovery-type",
+      "reason": "Numeric origin caused uncaught AttributeError; all closed discovery fields must be strings before URL parsing."
+    }
+  ],
+  "candidate_base": "ab6a035d0493db4786955532d5b5d5eda1efdcdd",
+  "slice_contract": "docs/handovers/2026-11-14-office-p1.md",
+  "status": "approved",
+  "actual_risk": "high: authentication, backup/restore and additive CLI boundary",
+  "actual_review_depth": "deep",
+  "authority": "agent technical review under maintainer routine-development delegation; no formal publication authority",
+  "scope": "P1 foundation checkpoint only; remaining daily UX and full package acceptance are explicitly not complete.",
+  "reviewed_evidence": [
+    "Two independent fresh-context reviewers covered disjoint full changes: backup/data/restore and controller/native auth/CLI/docs/browser fixture, then new-diff closure only. Six concrete findings fixed; new worker-exit regression also fixed an existing slot-release gap. Final extra command-inventory line reviewed.",
+    "CPython3.9.6/macOS27.0:93 focused office,legacyCLI,REPL,process-documentation tests passed21.453s before auth hardening; after handshake/input fixes20 affected service/CLI/web tests passed10.700s. Added offline-process test passed and then was included in affected rerun.16 skeleton/command-inventory checks passed2.354s.",
+    "Observed red failures for missing features and concrete review defects, then green focused regressions. Initial worker-test selector error was not counted as a product failure.",
+    "CPython3.12.14/python-docx1.2.0/Chrome156.0.8078.80:real bidirectionalCLI/browser report and revision flow;two material snapshots;exact old/newMDandDOCX export;original receipt recovery;live-owner backup/new-directory restore. Reran after auth handshake change;all seven fixture assertions true,no page errors. Desktop screenshot inspected;DOCX readback distinguishes versions;four real fixture-provider calls,no tools.",
+    "Targeted ruff E9,F passed;git diff --check passed;39 relative documentation links resolved. No full local suite repetition. Exact PR CI and remote main integration remain later readbacks."
+  ],
+  "unverified_scope": "Not fullP1:body search,archive/drafts,model switching,interactive entry and edit/regenerate remain. No real-provider content quality,Windows native secureI/O fallback,power-loss/disk-full,arbitraryWordlayout/rendering,tag,Release,package upload or scheduler changes.",
+  "reviewed_files": [
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "5c8160da5eb13a906c4f326a11115cf17df48bb80b6ea18c3f6d9db3ec6adabc"
+    },
+    {
+      "path": "docs/cli.md",
+      "sha256": "f889cf7aa56ff28dd621a31846d7f12084e8f8b1b2cce2eb87ba895cb6440f1e"
+    },
+    {
+      "path": "docs/cli.zh-CN.md",
+      "sha256": "93954cd8adf98b1d622303a839fd21467d10e5c1fa3a83b83b6e5e1915cf8f57"
+    },
+    {
+      "path": "docs/formats.md",
+      "sha256": "3d347676ca6e99105281398c639fb4bd9854ca7c973ff7c31efc5858ebf1c4aa"
+    },
+    {
+      "path": "docs/formats.zh-CN.md",
+      "sha256": "d57d2353617036f1a6447ccd25167d65f96f57693fdb3fc7c58351795b5feebf"
+    },
+    {
+      "path": "docs/handovers/2026-11-14-office-p1.md",
+      "sha256": "ef5d7af70dee2a799f5c70ed20f415cb723b22028f8c6cff97090e6b476dbd0c"
+    },
+    {
+      "path": "docs/office-web.md",
+      "sha256": "50f8f2446217482cb46eb630d411a68676f30147f99cf4ad8c19968faf7f00ee"
+    },
+    {
+      "path": "docs/office-web.zh-CN.md",
+      "sha256": "ecd09dbbc6c4ec0e09b8900c5eca8367b3a5624dde0722d9492878f6c3fbc6d4"
+    },
+    {
+      "path": "docs/security.md",
+      "sha256": "c6fed9e4b1f463a7fdc92d98077a2922ac2570c76ba45d10947b1abca2cff42f"
+    },
+    {
+      "path": "pocketchat/cli.py",
+      "sha256": "5c160fc84a8b598dea29b4f2f249dc779c25dfe4d486e8deda0120879f956a18"
+    },
+    {
+      "path": "pocketchat/office.py",
+      "sha256": "abd798ffaa258f4b11be2c20bb8c7e25c916ca1b2f3e3b6cdc56e2bdb1a4b41b"
+    },
+    {
+      "path": "pocketchat/office_backup.py",
+      "sha256": "f804b2b508a51a8baf8270d12554a8495a3707833ac0dc418556b1f10d171167"
+    },
+    {
+      "path": "pocketchat/office_cli.py",
+      "sha256": "3a9d26fc930d311adac10cd8274906903b91f29456f651f75a1b7732cbaa60f3"
+    },
+    {
+      "path": "pocketchat/office_service.py",
+      "sha256": "618c1bea92fd0312c20d64a9aed2467ac9871b754565f6b9ff710bd2cd5c5f3e"
+    },
+    {
+      "path": "pocketchat/office_web.py",
+      "sha256": "0357c0d9ede79ac3e67261bec3c141d35b1e7b33d4972093416df046af8c42d7"
+    },
+    {
+      "path": "tests/office_p1_browser.cjs",
+      "sha256": "f40dfdc179cfe2102e9bb711012a9aa07c712d84ec0e1b9b3608e117e329907a"
+    },
+    {
+      "path": "tests/test_office.py",
+      "sha256": "a7618995f3858058d5b071b582f952fac106b0076a29c0962fb0605c5e27706c"
+    },
+    {
+      "path": "tests/test_office_backup.py",
+      "sha256": "db8ecb4f57ae8b911dc3765d228046ff3b9cc08ea4e9773145ebc12bd3f21d72"
+    },
+    {
+      "path": "tests/test_office_cli.py",
+      "sha256": "8803a515a120d72916eab2546217bf492e65f7fed86bc2c1174f887d89e50c03"
+    },
+    {
+      "path": "tests/test_office_service.py",
+      "sha256": "150b6fdfeebc3e1cc9f0760bb81b3cefb675fe67864bff01987609daa5a85b1e"
+    },
+    {
+      "path": "tests/test_skeleton.py",
+      "sha256": "6418639297db602946e64e3560cfb8969dca16cc9bc480818f6e0d935e57faf9"
+    }
+  ]
+}
