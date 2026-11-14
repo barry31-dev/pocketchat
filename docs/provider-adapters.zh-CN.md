@@ -44,6 +44,13 @@ Provider 未报告 usage 时用零表示，绝不估算。新增 `usage_reported
 `finish_reason` 结束；两者都未出现就遇到 EOF 时，以可重试的 `incomplete_stream`
 拒绝，绝不把半截回答记录成完成回合。
 
+非流式 JSON 必须等 HTTP 帧完整接收后才能接受。`Content-Length` 正文不足或
+chunked 传输损坏或正文读取阶段连接重置时，以可重试的 `incomplete_response` 失败，即使已收前缀本身
+是合法 JSON。响应头到达前的 HTTP 协议失败（包括对端断连）以可重试的
+`connection_error` 失败；错误文本不回显部分正文或远端帧内容。完整但无效的
+JSON 仍为不可重试的 `malformed_response`；HTTP 错误状态和超时分类不变。
+适配器本身不重试，仅既有 Session 恢复策略决定是否重试；可重试不证明服务端未执行。
+
 ## Session 集成
 
 Session 在配置含 `config["provider_adapter"]` 时使用该适配器，否则使用默认适配器。

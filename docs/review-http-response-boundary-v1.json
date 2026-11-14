@@ -1,0 +1,134 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/provider.py",
+    "tests/test_provider_http_boundary.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-http-response-boundary-v1.json"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "HTTP-BODY-RESET-1",
+      "severity": "major",
+      "status": "fixed",
+      "reason": "Independent real TCP RST probe found body ConnectionResetError remained non-retryable io_error. Catch body-read OSError after a timeout passthrough; a real RST then complete response now uses exactly two configured attempts and preserves both snapshots and failure/success events. Focused TLS EOF/timeout mock also distinguishes the catch order.",
+      "fingerprint": "nonstreaming-body-rst-classified-nonretryable-io_error"
+    }
+  ],
+  "slice": "PC-HTTP-RESPONSE-BOUNDARY-1",
+  "base_commit": "c84a3f691cacbc0d11e8c59a565878fab8421841",
+  "authority": {
+    "kind": "agent-delegated",
+    "decision": "PocketChat routine-development delegation 2026-11-09"
+  },
+  "goal": "Keep interrupted non-streaming provider HTTP exchanges inside the existing failed-turn and trace contract rather than escaping as raw HTTP exceptions. Preserve complete responses, error semantics, credentials and existing retry ownership.",
+  "not_doing": [
+    "No SSE terminal-rule redesign",
+    "No provider-local automatic retries, new tools or paid calls",
+    "No tags, Releases or package uploads"
+  ],
+  "done_when": "Real loopback HTTP red regressions reproduce short fixed-length JSON, broken chunks and disconnect before headers; normalized failures terminate Session with model.response.failed and run.failed, never completed. Complete and malformed JSON controls retain existing behavior. Focused tests, fresh-context review, exact-head CI/main readback and AIKanban fixed evidence close delivery.",
+  "write_scope": [
+    "pocketchat/provider.py",
+    "tests/test_provider_http_boundary.py",
+    "docs/provider-adapters.md",
+    "docs/provider-adapters.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-http-response-boundary-v1.json"
+  ],
+  "plan": [
+    "Write real HTTP failure regressions for short valid JSON, broken chunks, and disconnect before headers; observe raw exceptions before implementation.",
+    "Normalize response-body HTTP protocol failures to retryable incomplete_response and pre-header HTTP failures to retryable connection_error without reflecting remote bytes. Preserve HTTP status and existing timeout/HTTPError semantics.",
+    "Run focused provider, Session, retry and documentation checks; independently review the exact diff.",
+    "Controlled push/PR, exact-head CI, merge and main readback; archive fixed task/test/delivery evidence through AIKanban without changing legacy verification authority."
+  ],
+  "budget_stop": "One bounded correctness slice; preserve checkpoint on external failure; at most three review rounds.",
+  "rollback_next": "Revert the isolated commit if needed; later select the next approved user-result package.",
+  "evidence": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_provider_http_boundary -v (before implementation)",
+      "result": "macOS CPython 3.12.13: 7 tests; expected red, 2 failures and 4 errors. Short fixed-length and broken chunked reads raised raw IncompleteRead; Session missed failed-response events; pre-header disconnect was non-retryable io_error. Exit 1."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_provider_http_boundary -v",
+      "result": "7 tests passed in 0.116s, exit 0. Actual loopback HTTP covers short valid JSON, broken chunked, pre-header disconnect, Session terminal trace, complete fixed/chunked/close-delimited bodies, complete malformed JSON and truncated 401."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_kernel tests.test_tool_calls tests.test_recovery_policy tests.test_release_process_docs -q",
+      "result": "100 adjacent tests passed in 4.686s, exit 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff check --select E9,F pocketchat/provider.py tests/test_provider_http_boundary.py; git diff --check",
+      "result": "Both exited 0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B - [two new body-reset regression tests against a4db650]",
+      "result": "2 tests, 2 expected failures, exit1: real TCP RST and mocked TLS EOF were io_error, not incomplete_response. Socket timeout control retained timeout."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_provider_http_boundary.ProviderBodyResetTests -v; rerun only corrected RST terminal-event assertion",
+      "result": "TLS/timeout case passed. RST recovery and evidence assertions passed, but initial test expected nonexistent run.completed rather than existing run.finished. Corrected that assertion only; exact affected test passed0.024s exit0. No server cleanup errors."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_provider_http_boundary.ProviderHttpBoundaryTests tests.test_kernel.ProviderBoundaryTests tests.test_kernel.ProviderStreamTests tests.test_recovery_policy tests.test_release_process_docs -q; ruff; git diff --check",
+      "result": "50 affected tests passed0.153s exit0 after expanding body catch; Ruff/diff0. Earlier unrelated passing tests were not rerun."
+    }
+  ],
+  "unverified": "No real paid provider, manual TUI, arbitrary HTTP attack coverage, package release, tags or uploads.",
+  "reviews": [
+    {
+      "round": 1,
+      "candidate": "a4db650481470c7700acdd89a2e2716ef4bd88f4",
+      "reviewer": "Independent fresh-context agent",
+      "decision": "request_changes",
+      "coverage": "All seven changed files and provider/Session/recovery/security/compatibility contracts; one independently run real TCP RST probe failed the intended retry classification.",
+      "findings": [
+        "HTTP-BODY-RESET-1"
+      ]
+    },
+    {
+      "round": 2,
+      "base": "a4db650481470c7700acdd89a2e2716ef4bd88f4",
+      "candidate": "b24b21b7dd269b3303d7dc6e7ea92fbb0c141fd5",
+      "reviewer": "Independent fresh-context agent (same bounded review thread)",
+      "decision": "approve",
+      "coverage": "New diff only across all seven files. Verified catch ordering, fixed error text, retry ownership, real-RST test synchronization/cleanup, TLS/timeout distinction and bilingual contracts. HTTP-BODY-RESET-1 closed; no new findings. This review was static; no tests repeated.",
+      "findings": []
+    }
+  ],
+  "checkpoint": {
+    "complete": false,
+    "ready_for_integration": true,
+    "next_action": "Controlled final metadata-candidate push; wait exact-head CI, merge with SHA guard, read back main and archive results. No release.",
+    "unverified": "Real provider and manual TUI; release/installation not run. Local RST is macOS only; CI supplies separate platform evidence."
+  },
+  "candidate": "b24b21b7dd269b3303d7dc6e7ea92fbb0c141fd5",
+  "metadata_finalization": "This record-only commit follows approved b24b21b. Source, tests and behavioral docs are byte-identical to that reviewed candidate; public PR head identifies final metadata SHA."
+}
