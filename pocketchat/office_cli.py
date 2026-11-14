@@ -18,16 +18,21 @@ def add_parser(subparsers):
     office.add_argument('--config', type=Path, help='provider configuration for an offline writer')
     office.add_argument('--profile', help='existing provider profile for an offline writer')
     commands = office.add_subparsers(dest='office_command', required=True)
+    commands.add_parser('upgrade', help='back up and explicitly upgrade an existing office workspace')
+    search = commands.add_parser('search', help='find literal text in message bodies')
+    search.add_argument('--query', required=True)
+    search.add_argument('--archived', action='store_true')
     backup = commands.add_parser('backup', help='save a validated data-only workspace snapshot')
     backup.add_argument('--out', type=Path, required=True, help='new backup JSON file; never overwritten')
     recover = commands.add_parser('restore', help='validate and restore a backup to a new workspace')
     recover.add_argument('--from', dest='source', type=Path, required=True, help='backup JSON file')
     conversations = commands.add_parser('conversations', help='list, create, read or rename conversations')
     actions = conversations.add_subparsers(dest='action', required=True)
-    actions.add_parser('list')
+    listing = actions.add_parser('list')
+    listing.add_argument('--archived', action='store_true')
     new = actions.add_parser('create')
     new.add_argument('--title', required=True)
-    for name in ('show', 'rename'):
+    for name in ('show', 'rename', 'archive', 'restore'):
         action = actions.add_parser(name)
         action.add_argument('--conversation', required=True)
         if name == 'rename':
@@ -68,11 +73,19 @@ def _operate(args, client):
     prefix = '/api/conversations'
     if getattr(args, 'conversation', None):
         prefix += '/' + identifier(args.conversation)
+    if command == 'upgrade':
+        return client.request('/api/upgrade', {}), 0
+    if command == 'search':
+        return client.request('/api/search', dict(query=args.query, archived=args.archived)), 0
     if command == 'backup':
         return write_new(args.out, client.request('/api/backup', {})), 0
     if command == 'conversations':
         if args.action in ('list', 'show'):
+            if args.action == 'list' and args.archived:
+                prefix += '/archived'
             return client.request(prefix), 0
+        if args.action in ('archive', 'restore'):
+            return client.request(prefix + '/archive', {'archived': args.action == 'archive'}), 0
         if args.action == 'create':
             return client.request(prefix, {'title': args.title}), 0
         return client.request(prefix + '/rename', {'title': args.title}), 0

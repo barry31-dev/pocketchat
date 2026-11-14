@@ -165,3 +165,23 @@ class OfficeCLITests(unittest.TestCase):
                                       '--prompt', 'Hello', '--request-id', 'safe-preview')
                 self.assertEqual(code, 2, data)
                 self.assertNotIn('synthetic-', json.dumps(data))
+
+    @unittest.skipUnless(SECURE_IO, 'requires no-follow descriptor I/O')
+    def test_daily_search_archive_restore_without_a_model_call(self):
+        with self.open_store() as store:
+            p = dict(prompt='Budget question', intent='chat', source_ids=[], revision_id=None)
+            run = store.begin(self.cid, 'cli-search-request', p)
+            store.finish(run['id'], 'completed', 'Budget answer', None)
+        code, data = self.cli('search', '--query', 'budget')
+        self.assertEqual(code, 0, data)
+        self.assertEqual(len(data['result']['items']), 2)
+        code, data = self.cli('conversations', 'archive', '--conversation', self.cid)
+        self.assertEqual(code, 0, data)
+        self.assertTrue(data['result']['archived'])
+        self.assertEqual(self.cli('conversations', 'list')[1]['result']['items'], [])
+        self.assertEqual(len(self.cli('search', '--query', 'budget', '--archived')[1]['result']['items']), 2)
+        self.assertEqual(self.cli('conversations', 'list', '--archived')[1]['result']['items'][0]['id'], self.cid)
+        code, data = self.cli('conversations', 'restore', '--conversation', self.cid)
+        self.assertEqual(code, 0, data)
+        self.assertFalse(data['result']['archived'])
+        self.assertEqual(self.cli('upgrade')[1]['result'], {'database_version': 3, 'upgraded': False})

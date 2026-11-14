@@ -719,3 +719,21 @@ stderr 与退出码 2。输出不含发现令牌；预览与备份仍含用户�
 目录描述符 I/O，目前为 macOS/Linux；不具备该能力时明确拒绝，不做不安全的 Windows
 降级。既有网页及旧 CLI 不因此禁用。Word 输出沿用可选 `office` 依赖，仍不接受 PDF/DOCX
 输入。备份含义和排除范围见[格式说明](formats.zh-CN.md)。
+
+### Office 日常会话操作
+
+`search --query "budget"` 按 Unicode 大小写折叠做消息正文的字面匹配，不执行正则或 SQL 通配符；
+查询上限 240 UTF-8 字节，最多返回 100 条，含 `truncated`、稳定 `message_id`、会话 ID 和摘要。
+列表/搜索默认仅活动会话；`conversations list --archived` 与 `search --query TEXT --archived`
+只看归档。`conversations archive --conversation CID` 归档，`conversations restore --conversation CID`
+恢复可见性，不同于顶层 `restore --from` 的新目录备份恢复。归档保留消息、资料、回执和版本，
+允许查看/导出/恢复旧回执；新发送、改名和导入资料前必须先恢复；在飞请求不能归档。
+
+既有 schema 2 使用 `office --data-dir PRIVATE_DIR upgrade` 显式升级后才能归档；当前写入者
+先在私有工作区保存并回读旧版备份，不调用模型，已是 schema 3 则不重复升级。
+完整参数见[英文日常操作](cli.md#office-daily-conversation-operations)。
+
+消息搜索的 `message_id` 与会话消息 `id` 是不透明十进制字符串，
+不是 JSON 数字，避免浏览器整数舍入；备份表中的消息 ID 仍为整数。
+
+办公运行回执另附原始 `request_id`，用于只读核对回执，不修改原请求或调用模型。
