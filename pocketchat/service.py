@@ -28,8 +28,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from .queries import (QueryError, collect_history, diff_sessions,  # noqa: F401
                       render_diff_lines, render_history_lines,
                       render_search_lines, search_messages)
-from .context import ContextBudgetExceeded, context_chars, preview_budget
+from .context import (ContextBudgetExceeded, build_initial_messages,
+                      context_chars, preview_budget)
 from .context_projection import ContextProjectionError, project_context
+from .request import canonical_bytes
 from .memory_migration import MemoryMigrationError, read_v2_store
 from .memory_retrieval import (MemoryRetrievalError, recall_context_message,
                                recall_evidence_items, retrieve_memories)
@@ -362,20 +364,37 @@ def _memory_recall_preview(config: Dict[str, Any], root: Path,
 
 def context_preview(target, sessions_dir: str = "sessions",
                     workspace=None, budget_chars: Optional[int] = None,
-                    keep_recent: int = 2,
-                    pending_prompt: Optional[str] = None) -> Dict[str, Any]:
-    """Read one session and describe its context selection without writing."""
+                    keep_recent: Optional[int] = None,
+                    pending_prompt: Optional[str] = None,
+                    config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Read-only historical selection, or a next turn using explicit current config.
+
+    A current config replaces historical trace settings; it never inherits a
+    previous profile's memory permissions. No provider or credential is read.
+    """
+    next_turn = config is not None
+    if next_turn and (not isinstance(config, dict) or pending_prompt is None):
+        raise SessionFileError("current config preview requires a pending prompt")
     resolved = resolve_named_path(Path(target), sessions_dir, workspace)
     if resolved is None:
         raise SessionFileError("no such session: %s" % target)
     session, trace = _resolve_pair(resolved)
+    if next_turn and trace is not None:
+        trace = trace.resolve()
     messages = read_context_messages(session)
     pending = []
     if pending_prompt is not None:
         if not isinstance(pending_prompt, str) or not pending_prompt:
             raise SessionFileError("pending prompt must be non-empty")
         pending = [{"role": "user", "content": pending_prompt}]
-    config = _trace_config_summary(trace)
+    config = dict(config) if next_turn else _trace_config_summary(trace)
+    if next_turn:
+        messages = build_initial_messages(config.get("system_prompt") or "") + [
+            message for message in messages
+            if message.get("role") in ("user", "assistant", "tool")]
+    if keep_recent is None:
+        keep_recent = (1 if next_turn and config.get("context_projection_enabled") is True
+                       else 2)
     root = Path(workspace) if workspace is not None else Path.cwd()
     if budget_chars is None:
         value = config.get("max_context_chars")
@@ -384,8 +403,14 @@ def context_preview(target, sessions_dir: str = "sessions",
                         else 24000)
     projection = None
     if config.get("context_projection_enabled") is True:
+        recall_root = root
+        if next_turn:
+            if config.get("task_workspace_root"):
+                recall_root = Path(config["task_workspace_root"])
+            elif trace is not None and trace.parent.name == "traces":
+                recall_root = trace.parent.parent
         recall_messages, recall_evidence, recall_summary = \
-            _memory_recall_preview(config, root, pending_prompt)
+            _memory_recall_preview(config, recall_root, pending_prompt)
         selected = [message for message in messages
                     if message.get("role") == "system"] + recall_messages
         turns = [message for message in messages
@@ -399,6 +424,16 @@ def context_preview(target, sessions_dir: str = "sessions",
         except ContextProjectionError as exc:
             raise ContextBudgetExceeded(str(exc)) from exc
         selected_messages = projected["messages"]
+        if next_turn:
+            limit = config.get("context_projection_max_bytes")
+            if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+                raise ContextBudgetExceeded(
+                    "context_projection_max_bytes must be a positive integer")
+            size = len(canonical_bytes(selected_messages))
+            if size > limit:
+                raise ContextBudgetExceeded(
+                    "projected context is %d bytes, above the configured projection budget %d"
+                    % (size, limit))
         projection = projected["manifest"]
         if recall_summary is not None:
             projection["memory_recall"] = recall_summary
@@ -421,12 +456,13 @@ def context_preview(target, sessions_dir: str = "sessions",
         preview["dropped_indices"] = []
     else:
         try:
-            preview = preview_budget(messages, budget_chars, keep_recent)
+            preview_source = messages + pending if next_turn else messages
+            preview = preview_budget(preview_source, budget_chars, keep_recent)
         except ContextBudgetExceeded:
             raise
         kept = set(preview["kept_indices"])
         selected_messages = [
-            message for index, message in enumerate(messages)
+            message for index, message in enumerate(preview_source)
             if index in kept]
     result = {
         "ok": True,
@@ -442,6 +478,11 @@ def context_preview(target, sessions_dir: str = "sessions",
         "pending_messages": pending,
         **preview,
     }
+    if next_turn:
+        result["preview_mode"] = {
+            "kind": "next_turn", "config_source": "explicit",
+            "profile": config.get("profile") or "", "keep_recent": keep_recent,
+        }
     if projection is not None:
         result["context_projection"] = projection
     if config.get("memory_recall_enabled") is True and pending_prompt is not None:

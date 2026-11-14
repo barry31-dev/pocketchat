@@ -266,8 +266,14 @@ def _parser() -> argparse.ArgumentParser:
                          help="a session file, or the trace it recorded")
     context.add_argument("--budget", type=int, default=None,
                          help="character budget (default: trace config)")
-    context.add_argument("--keep-recent", type=int, default=2,
-                         help="recent messages pinned at the end (default: 2)")
+    context.add_argument("--keep-recent", type=int, default=None,
+                         help="history window override (next turn: 1 layered turn or 2 messages)")
+    context.add_argument("--prompt", default=None,
+                         help="preview this next prompt with an explicit current --config")
+    context.add_argument("--config", type=Path, default=None,
+                         help="current configuration for --prompt; no API key is read")
+    context.add_argument("--profile", default=None,
+                         help="current profile for --prompt (default: configured default)")
     context.add_argument("--json", action="store_true", dest="as_json",
                          help="print one JSON object instead of human lines")
 
@@ -2873,10 +2879,18 @@ def _cmd_show(args: argparse.Namespace) -> int:
 
 def _cmd_context(args: argparse.Namespace) -> int:
     try:
+        selected = None
+        if args.prompt is not None:
+            if not args.prompt or args.config is None:
+                raise ValueError("--prompt requires non-empty text and an explicit --config")
+            selected = profile_config(load_config(args.config), args.profile)
+        elif args.config is not None or args.profile is not None:
+            raise ValueError("--config and --profile require --prompt for next-turn preview")
         record = context_preview(
             args.session, budget_chars=args.budget,
-            keep_recent=args.keep_recent)
-    except (SessionFileError, ContextBudgetExceeded, ValueError) as exc:
+            keep_recent=args.keep_recent, pending_prompt=args.prompt,
+            config=selected)
+    except (SessionFileError, ContextBudgetExceeded, ConfigError, OSError, ValueError) as exc:
         if args.as_json:
             _print_json_error("context", str(exc))
         else:

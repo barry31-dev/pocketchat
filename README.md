@@ -15,6 +15,10 @@ The trace is the point. Everything else here exists so that when someone asks
 "what did the model actually see, and what did it actually answer", there is a
 file to open instead of a memory to trust.
 
+## Unreleased: project guidance continuity
+
+Explicitly save and accept project guidance, reopen with a current-config next-turn preview, and retire guidance without rewriting old evidence. Fixed instructions survive layered compaction. Run `python3 examples/project-context-demo.py` for the offline real-CLI journey, or see [project context](docs/project-context.md). No real-model or formal-release claim.
+
 ## What it is not
 
 - No general-purpose tool calling. Optional local tools are limited to

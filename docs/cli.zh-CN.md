@@ -498,6 +498,19 @@ pocketchat delegate run "check A" "check B" --profile local --max-children 4 --j
 `.pocketchat/delegations/<id>.json`。某个子任务失败不会中止其余子任务。这是
 有界委派，不是递归多 Agent 编排：子任务不能继续委派，也不共享父 session。
 
+## 当前配置的下一轮上下文预览
+
+```sh
+pocketchat context notes --prompt "patches: continue" --config pocketchat.json --profile project --json
+```
+
+`--prompt` 要求非空文本和显式 `--config`，`--profile` 选择当前配置中的 profile。
+不读取 API key、不调用 provider、不写产物；当前固定指令与召回设置替换旧 trace 设置。
+默认窗口与执行一致：分层模式一个最近回合，旧模式两个最近消息；同时检查分层 JSON 字节限制。
+`preview_mode` 标明显式下一轮预览。`--budget`／`--keep-recent` 只是预览假设，不修改运行配置。
+随后配置、记忆、会话或过期状态改变时，请求可能改变。不带 `--prompt` 保留旧历史预览。
+保存、接受、重开、退役及“不再召回不等于擦除历史”见[项目上下文说明](project-context.zh-CN.md)。
+
 ## 恢复策略
 
 schema `"2"` profile 可声明 `retry_max_attempts`（1-5，默认 1）、

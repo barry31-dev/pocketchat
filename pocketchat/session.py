@@ -1281,8 +1281,9 @@ class Session:
                     "context_projection_max_bytes must be a positive integer")
             recall_messages, recall_evidence, recall_summary = \
                 self._memory_recall_projection(prompt)
-            instructions = [message for message in self.messages
-                            if message.get("role") == "system"] + recall_messages
+            fixed_instructions = [message for message in self.messages
+                                  if message.get("role") == "system"]
+            instructions = fixed_instructions + recall_messages
             history = [message for message in self.messages
                        if message.get("role") != "system"]
             pending = [{"role": "user", "content": prompt}]
@@ -1311,7 +1312,8 @@ class Session:
             if projected_history != [
                     message for message in self.messages
                     if message.get("role") != "system"]:
-                self.messages = projected_history
+                # Keep authored instructions, never the transient recalled layer.
+                self.messages = fixed_instructions + projected_history
                 self.compacted_count += 1
                 payload = {"strategy": "layered_v1"}
                 payload.update({

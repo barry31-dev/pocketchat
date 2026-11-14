@@ -59,3 +59,9 @@ Session 使用当前 prompt 作为召回查询，并在投影请求前加入一�
 system message。投影 sidecar 与 request-start 元数据绑定 query digest 和选择计数。
 跨 workspace 记录在排序前排除；任一模式关闭时不注入召回内容。`context preview` 对给定
 pending prompt 执行相同选择。
+
+## 跨会话项目指导
+
+`context SESSION --prompt TEXT --config FILE [--profile NAME] --json` 按当前配置
+只读预览下一轮召回，不继承旧 trace 的许可。固定指令跨压缩保留，召回消息不持久化为系统指令。
+显式接受、重开、退役、快照核对与“不抹除历史”的边界见[项目上下文](project-context.zh-CN.md)。

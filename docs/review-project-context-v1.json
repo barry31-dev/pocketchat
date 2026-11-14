@@ -1,0 +1,157 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/session.py",
+    "pocketchat/service.py",
+    "pocketchat/cli.py",
+    "tests/test_project_context.py",
+    "examples/project-context-demo.py",
+    "docs/project-context.md",
+    "docs/project-context.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/memory-retrieval.md",
+    "docs/memory-retrieval.zh-CN.md",
+    "docs/review-project-context-v1.json",
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "PROJECT-TRACE-ALIAS-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "next-preview-trace-alias-recall-root",
+      "reason": "Independent static review found trace aliases retain lexical location after finding the original session. New real symlink regression reproduced a different recalled context; next-turn preview resolves its trace before choosing the Session workspace."
+    },
+    {
+      "id": "PROJECT-CONFIG-IO-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "next-preview-config-io-json-refusal",
+      "reason": "Independent real CLI directory-config probe produced exit1traceback. New directory-process and mockedPermissionError regressions failed then passed after routing OSError through existing context JSON exit2 refusal."
+    }
+  ],
+  "slice": "PC-PROJECT-CONTEXT-1",
+  "base_commit": "1c695160642a1c1824497fd905227c7372b25d7f",
+  "authority": {
+    "kind": "agent-delegated",
+    "decision": "User continued approved project-context package; routine development delegation2026-11-09"
+  },
+  "goal": "Complete save/accept project guidance, reopen with current-config next-turn preview, continue under unchanged fixed instructions, and retire guidance so future recall excludes it. Reuse existing memoryv2, Session, CLI and snapshots.",
+  "done_when": "Red-first regressions prove fixed instructions survive layered compaction and CLI next-prompt preview uses explicit current config/profile with runtime-equivalent recency and byte limits, without provider/key or writes. A real loopback-HTTP CLI journey saves/accepts/reopens/retires scoped guidance, binds preview to actual sent messages and snapshots, excludes other-workspace/unaccepted/expired/sensitive memory and retains immutable history. Focused tests, independent review, exact-headCI/main and AIKanban archive/readback complete delivery.",
+  "not_doing": "No real provider reasoning quality, secure erasure of old conversations/traces, semantic search, automatic memory acceptance, new tools, MCP dispatch, paid keys, tags Releases or package uploads.",
+  "write_scope": [
+    "pocketchat/session.py",
+    "pocketchat/service.py",
+    "pocketchat/cli.py",
+    "tests/test_project_context.py",
+    "examples/project-context-demo.py",
+    "docs/project-context.md",
+    "docs/project-context.zh-CN.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/memory-retrieval.md",
+    "docs/memory-retrieval.zh-CN.md",
+    "docs/review-project-context-v1.json",
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "design": {
+    "reuse": "Existing memoryv2 proposal/accept/retire, explicit config/profile, Session, layered projector, lexical retrieval and immutable request snapshots. No new memory store or execution surface.",
+    "runtime_fix": "Retain only original fixed system messages plus projected history after layered compaction. Recall messages remain ephemeral and are freshly admitted each turn.",
+    "preview": "Add context SESSION --prompt TEXT --config PATH [--profile NAME]. New next-turn mode requires explicit current config; legacy no-prompt path remains historical. Use current system_prompt/recall settings, runtime recency default1turn(layered)/2messages(legacy), pending prompt and projected byte admission. No credential/provider/writes.",
+    "verification": "Fail first for disappearing fixed instructions and absent next-prompt CLI/current-config API. Add real CLI loopback journey: candidate/accept/run/reopen/retire/recall exclusion; match preview messages to actual sent payload. Preserve previous snapshots; no claim of erasing historical memory text."
+  },
+  "plan": [
+    "Observe discriminating red fixed-instruction and current-config preview tests.",
+    "Implement minimal Session/CLI/service seams; verify success/refusal/no-write, recency/budget and scope boundaries.",
+    "Create reusable local CLI demonstration and bilingual usage; run focused checks once per affected change.",
+    "Independent scoped review; controlled exact-head push/PR/CI/main readback; AIKanban fixed task/evidence archive."
+  ],
+  "budget_stop": "One bounded user-result package; preserve original checkpoint if an external gate remains. No unbounded refactor or full-suite repetition.",
+  "rollback_next": "Revert isolated source commits if necessary. Next package selected from original approved roadmap, not from derived AIKanban state.",
+  "evidence": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_project_context -v before implementation",
+      "result": "macOSPython3.12.13:7tests0.071s,3failures7errors,exit1. Fixed instruction missing on fourth turn; new CLI flags/API config parameter absent. Failure preserved."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Targeted tests.test_project_context cases, initial green and fixture corrections",
+      "result": "9distinct unit cases settled green. Initial fixture mistakenly put system_prompt inside profile, used noncanonical absolute temp store path and too-short synthetic key k; corrected only fixture/config/path/key and reran affected cases. Security/config/credential guards were not weakened."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B examples/project-context-demo.py --output <new evidence directory>",
+      "result": "First attempt reached expiry case then refused +00:00 timestamp; corrected fixture to required UTC Z spelling and used a new directory. Second run exit0:18realCLI processes,7loopbackHTTPrequests,14checks true. Original failed run retained."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_context tests.test_memory_tools tests.test_context_projection tests.test_memory_retrieval tests.test_release_process_docs tests.test_profile_admin -q",
+      "result": "77related tests passed0.540s exit0; no fullsuite or installed-package check performed."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ProjectRecallRootTests red then green; ProjectContextDemoTests test entry",
+      "result": "Outside-observer-workspace preview initially selected0instead1; mirrored Session root selection, exact regression passed0.068sexit0. First string-edit attempt made no source change and failed again; corrected actual edit was read back. Demo test-entry passed within1.675s aggregate run; no fixture replay claim for production data."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "ruff check --select E9,F [five changed Python files]; git diff --check; changed Markdown local-link check",
+      "result": "Ruff and diff checks passed; local links checked below at this candidate."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3.12 -B -m unittest tests.test_project_context.ProjectRecallRootTests.test_trace_symlink_preview_uses_the_recorded_session_workspace tests.test_project_context.ProjectConfigRefusalTests -v",
+      "result": "Beforefix3tests:2failures1errorexit1. Afterfixall3passed;realtracealiasparity,realprocessdirectoryconfigexit2JSON,andmockedPermissionErrorJSON. Ruff/diffpassed. No broadergreensrepeated."
+    }
+  ],
+  "reviews": [
+    {
+      "round": 1,
+      "candidate": "7656466bf4102343d31845ac16612be9af0a1dba",
+      "reviewer": "Independent fresh-context agent",
+      "decision": "request_changes",
+      "coverage": "Full14pathdiff plus narrow session/config/projection/memory/trace/CLI/security/contracts.1realCLIprobe verifieddirectoryI/Oescape;tracealiasfindingwasstatic. No author greens repeated.",
+      "findings": [
+        "PROJECT-TRACE-ALIAS-1",
+        "PROJECT-CONFIG-IO-1"
+      ]
+    },
+    {
+      "round": 2,
+      "candidate": "30a8690bb51cad8dcef417c2d00085345d12e552",
+      "base": "7656466bf4102343d31845ac16612be9af0a1dba",
+      "reviewer": "Independent fresh-context agent, same bounded review",
+      "decision": "approve",
+      "coverage": "Newdiffonly4of4paths: canonical trace root guarded by next_turn, OSError JSON refusal,3regressions and metadata. Both findings closed; no remaining actionable issues. Static review only; no repeated tests.",
+      "findings": []
+    }
+  ],
+  "unverified": "No real provider reasoning quality, secure erasure of old conversations/traces, semantic search, automatic memory acceptance, new tools, MCP dispatch, paid keys, tags Releases or package uploads.",
+  "checkpoint": {
+    "complete": false,
+    "ready_for_integration": true,
+    "next_action": "Push final metadata candidate, wait exact-headCI, merge with head guard, read back main/tree and archive delivery. No formal release."
+  },
+  "candidate": "30a8690bb51cad8dcef417c2d00085345d12e552",
+  "metadata_finalization": "Record-only commit after approved30a8690; runtime/test/demo/behavior-doc blobs unchanged. PR head identifies final metadata SHA."
+}

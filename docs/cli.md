@@ -523,6 +523,25 @@ appended by the caller. `context_projection_max_bytes` separately bounds the
 complete projected JSON and does not reinterpret the older text-only
 `max_context_chars` unit. This mode is off by default.
 
+### Next-turn preview with the current config
+
+```sh
+pocketchat context notes --prompt "patches: continue" --config pocketchat.json --profile project --json
+```
+
+`--prompt` requires non-empty text and an explicit `--config`; `--profile` selects
+that config's current profile. No API key is read, no provider is called and no
+artifacts are written. Current settings replace historical trace settings,
+including fixed system instructions and opt-in memory recall. The default window
+matches execution: one recent turn in layered mode, two pinned messages otherwise;
+layered JSON-byte admission also applies. `preview_mode` identifies this explicit
+next-turn mode. `--budget`/`--keep-recent` are what-if overrides, not changes to the
+runtime configuration. A later config/store/session/expiry change can change the
+actual request. Without `--prompt`, historical preview behavior is unchanged.
+See [project guidance continuity](project-context.md) for save/accept/reopen/retire
+and the distinction between disabling new recall and erasing old history.
+
+
 ## Local read tool
 
 `tool read` is a local, explicit-allowlist read-only operation:
