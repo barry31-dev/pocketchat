@@ -146,3 +146,8 @@ never overwrites an existing directory. There is no remote service, server
 autostart, arbitrary shell, imported SQL, extraction path or overwrite API.
 Same-user processes that can replace program code or alter the private workspace
 are not a sandboxed adversary; these checks do not claim OS-level isolation.
+
+Office-only provider preflight refuses URL userinfo, queries, fragments and
+control characters before creating/opening the workspace, so those credential
+carriers cannot enter its send preview or model snapshot. Use the existing
+credential environment variable instead; the legacy profile parser is unchanged.

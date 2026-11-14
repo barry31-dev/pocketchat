@@ -7,6 +7,7 @@ import hmac
 import json
 import threading
 import time
+from urllib.parse import urlsplit
 
 from .provider import DEFAULT_PROVIDER_ADAPTER
 
@@ -27,6 +28,16 @@ A request to fit one page is a content goal, not a measured pagination guarantee
 class OfficeWorkspace:
     def __init__(self, root, config=None):
         config = config or {}
+        if config.get('base_url'):
+            endpoint = urlsplit(config['base_url'])
+            if (endpoint.scheme not in ('http', 'https') or not endpoint.hostname or
+                    endpoint.username is not None or endpoint.password is not None or
+                    endpoint.query or endpoint.fragment or any(ord(c) < 32 for c in config['base_url'])):
+                raise OfficeError('Office provider URLs must not contain credentials, queries or fragments.')
+            try:
+                endpoint.port
+            except ValueError as exc:
+                raise OfficeError('Invalid office provider endpoint.') from exc
         self.store = OfficeStore(root)
         self.root = self.store.root
         self.config = copy.copy(config)

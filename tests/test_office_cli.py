@@ -151,3 +151,17 @@ class OfficeCLITests(unittest.TestCase):
                               '--prompt', 'Hello', '--request-id', 'unicode-proof', '--confirm', 'é')
         self.assertEqual(code, 2)
         self.assertFalse(data['ok'])
+
+    def test_office_preview_refuses_credential_bearing_provider_urls(self):
+        cfg = self.base / 'config.json'
+        base = json.loads((ROOT / 'examples/config.json').read_text())
+        for endpoint in ('https://user:synthetic-password@example.invalid/v1',
+                         'https://example.invalid/v1?api_key=synthetic-token',
+                         'https://example.invalid/v1#synthetic-token'):
+            base['profiles']['local']['base_url'] = endpoint
+            cfg.write_text(json.dumps(base))
+            with self.subTest(endpoint=endpoint):
+                code, data = self.cli('--config', str(cfg), 'chat', '--conversation', self.cid,
+                                      '--prompt', 'Hello', '--request-id', 'safe-preview')
+                self.assertEqual(code, 2, data)
+                self.assertNotIn('synthetic-', json.dumps(data))

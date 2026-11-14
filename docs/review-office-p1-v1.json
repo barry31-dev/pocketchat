@@ -30,9 +30,9 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 2,
-  "round_decision": "review",
-  "round_scope": "full",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
   "findings": [
     {
       "id": "RESTORE-LOCK",
@@ -75,6 +75,13 @@
       "status": "fixed",
       "fingerprint": "discovery-type",
       "reason": "Numeric origin caused uncaught AttributeError; all closed discovery fields must be strings before URL parsing."
+    },
+    {
+      "id": "PROVIDER-URL",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "provider-url-secret-carriers",
+      "reason": "Office preview could expose provider URL userinfo/query/fragment; office-only preflight now refuses before opening workspace.Three red URL cases,then two focused tests passed;independent new-diff review closed."
     }
   ],
   "candidate_base": "ab6a035d0493db4786955532d5b5d5eda1efdcdd",
@@ -89,7 +96,8 @@
     "CPython3.9.6/macOS27.0:93 focused office,legacyCLI,REPL,process-documentation tests passed21.453s before auth hardening; after handshake/input fixes20 affected service/CLI/web tests passed10.700s. Added offline-process test passed and then was included in affected rerun.16 skeleton/command-inventory checks passed2.354s.",
     "Observed red failures for missing features and concrete review defects, then green focused regressions. Initial worker-test selector error was not counted as a product failure.",
     "CPython3.12.14/python-docx1.2.0/Chrome156.0.8078.80:real bidirectionalCLI/browser report and revision flow;two material snapshots;exact old/newMDandDOCX export;original receipt recovery;live-owner backup/new-directory restore. Reran after auth handshake change;all seven fixture assertions true,no page errors. Desktop screenshot inspected;DOCX readback distinguishes versions;four real fixture-provider calls,no tools.",
-    "Targeted ruff E9,F passed;git diff --check passed;39 relative documentation links resolved. No full local suite repetition. Exact PR CI and remote main integration remain later readbacks."
+    "Targeted ruff E9,F passed;git diff --check passed;39 relative documentation links resolved. No full local suite repetition. Exact PR CI and remote main integration remain later readbacks.",
+    "Final third round was new-diff only: provider URL credential carriers rejected;two focused offlineCLI tests passed2.106s. No fourth full review. Initial PR70 CI on1161996 is not final candidate evidence."
   ],
   "unverified_scope": "Not fullP1:body search,archive/drafts,model switching,interactive entry and edit/regenerate remain. No real-provider content quality,Windows native secureI/O fallback,power-loss/disk-full,arbitraryWordlayout/rendering,tag,Release,package upload or scheduler changes.",
   "reviewed_files": [
@@ -127,7 +135,7 @@
     },
     {
       "path": "docs/security.md",
-      "sha256": "c6fed9e4b1f463a7fdc92d98077a2922ac2570c76ba45d10947b1abca2cff42f"
+      "sha256": "256f7656f998fa0199f238b1fa997e79f6e181e3ccf414a21e192d69283e19e2"
     },
     {
       "path": "pocketchat/cli.py",
@@ -135,7 +143,7 @@
     },
     {
       "path": "pocketchat/office.py",
-      "sha256": "abd798ffaa258f4b11be2c20bb8c7e25c916ca1b2f3e3b6cdc56e2bdb1a4b41b"
+      "sha256": "e6d6631a883085fb5c4b497697472883cfeb0e3fff916e019eac2c778c2c3e22"
     },
     {
       "path": "pocketchat/office_backup.py",
@@ -167,7 +175,7 @@
     },
     {
       "path": "tests/test_office_cli.py",
-      "sha256": "8803a515a120d72916eab2546217bf492e65f7fed86bc2c1174f887d89e50c03"
+      "sha256": "7111b94ce937f7ff9fd277e3f7a1588062a55bec127ca83028a9e0102919e1ce"
     },
     {
       "path": "tests/test_office_service.py",
