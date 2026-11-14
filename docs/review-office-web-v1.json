@@ -26,7 +26,8 @@
     "docs/review-office-web-v1.json",
     "docs/handovers/2026-11-14-office-web.md",
     "docs/slice-queue.md",
-    "pocketchat/provider.py"
+    "pocketchat/provider.py",
+    "tests/test_skeleton.py"
   ],
   "categories": [
     "docs",
@@ -116,6 +117,12 @@
       "status": "verified",
       "command": "pip wheel . --no-deps --no-build-isolation",
       "result": "Initialcandidate wheel included allthree packaged web assets; changedcandidate requiresnewpackagingcheck."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.9 tests.test_agent tests.test_repl tests.test_cli_json",
+      "result": "112existingchat/CLIchecks passed20.817s; first attempt named three nonexistent modules and is retained as failed discovery, not product failure."
     }
   ],
   "reviews": [
