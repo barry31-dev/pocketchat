@@ -77,3 +77,11 @@ The projection sidecar and request-start metadata bind the query digest and
 selection counts. Cross-workspace records are excluded before ranking. If either
 mode is disabled, no recalled content is injected. `context preview` performs
 the same selection for the supplied pending prompt.
+
+## Cross-session guidance
+
+Use `context SESSION --prompt TEXT --config FILE [--profile NAME] --json` for a
+read-only next-turn preview with current recall settings, not old trace settings.
+Fixed instructions survive compaction; recalled messages remain temporary.
+[Project context](project-context.md) documents explicit acceptance, reopen,
+retirement, exact snapshot comparison and the non-erasure boundary.
