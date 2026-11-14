@@ -1,7 +1,6 @@
 """Literal-loopback browser adapter; no arbitrary filesystem or model routes."""
 from __future__ import annotations
 
-import hashlib
 import hmac
 import json
 import secrets
@@ -13,18 +12,12 @@ from urllib.parse import urlsplit
 from .config import ConfigError, load_api_key, load_config, profile_config, requires_api_key
 from .json_input import JSONInputError, decode_json_bytes
 from .office import OfficeWorkspace
-from .office_docx import render_docx
+from .office_service import dispatch, exact, native_proof, publish_discovery, remove_discovery
 from .office_store import OfficeError
 
 MAX_BODY = 96 * 1024
 CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 ASSETS = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css'}
-
-
-def exact(body, fields):
-    if not isinstance(body, dict) or set(body) != set(fields):
-        raise OfficeError('Invalid request fields.')
-    return body
 
 
 class OfficeServer(ThreadingHTTPServer):
@@ -33,12 +26,23 @@ class OfficeServer(ThreadingHTTPServer):
 
     def __init__(self, app, port):
         self.app = app
+        self.native_token = secrets.token_urlsafe(32)
+        self.discovery_bytes = None
         self.bootstrap_token = secrets.token_urlsafe(32)
         self.cookie_token = secrets.token_urlsafe(32)
         self.csrf_token = secrets.token_urlsafe(32)
         super().__init__(('127.0.0.1', port), OfficeHandler)
         self.origin = 'http://127.0.0.1:%d' % self.server_port
         self.cookie_name = 'pocketchat_%d' % self.server_port
+        try:
+            publish_discovery(self)
+        except Exception:
+            super().server_close()
+            raise
+
+    def server_close(self):
+        remove_discovery(self)
+        super().server_close()
 
 
 class OfficeHandler(BaseHTTPRequestHandler):
@@ -54,6 +58,7 @@ class OfficeHandler(BaseHTTPRequestHandler):
                          'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
                          'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': CSP,
                          'Cross-Origin-Resource-Policy': 'same-origin',
+                         'X-Office-Workspace': self.server.workspace_id,
                          **(headers or {})}.items():
             self.send_header(key, val)
         self.end_headers()
@@ -70,6 +75,22 @@ class OfficeHandler(BaseHTTPRequestHandler):
     def _admit(self):
         if self.headers.get_all('Host', []) != [urlsplit(self.server.origin).netloc]:
             raise OfficeError('Host refused.', 403)
+        if self.path == '/api/native-proof':
+            nonce = self.headers.get('X-Office-Nonce', '')
+            if (self.command != 'GET' or getattr(self, 'native_proved', False) or
+                    self.headers.get('Origin') is not None or self.headers.get('Sec-Fetch-Site') is not None or
+                    self.headers.get('Authorization') is not None or
+                    self.headers.get_all('X-Office-Workspace', []) != [self.server.workspace_id] or
+                    self.headers.get_all('X-Office-Nonce', []) != [nonce] or
+                    len(nonce) != 64 or any(c not in '0123456789abcdef' for c in nonce)):
+                raise OfficeError('Native proof request refused.', 403)
+            return self.path, None
+        native = self.headers.get('Authorization') is not None
+        if native:
+            if (self.headers.get('Origin') is not None or self.headers.get('Sec-Fetch-Site') is not None or
+                    self.headers.get_all('Authorization', []) != ['Bearer ' + self.server.native_token] or
+                    self.headers.get_all('X-Office-Workspace', []) != [self.server.workspace_id]):
+                raise OfficeError('Native client authentication refused.', 403)
         origins = self.headers.get_all('Origin', [])
         if origins and origins != [self.server.origin]:
             raise OfficeError('Origin refused.', 403)
@@ -77,7 +98,7 @@ class OfficeHandler(BaseHTTPRequestHandler):
         if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
             raise OfficeError('Only local paths without query parameters are accepted.')
         if self.command == 'POST':
-            if origins != [self.server.origin]:
+            if not native and origins != [self.server.origin]:
                 raise OfficeError('A same-origin request is required.', 403)
             if self.headers.get('Transfer-Encoding') is not None:
                 raise OfficeError('Transfer encoding is not supported.')
@@ -102,9 +123,9 @@ class OfficeHandler(BaseHTTPRequestHandler):
         if parsed.path == '/api/login' and self.command == 'POST':
             return parsed.path, body
         if parsed.path not in ASSETS:
-            if not self._authenticated():
+            if not native and not self._authenticated():
                 raise OfficeError('Open the private launch link to connect.', 401)
-            if self.command == 'POST' and not hmac.compare_digest(
+            if not native and self.command == 'POST' and not hmac.compare_digest(
                     self.headers.get('X-CSRF-Token', ''), self.server.csrf_token):
                 raise OfficeError('Request confirmation token refused.', 403)
         return parsed.path, body
@@ -118,6 +139,16 @@ class OfficeHandler(BaseHTTPRequestHandler):
                 content_type = {'/': 'text/html; charset=utf-8', '/app.js': 'text/javascript; charset=utf-8', '/style.css': 'text/css; charset=utf-8'}[path]
                 self._send(200, file.read_bytes(), content_type)
                 return
+            if path == '/api/native-proof':
+                self.protocol_version = 'HTTP/1.1'
+                self.close_connection = False
+                self.native_proved = True
+                self.connection.settimeout(5)
+                proof = native_proof(self.server.native_token, self.server.workspace_id, self.headers['X-Office-Nonce'])
+                self._send(200, proof.encode('ascii'), 'text/plain', {'Connection': 'keep-alive'})
+                return
+            if getattr(self, 'native_proved', False):
+                self.close_connection = True
             if self.command == 'POST' and path == '/api/login':
                 exact(body, ['token'])
                 if not isinstance(body['token'], str) or not hmac.compare_digest(body['token'], self.server.bootstrap_token):
@@ -125,57 +156,10 @@ class OfficeHandler(BaseHTTPRequestHandler):
                 self._send(200, {'csrf': self.server.csrf_token}, headers={
                     'Set-Cookie': '%s=%s; HttpOnly; SameSite=Strict; Path=/' % (self.server.cookie_name, self.server.cookie_token)})
                 return
-            if path == '/api/bootstrap' and self.command == 'GET':
-                self._send(200, dict(csrf=self.server.csrf_token, model=app.config['model'],
-                                    provider=app.config['base_url'], max_source_bytes=12*1024))
-                return
-            if path == '/api/conversations':
-                if self.command == 'GET':
-                    self._send(200, {'items': app.store.list()})
-                else:
-                    self._send(201, app.store.create(exact(body, ['title'])['title']))
-                return
-            parts = path.strip('/').split('/')
-            if len(parts) >= 3 and parts[:2] == ['api', 'conversations']:
-                cid = parts[2]
-                if len(parts) == 3 and self.command == 'GET':
-                    self._send(200, app.store.get(cid))
-                    return
-                if len(parts) == 4 and self.command == 'POST':
-                    if parts[3] == 'rename':
-                        self._send(200, app.store.rename(cid, exact(body, ['title'])['title']))
-                        return
-                    if parts[3] == 'sources':
-                        exact(body, ['name', 'text'])
-                        self._send(201, app.store.add_source(cid, body['name'], body['text']))
-                        return
-                    if parts[3] == 'runs':
-                        self._send(202, app.submit(cid, body))
-                        return
-                if len(parts) == 6 and parts[3] == 'artifacts' and self.command == 'GET':
-                    artifact = app.store.artifact(cid, parts[4])
-                    if parts[5] == 'view':
-                        self._send(200, artifact)
-                        return
-                    if parts[5] == 'docx':
-                        data = render_docx(artifact['content'], artifact['sources'])
-                        mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                    elif parts[5] == 'md':
-                        data = artifact['content'].encode('utf-8')
-                        mime = 'text/markdown; charset=utf-8'
-                    else:
-                        raise OfficeError('Not found.', 404)
-                    self._send(200, data, mime, {'Content-Disposition': 'attachment; filename="report-%s.%s"' % (parts[4][:8], parts[5]), 'X-Content-SHA256': hashlib.sha256(data).hexdigest()})
-                    return
-            if len(parts) in (3, 4) and parts[:2] == ['api', 'runs']:
-                if len(parts) == 3 and self.command == 'GET':
-                    self._send(200, app.status(parts[2]))
-                    return
-                if len(parts) == 4 and parts[3] == 'stop' and self.command == 'POST':
-                    exact(body, [])
-                    self._send(200, app.cancel(parts[2]))
-                    return
-            raise OfficeError('Not found.', 404)
+            status, value, mime, headers = dispatch(app, path, self.command, body)
+            if path == '/api/bootstrap':
+                value['csrf'] = self.server.csrf_token
+            self._send(status, value, mime, headers)
         except OfficeError as exc:
             self._send(exc.status, {'error': str(exc)})
         except (OSError, ValueError):

@@ -127,6 +127,27 @@ class OfficeTests(unittest.TestCase):
         self.assertEqual(self.app.store.artifact(self.cid,aid)['sources'][0]['id'],s['id'])
 
 
+    def test_terminal_receipt_does_not_release_slot_before_worker_exit(self):
+        completed, release = threading.Event(), threading.Event()
+        original = self.app._execute
+        def finishing(*args):
+            original(*args)
+            completed.set()
+            release.wait(3)
+        self.app._execute = finishing
+        try:
+            r = self.app.submit(self.cid, dict(prompt='One', intent='chat', source_ids=[],
+                                revision_id=None, request_id='request-worker-one', consent=True))
+            self.assertTrue(completed.wait(2))
+            self.assertEqual(self.app.status(r['id'])['status'], 'completed')
+            with self.assertRaisesRegex(OfficeError, 'worker|exiting'):
+                self.app.submit(self.cid, dict(prompt='Two', intent='chat', source_ids=[],
+                                revision_id=None, request_id='request-worker-two', consent=True))
+        finally:
+            release.set()
+            self.app.wait(r['id'], 3)
+
+
 class OfficeTransportTests(unittest.TestCase):
     def test_cancel_before_send_and_heartbeat_deadline(self):
         import time

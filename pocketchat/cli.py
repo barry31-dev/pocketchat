@@ -160,6 +160,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--quiet", action="store_true",
                         help="suppress agent replies and goodbye")
     subparsers = parser.add_subparsers(dest="command")
+    from .office_cli import add_parser as add_office_parser
+    add_office_parser(subparsers)
     web = subparsers.add_parser("web", help="open a private local chat and office workspace")
     web.add_argument("--config", type=Path, required=True, help="provider configuration file")
     web.add_argument("--profile", default=None, help="configured provider profile")
@@ -923,6 +925,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command is None:
         args.command = "agent"
         args.as_json = False
+    if args.command == "office":
+        from .office_cli import run_office
+        return run_office(args)
     if args.command == "web":
         from .office_web import run_web
         return run_web(args)

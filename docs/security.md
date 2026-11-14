@@ -122,3 +122,32 @@ the operator plan, so do not put credentials or secret comparison values in that
 input. Receipts are local editable observations, not signatures, adversarial
 tamper proof, authorship evidence or a security sandbox. See
 [task-acceptance.md](task-acceptance.md) for exact limits and result states.
+
+## Shared office CLI and data-only restore
+
+`office_service` acquires the existing office writer lock or reads a private
+no-follow discovery file bound to the canonical directory's identity. It only
+connects to literal `127.0.0.1` HTTP, without proxies or redirects. Before sending
+any bearer or business body on each connection, it verifies a fresh nonce HMAC
+proof from the server, then uses that same socket with automatic reconnect
+disabled. Echoing the workspace header alone cannot authenticate a stale port.
+It additionally verifies the workspace binding in every response. The native bearer is not the browser
+launch/cookie token. Native requests carrying browser Origin/fetch metadata are
+refused; browser Host/Origin/CSRF checks remain required. Discovery is not model
+send consent. CLI previews require a content/history/config-bound confirmation;
+receipt recovery does not create new execution authority. Tools and fallback
+remain disabled by `OfficeWorkspace`, regardless of legacy profile flags.
+
+Explicit file operations require no-follow directory-descriptor support and
+fail closed when it is absent. Backups never copy credential/config directories;
+they remain sensitive because they contain user content. Restore imports only
+validated values into the fixed office schema, holds the target writer lock and
+never overwrites an existing directory. There is no remote service, server
+autostart, arbitrary shell, imported SQL, extraction path or overwrite API.
+Same-user processes that can replace program code or alter the private workspace
+are not a sandboxed adversary; these checks do not claim OS-level isolation.
+
+Office-only provider preflight refuses URL userinfo, queries, fragments and
+control characters before creating/opening the workspace, so those credential
+carriers cannot enter its send preview or model snapshot. Use the existing
+credential environment variable instead; the legacy profile parser is unchanged.

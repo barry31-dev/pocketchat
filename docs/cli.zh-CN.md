@@ -687,3 +687,35 @@ pocketchat evidence release-preflight release-acceptance.json --workspace . --js
 不调用 provider、不读 wheel/源码树、不发布、不写文件。complete 返回 0；
 pending/unknown/blocked 返回 1；拒绝输入返回 2。观察契约见
 [发布验收预检](release-preflight.zh-CN.md)。
+
+## Office：共享网页／CLI 办公工作区（P1 基础接续）
+
+新增 `office` 命名空间，不修改旧 `chat`、`agent`、`run` 或 JSONL。
+`--data-dir PRIVATE_DIR`、`--json`、`--config CONFIG`、`--profile NAME`
+均放在具体子命令之前。不会自动启动后台服务：网页占用工作区时认证连接同一实例，
+否则独占打开；不抢锁、不连接任意远端、不隐式换模型。
+
+子命令及参数以[英文手册 Office 节](cli.md#office--shared-browsercli-workspace-p1-foundation)
+为完整语法来源：会话 `conversations create/list/show/rename`；文本资料 `materials add`；
+单次普通聊天 `chat`；报告 `report create/revise`；回执与停止 `runs show/stop`；
+指定不可变版本 `export --format md|docx --out ...`；`backup --out ...`；
+`restore --from ...`（`--data-dir` 必须是不存在的新目录）。
+
+聊天／报告首次不带 `--confirm` 只生成预览，不请求模型。检查模型、端点、历史、资料和
+问题后，用**原参数及 request ID** 加 `--confirm 返回的摘要` 发送。确认绑定请求、上下文、
+资料／前序版本及模型配置；变化后旧确认拒绝。保留原参数、ID、摘要直到回执明确；
+相同请求恢复原运行，不重复调用，内容不同则拒绝。`unknown` 不自动重放。
+`runs stop` 的 `stopping` 不等于线程已退出，应继续查 `runs show`。
+
+无服务时，模型请求需要显式配置；连接服务时不得覆盖其配置。只读、导入、导出、备份恢复
+无需模型配置。本检查点是单次命令，不是交互式办公 REPL。
+
+`--json` 输出单个 `pocketchat-office-cli.v1` 对象，含 `ok` 与 `result` 或 `error`；
+命令错误不向 stderr 混入诊断。退出码 0 为成功／尚未发送的预览；1 为已知运行失败、取消、
+未知终态或等待中断；2 为拒绝、配置、输入或传输结果未知。参数语法错误仍走 argparse 的
+stderr 与退出码 2。输出不含发现令牌；预览与备份仍含用户内容，需私密保管。
+
+输出仅新建（0600），无覆盖开关。原生发现与文件导入／导出／恢复要求不跟随符号链接的
+目录描述符 I/O，目前为 macOS/Linux；不具备该能力时明确拒绝，不做不安全的 Windows
+降级。既有网页及旧 CLI 不因此禁用。Word 输出沿用可选 `office` 依赖，仍不接受 PDF/DOCX
+输入。备份含义和排除范围见[格式说明](formats.zh-CN.md)。

@@ -2,6 +2,12 @@
 
 ## Unreleased — local office workspace
 
+- Add the P1 foundation: shared authenticated `office` CLI for chat, text material,
+  report/revision and exact-version exports; content-bound send confirmation,
+  receipt recovery and data-only backup/new-directory restore. Preserve the
+  single-writer/worker-exit boundary and old CLI/session formats. This is not
+  the complete P1 daily-UX package or a formal release.
+
 - Add authenticated loopback browser chat with selected text material, explicit
   provider disclosure, versioned report revisions, optional DOCX export, durable
   conversations and bounded cancellation. Existing CLI commands remain intact.
