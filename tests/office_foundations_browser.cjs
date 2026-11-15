@@ -168,8 +168,11 @@ async function main() {
   assert.equal(cli(['summary','show','--conversation',longId]).original_messages.length,400);
   await page.locator('#leave-branch').click();
   // OF06: over-budget pinned request is refused before any run or receipt exists.
+  const readReceipts=()=>JSON.parse(execFileSync(python,['-c',"import json,sqlite3,sys;db=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True);print(json.dumps(db.execute('SELECT id,request_id,status FROM runs WHERE cid=? ORDER BY id',(sys.argv[2],)).fetchall()))",path.join(workspace,'office.sqlite'),longId],{encoding:'utf8',timeout:15000}));
+  const receiptsBeforeLimit=readReceipts();
   await page.locator('#prompt').fill('x'.repeat(60001));await page.locator('#preview-request').click();
   await page.waitForFunction(()=>/limit|exceed|large/i.test(document.getElementById('notice').textContent));
+  assert.deepEqual(readReceipts(),receiptsBeforeLimit,'OF06: over-limit preview must create no run or request receipt, including failed ones');
   assert.equal(cli(['summary','show','--conversation',longId]).original_messages.length,400);
   await page.locator('#prompt').fill('Continue the weekly draft.');
   // P2: successful write and failed readback must remain visibly distinct.

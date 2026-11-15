@@ -104,13 +104,20 @@
       "status": "fixed",
       "fingerprint": "saved-status-hides-project-readback-failure",
       "reason": "Fresh-context reviewer injected memory readback failure after successful project write. Refresh errors now propagate; callers preserve saved-but-refresh-failed and its original cause. Real Chrome route-injected HTTP409 confirms write happened without claiming readback success; startup remains tolerant without auto-upgrade."
+    },
+    {
+      "id": "OF-ACCEPTANCE-RECEIPT",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "over-budget-zero-new-runs-without-receipt-assertion",
+      "reason": "Final test/docs review noted that unchanged400 messages and provider count did not rule out failed receipts. The owned fixture now compares complete ordered id/request_id/status rows before and after the oversized preview with read-only SQLite. Static correction review closed this exact evidence gap; actual Chrome rerun passed."
     }
   ],
   "slice_contract": "docs/office-foundations.md",
-  "status": "scoped-technical-review-closed-local-acceptance-passed-ci-pending",
+  "status": "local-acceptance-and-scoped-reviews-complete-required-ci-pending",
   "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
   "reviewer": "Fresh-context scoped reviewers; original backend reviews preserved, new browser initial review and correction review tracked independently.",
-  "scope": "Original schema/project/memory/backup/prepared-send/summary scopes and correction records cover unchanged backend. New browser controls reviewed independently; substitute fresh-context correction review closes both consent/readback findings at b657dbb. Added test/documentation scope is tracked separately; no full repeated backend review claimed.",
+  "scope": "Original backend initial/correction scopes retained with seven closed findings; independent browser initial and precise consent/readback corrections closed; final added acceptance/test/docs static review closed after adding actual oversized-preview run/receipt equality. All changed paths are enumerated. This is the union of bounded scopes, not a fabricated single full rerun/review.",
   "verification": [
     {
       "source_type": "local run (V)",
@@ -177,11 +184,17 @@
       "status": "verified",
       "command": "fresh-context two-finding correction review at b657dbb",
       "result": "Consent dispatch independently checks checked user consent; cached preview is selectable without branch bypass. Successful writes and failed refreshes remain distinct, boot tolerates local readback failure without implicit migration. Both initial findings closed; whole OF01-10/model/Windows claims excluded."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "node tests/office_foundations_browser.cjs after OF-ACCEPTANCE-RECEIPT assertion correction",
+      "result": "Expanded actual Chrome156.0.8078.80/CLI journey passed again because the receipt assertion changed: exact oversized-preview ordered run/request/status snapshots equal before and after; provider request count exactly1 and frozen displayed JSON equals HTTP. Existing production, Python and other checks unchanged, not rerun."
     }
   ],
-  "unverified_scope": "Exact final-candidate CI and actual main integration/readback pending; added final test/docs review recorded separately. Real-provider/model obedience, Windows browser, complete accessibility, Word pagination, formal release and P2 excluded.",
+  "unverified_scope": "Required CI for the exact final candidate and actual main integration/readback pending. Static reviewers did not run tests; real provider/model obedience, Windows browser, full accessibility, Word pagination, formal release and P2 excluded.",
   "schema": "pocketchat-review-record.v1",
-  "ready_for_integration": false,
+  "ready_for_integration": true,
   "review_history": [
     {
       "phase": "unchanged-backend",
@@ -202,6 +215,13 @@
       "candidate": "b657dbbd0c5cfb8b348c0096c819da3576ba1517",
       "reviewer_id": "01a1e02a-e935-7bc0-86cb-4e6d735799ed",
       "coverage": "Read requestKey, preview, busy, full composer, project/memory mutation and readback/boot/upgrade. Original two findings closed at precise app.js lines; no residual in those fixes. Static only; did not run VM, tests/browser or re-review backend. Original stalled reviewer was not treated as approval."
+    },
+    {
+      "phase": "final-added-tests-and-docs",
+      "reviewer_id": "01a1e02a-e935-7bc0-86cb-4e6d735799ed",
+      "candidate": "292a7c051c0dbc6f36b5704e63b2b9876eaa5bbf",
+      "status": "closed-with-scoped-correction",
+      "coverage": "Read OF01-10 contract, office English/Chinese guides, CHANGELOG, added dependency/expiry tests and expanded browser script. Evidence overclaim found in oversized-preview result; exact actual run/receipt snapshot equality added and statically closed. No backend re-review or tests run by reviewer."
     }
   ]
 }

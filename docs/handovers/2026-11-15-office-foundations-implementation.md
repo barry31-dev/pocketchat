@@ -70,3 +70,5 @@ Exact candidate/PR CI and actual remote-main readback remain required for integr
 Expiry/sensitivity/corruption negative coverage additionally passed with a controlled UTC clock: expiry between preview/send invalidates confirmation, expired/sensitive records do not enter payload, corrupt store is a named refusal, with zero provider calls and no receipt. Backend code is unchanged.
 
 Fresh-context substitute correction review read the exact b657dbb dispatch/readback changes and closed both original findings. This is static evidence for those fixes only; candidate-bound necessary CI and actual main readback are still pending. The interrupted original reviewer supplied no approval.
+
+Final added-test/docs review identified an over-limit evidence gap: unchanged messages and zero calls alone did not prove zero failed receipts. Read-only actual run/request/status snapshots now compare equal before/after the oversized preview; static correction review closed that precise gap and the expanded real Chrome journey passed again. All scoped findings are closed; exact final-head CI and remote-main integration remain pending.
