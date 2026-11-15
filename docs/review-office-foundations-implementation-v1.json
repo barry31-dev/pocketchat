@@ -107,10 +107,10 @@
     }
   ],
   "slice_contract": "docs/office-foundations.md",
-  "status": "browser-cross-client-acceptance-passed-correction-review-pending",
+  "status": "scoped-technical-review-closed-local-acceptance-passed-ci-pending",
   "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
   "reviewer": "Fresh-context scoped reviewers; original backend reviews preserved, new browser initial review and correction review tracked independently.",
-  "scope": "Original schema/project/memory/backup/prepared-send/summary scoped initial and correction records cover unchanged backend. New browser controls and their authenticated service boundaries reviewed independently; latest correction final response pending, not accepted as approval.",
+  "scope": "Original schema/project/memory/backup/prepared-send/summary scopes and correction records cover unchanged backend. New browser controls reviewed independently; substitute fresh-context correction review closes both consent/readback findings at b657dbb. Added test/documentation scope is tracked separately; no full repeated backend review claimed.",
   "verification": [
     {
       "source_type": "local run (V)",
@@ -171,9 +171,15 @@
       "status": "verified",
       "command": "python3 -B -m unittest tests.test_office.OfficeFoundationSendTests.test_expiring_sensitive_and_corrupt_office_memory_never_silently_enters_a_request -v",
       "result": "A controlled UTC clock crosses an accepted memory expiry between preview/send; old confirmation refuses, expired or sensitive content is absent, corrupt store refuses rather than empty recall, and provider/receipt counts remain zero. macOS Python3.9.6."
+    },
+    {
+      "source_type": "current code/tests/schema (C)",
+      "status": "verified",
+      "command": "fresh-context two-finding correction review at b657dbb",
+      "result": "Consent dispatch independently checks checked user consent; cached preview is selectable without branch bypass. Successful writes and failed refreshes remain distinct, boot tolerates local readback failure without implicit migration. Both initial findings closed; whole OF01-10/model/Windows claims excluded."
     }
   ],
-  "unverified_scope": "Final fresh-context correction response and exact-head CI/main integration pending. Real-provider/model obedience, Windows browser journeys, complete accessibility, Word pagination, formal release and P2 excluded.",
+  "unverified_scope": "Exact final-candidate CI and actual main integration/readback pending; added final test/docs review recorded separately. Real-provider/model obedience, Windows browser, complete accessibility, Word pagination, formal release and P2 excluded.",
   "schema": "pocketchat-review-record.v1",
   "ready_for_integration": false,
   "review_history": [
@@ -192,8 +198,10 @@
     },
     {
       "phase": "browser-correction",
-      "status": "pending",
-      "coverage": "Two original findings fixed with discriminating real-browser tests; final fresh-context response is required. First correction request disconnected and is not an approval."
+      "status": "closed",
+      "candidate": "b657dbbd0c5cfb8b348c0096c819da3576ba1517",
+      "reviewer_id": "01a1e02a-e935-7bc0-86cb-4e6d735799ed",
+      "coverage": "Read requestKey, preview, busy, full composer, project/memory mutation and readback/boot/upgrade. Original two findings closed at precise app.js lines; no residual in those fixes. Static only; did not run VM, tests/browser or re-review backend. Original stalled reviewer was not treated as approval."
     }
   ]
 }

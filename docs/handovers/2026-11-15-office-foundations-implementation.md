@@ -68,3 +68,5 @@ Windows browser journeys, Word pagination, formal release or P2 document reading
 Exact candidate/PR CI and actual remote-main readback remain required for integration.
 
 Expiry/sensitivity/corruption negative coverage additionally passed with a controlled UTC clock: expiry between preview/send invalidates confirmation, expired/sensitive records do not enter payload, corrupt store is a named refusal, with zero provider calls and no receipt. Backend code is unchanged.
+
+Fresh-context substitute correction review read the exact b657dbb dispatch/readback changes and closed both original findings. This is static evidence for those fixes only; candidate-bound necessary CI and actual main readback are still pending. The interrupted original reviewer supplied no approval.
