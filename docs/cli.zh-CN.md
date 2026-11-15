@@ -730,7 +730,7 @@ stderr 与退出码 2。输出不含发现令牌；预览与备份仍含用户�
 允许查看/导出/恢复旧回执；新发送、改名和导入资料前必须先恢复；在飞请求不能归档。
 
 既有 schema 2 使用 `office --data-dir PRIVATE_DIR upgrade` 显式升级后才能归档；当前写入者
-先在私有工作区保存并回读旧版备份，不调用模型，已是当前 schema 4 则不重复升级。
+先在私有工作区保存并回读旧版备份，不调用模型，已是当前 schema 5 则不重复升级。
 完整参数见[英文日常操作](cli.md#office-daily-conversation-operations)。
 
 消息搜索的 `message_id` 与会话消息 `id` 是不透明十进制字符串，
@@ -786,3 +786,28 @@ pocketchat office --data-dir PRIVATE_DIR --json chat --conversation ID --branch-
 恢复为私有未发送草稿。普通文本追加到草稿，精确替换正文可用上述单次命令。`/send` 仍要求输入完整新确认哈希。
 `/chat`、`/report` 或 `/revise VERSION` 退出分支模式；`/sources` 可调整资料。重开只恢复草稿、不自动发送。
 旧 schema 2/3 工作区先 `office upgrade`，必须先完成备份回读。
+
+
+### Office project and explicit memory controls
+
+```sh
+pocketchat office --data-dir PRIVATE_DIR --json project show
+pocketchat office --data-dir PRIVATE_DIR --json project instructions --project-id PROJECT_ID --revision 1 --text "Keep reports concise."
+pocketchat office --data-dir PRIVATE_DIR --json project memory --project-id PROJECT_ID --revision 1 --enabled true
+pocketchat office --data-dir PRIVATE_DIR --json memory list
+pocketchat office --data-dir PRIVATE_DIR --json memory propose --project-id PROJECT_ID --store-sha256 HASH --text "Prefer concise replies" --category user_preference --personal-guidance
+pocketchat office --data-dir PRIVATE_DIR --json memory accept --project-id PROJECT_ID --store-sha256 HASH --memory-id MEMORY_ID --revision 1 --personal-guidance
+pocketchat office --data-dir PRIVATE_DIR --json memory recall --query "concise"
+pocketchat office --data-dir PRIVATE_DIR --json memory revise --project-id PROJECT_ID --store-sha256 HASH --memory-id MEMORY_ID --revision REVISION --text "Prefer concise Chinese replies" --personal-guidance
+pocketchat office --data-dir PRIVATE_DIR --json memory retire --project-id PROJECT_ID --store-sha256 HASH --memory-id MEMORY_ID --revision REVISION
+pocketchat office --data-dir PRIVATE_DIR --json memory forget --project-id PROJECT_ID --store-sha256 HASH --memory-id MEMORY_ID --revision REVISION --acknowledge-history
+```
+
+Use the current project revisions and whole-store hash from readback, not the
+example placeholders. Proposals/revisions do not become accepted automatically.
+`--personal-guidance` declares non-factual personal or project guidance, not
+independent fact verification. `--acknowledge-history` acknowledges that prior
+traces, exports and backups are not erased. These actions never call a provider.
+Recall is disabled until explicitly enabled; this checkpoint's recall preview
+does not yet integrate remembered text or project instructions into sent requests.
+Old schemas require explicit verified-backup upgrade for these controls.

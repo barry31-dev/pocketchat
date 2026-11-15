@@ -91,6 +91,20 @@ def dispatch(app, path, method, body=None):
         with app.guard:
             changes = {key: value for key, value in body.items() if key != 'project_id'}
             return result(update_project_metadata(app.store, body['project_id'], **changes))
+    if path == '/api/memory' and method == 'GET':
+        from .office_context import office_memory_view
+        return result(office_memory_view(app.store))
+    if path == '/api/memory/recall' and method == 'POST':
+        from .office_context import office_memory_view
+        exact(body, ['query'])
+        return result(office_memory_view(app.store, body['query']))
+    if path.startswith('/api/memory/') and method == 'POST':
+        from .office_context import office_memory_action
+        if not isinstance(body, dict) or not {'project_id', 'store_sha256'} <= set(body):
+            raise OfficeError('Invalid memory mutation fields.')
+        with app.guard:
+            return result(office_memory_action(app.store, path[len('/api/memory/'):],
+                body['project_id'], body['store_sha256'], **{k: v for k, v in body.items() if k not in ('project_id', 'store_sha256')}))
     if path == '/api/models':
         if method == 'GET':
             return result(app.models())

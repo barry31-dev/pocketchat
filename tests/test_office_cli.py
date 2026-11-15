@@ -526,3 +526,21 @@ class OfficeCLITests(unittest.TestCase):
                                  '--revision', '1', '--enabled', 'true')
         self.assertEqual(code, 0)
         self.assertTrue(enabled['result']['memory_enabled'])
+
+    @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
+    def test_memory_propose_accept_and_forget_require_explicit_process_arguments(self):
+        code, response = self.cli('memory', 'list')
+        self.assertEqual(code, 0)
+        view = response['result']
+        code, proposal = self.cli('memory', 'propose', '--project-id', view['project_id'], '--store-sha256', view['store_sha256'],
+                                  '--text', 'Prefer concise replies', '--category', 'user_preference', '--personal-guidance')
+        self.assertEqual(code, 0)
+        proposed = proposal['result']
+        code, acceptance = self.cli('memory', 'accept', '--project-id', view['project_id'], '--store-sha256', proposed['store_sha256'],
+                                    '--memory-id', proposed['record']['memory_id'], '--revision', '1', '--personal-guidance')
+        self.assertEqual(code, 0)
+        accepted = acceptance['result']
+        code, forgotten = self.cli('memory', 'forget', '--project-id', view['project_id'], '--store-sha256', accepted['store_sha256'],
+                                   '--memory-id', accepted['record']['memory_id'], '--revision', str(accepted['record']['revision']), '--acknowledge-history')
+        self.assertEqual(code, 0)
+        self.assertEqual(forgotten['result']['records'], [])

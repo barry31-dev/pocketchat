@@ -602,3 +602,18 @@ class FoundationBackupTests(unittest.TestCase):
             with self.assertRaises(OfficeError):
                 office_backup.restore(raw, self.base / 'other-output')
         self.assertEqual((self.base / 'other-output' / 'office-memory.v2.jsonl').read_bytes(), b'other writer bytes')
+
+    @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
+    def test_accepted_replacement_requires_present_predecessor_retired_backlink(self):
+        from pocketchat.office_backup import snapshot, validate
+        predecessor = self.memory_record()
+        successor = self.memory_record(memory_id='mem_second', supersedes=['mem_first'])
+        self.store_memory([])
+        doc = json.loads(snapshot(self.store))
+        doc['data']['memory'] = [predecessor, successor]
+        doc['sha256'] = hashlib.sha256(encoded(doc['data']).encode()).hexdigest()
+        with self.assertRaises(OfficeError):
+            validate(encoded(doc).encode())
+        doc['data']['memory'] = [dict(predecessor, admission_status='retired', superseded_by='mem_second'), successor]
+        doc['sha256'] = hashlib.sha256(encoded(doc['data']).encode()).hexdigest()
+        self.assertEqual(len(validate(encoded(doc).encode())['memory']), 2)

@@ -11,7 +11,15 @@
     "tests/test_office_service.py",
     "tests/test_office_cli.py",
     "docs/review-office-foundations-implementation-v1.json",
-    "docs/handovers/2026-11-15-office-foundations-implementation.md"
+    "docs/handovers/2026-11-15-office-foundations-implementation.md",
+    "pocketchat/memory_migration.py",
+    "tests/test_memory_migration.py",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/formats.md",
+    "docs/formats.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/security.md"
   ],
   "categories": [
     "python-tools",
@@ -19,15 +27,30 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 1,
+  "rounds": 2,
   "round_decision": "review",
-  "round_scope": "full",
-  "findings": [],
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "OF-LIFE-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "candidate-edge-conflicts-with-selected-replacement",
+      "reason": "Candidate supersedes now remains provenance; multiple pending revision regression accepts one and refuses the stale competitor."
+    },
+    {
+      "id": "OF-LIFE-2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "accepted-successor-without-retired-predecessor",
+      "reason": "Present predecessor of accepted/retired successor must be retired with exact backlink; rehashed corrupt backup regression now refuses dual accepted replacement."
+    }
+  ],
   "slice_contract": "docs/office-foundations.md",
-  "status": "partial-schema5-project-backup-checkpoint",
+  "status": "partial-schema5-explicit-memory-checkpoint",
   "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
-  "reviewer": "self (routine delegated technical review)",
-  "scope": "Full schema creation/upgrade, project CAS, v1/v2 backup/restore, memory graph/identity and summary source-reference validation; authenticated project routes and CLI subprocess. Prepared context, memory actions, browser controls not yet wired.",
+  "reviewer": "independent fresh-context agent, initial scoped review and focused correction re-review",
+  "scope": "Implemented schema5/project/backup and explicit office memory lifecycle only. Independent review reproduced two lifecycle defects, then re-reviewed corrected graph logic/tests; frozen send, summary controls and browser were expressly excluded.",
   "verification": [
     {
       "source_type": "local run (V)",
@@ -40,7 +63,19 @@
       "status": "verified",
       "command": "python3 -m unittest discover -s tests -p 'test_office*.py' -v; ruff check --select E9,F pocketchat/office*.py tests/test_office*.py",
       "result": "138 office tests passed with 1 skip; Ruff passed. Secure descriptor-I/O tests do not claim unsupported Windows filesystem behavior."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest discover -s tests -p 'test_office*.py' -v; python3 -m unittest discover -s tests -p test_memory_migration.py -v",
+      "result": "143 office tests with 1 skip and 41 memory migration tests passed before graph correction; correction separately passed 4 lifecycle/30 backup tests. Ruff E9/F and diff check passed. macOS Python3.9.6; reviewer reproduced both original defects on Python3.13.9."
+    },
+    {
+      "source_type": "current code/tests/schema (C)",
+      "status": "verified",
+      "command": "independent correction re-review",
+      "result": "Both findings closed; correction ready only within implemented partial checkpoint."
     }
   ],
-  "unverified_scope": "One frozen preview/send context, explicit office memory actions/summary controls, browser controls and OF01–OF10 complete user-path acceptance not implemented; no real provider, paid services, formal release or P2."
+  "unverified_scope": "Frozen preview/send, summary operator controls, browser UI and complete OF01–OF10 user path acceptance not implemented. No paid provider or formal release."
 }

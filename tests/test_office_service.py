@@ -208,3 +208,17 @@ class SharedOfficeTests(unittest.TestCase):
         self.assertTrue(enabled['memory_enabled'])
         self.assertEqual(client.request('/api/project'), enabled)
         self.assertEqual(self.adapter.calls, [])
+
+    def test_memory_proposal_acceptance_and_forget_are_shared_without_provider_calls(self):
+        client = self.connect()
+        view = client.request('/api/memory')
+        proposal = client.request('/api/memory/propose', dict(project_id=view['project_id'], store_sha256=view['store_sha256'],
+            content='Prefer concise replies', category='user_preference', personal_guidance=True))
+        record = proposal['record']
+        accepted = client.request('/api/memory/accept', dict(project_id=view['project_id'], store_sha256=proposal['store_sha256'],
+            memory_id=record['memory_id'], revision=record['revision'], personal_guidance=True))
+        self.assertEqual(accepted['record']['admission_status'], 'accepted')
+        forgotten = client.request('/api/memory/forget', dict(project_id=view['project_id'], store_sha256=accepted['store_sha256'],
+            memory_id=record['memory_id'], revision=accepted['record']['revision'], acknowledge_history=True))
+        self.assertEqual(forgotten['records'], [])
+        self.assertEqual(self.adapter.calls, [])

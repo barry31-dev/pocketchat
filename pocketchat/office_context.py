@@ -96,8 +96,10 @@ def validate_project_memory(records, project_id):
         mid = record['memory_id']
         for old in record['supersedes']:
             if old in by_id:
-                target = by_id[old].get('superseded_by')
-                if target is not None and target != mid:
+                predecessor = by_id[old]
+                # Candidate supersedes is provenance, not an accepted replacement.
+                if record['admission_status'] in ('accepted', 'retired') and (
+                        predecessor['admission_status'] != 'retired' or predecessor.get('superseded_by') != mid):
                     raise OfficeError('Office memory replacement edges contradict.')
                 edges[old].add(mid)
         new = record.get('superseded_by')
@@ -199,3 +201,124 @@ def update_project_metadata(store, project_id, **changes):
             store.db.execute('UPDATE office_project SET ' + field + '=?, ' + revision + '=? WHERE project_id=?',
                              (updated[field], updated[revision], project_id))
         return updated
+
+
+def _office_guidance_source(record, project_id):
+    return (record['source_kind'] == 'user_explicit' and
+            record['category'] in ('user_preference', 'project_decision') and
+            record['source_refs'] == [dict(kind='event', ref='office:propose:' + record['memory_id'],
+                sha256=record['content_sha256'], scope=project_id)])
+
+
+def office_memory_view(store, query=None):
+    """Inspect project memory and preview recall without accepting or calling anything."""
+    import hashlib
+    from datetime import datetime, timezone
+    from .memory_migration import _store_payload
+    from .memory_retrieval import retrieve_memories, MemoryRetrievalError
+    with store.lock:
+        project = read_project_metadata(store)
+        records = read_project_memory(store, project['project_id'])
+        digest = hashlib.sha256(_store_payload(records)).hexdigest()
+        result = dict(project_id=project['project_id'], store_sha256=digest,
+                      enabled=project['memory_enabled'], records=records, selected=[], excluded=[])
+        if query is None or not project['memory_enabled']:
+            return result
+        permitted = []
+        for record in records:
+            if (not _office_guidance_source(record, project['project_id']) or record['verification_status'] != 'not_required'):
+                result['excluded'].append(dict(memory_id=record['memory_id'], reasons=['guidance_admission_required']))
+            else:
+                permitted.append(record)
+        try:
+            recall = retrieve_memories(permitted, query, workspace_id=project['project_id'],
+                                      now=datetime.now(timezone.utc), max_results=5,
+                                      max_excerpt_bytes=8 * 1024, max_recall_tokens=8192)
+        except MemoryRetrievalError as exc:
+            raise OfficeError('Memory recall query or store is invalid.') from exc
+        result['selected'] = recall['items']
+        result['excluded'].extend(recall['excluded'])
+        result['omissions'] = recall['omissions']
+        return result
+
+
+def office_memory_action(store, action, project_id, store_sha256, **fields):
+    """Explicit operator lifecycle on the fixed office store, never a model tool."""
+    import hashlib
+    from . import memory_migration as memory
+    shapes = {
+        'propose': {'content', 'category', 'personal_guidance'},
+        'accept': {'memory_id', 'revision', 'personal_guidance'},
+        'revise': {'memory_id', 'revision', 'content', 'personal_guidance'},
+        'retire': {'memory_id', 'revision'},
+        'forget': {'memory_id', 'revision', 'acknowledge_history'},
+    }
+    if action not in shapes or set(fields) != shapes[action]:
+        raise OfficeError('Invalid office memory action fields.')
+    if (action in ('propose', 'accept', 'revise') and fields['personal_guidance'] is not True or
+            action == 'forget' and fields['acknowledge_history'] is not True):
+        raise OfficeError('Explicit personal guidance or historical-copy acknowledgement is required.')
+    if 'content' in fields:
+        text_value(fields['content'], MAX_INSTRUCTION_BYTES, 'Memory guidance')
+    if action == 'propose' and fields['category'] not in ('user_preference', 'project_decision'):
+        raise OfficeError('Only explicit non-factual personal or project guidance is supported.')
+    with store.lock:
+        project = read_project_metadata(store)
+        view = office_memory_view(store)
+        if project_id != project['project_id'] or store_sha256 != view['store_sha256']:
+            raise OfficeError('Project or memory store changed. Inspect it before saving.', 409)
+        path = store.root / MEMORY_FILE
+        validate = lambda records: validate_project_memory(records, project_id)
+        if action == 'accept':
+            candidate = next((r for r in view['records'] if r['memory_id'] == fields['memory_id']), None)
+            if candidate is None or not _office_guidance_source(candidate, project_id):
+                raise OfficeError('Memory requires an original office personal-guidance declaration.')
+            try:
+                record = memory.accept_v2_replacement(store.root, path, fields['memory_id'], accepted_by='office-user',
+                    workspace_id=project_id, expected_revision=fields['revision'], expected_store_sha256=store_sha256,
+                    validate_records=validate)
+            except (memory.MemoryMigrationError, TypeError, ValueError) as exc:
+                raise OfficeError('Office memory acceptance identity or revision does not match.', 409) from exc
+        else:
+            def change(records, write):
+                validate(records)
+                if hashlib.sha256(memory._store_payload(records)).hexdigest() != store_sha256:
+                    raise OfficeError('Memory changed before saving.', 409)
+                current = None
+                if action != 'propose':
+                    current = next((r for r in records if r['memory_id'] == fields['memory_id']), None)
+                    if current is None or type(fields['revision']) is not int or current['revision'] != fields['revision']:
+                        raise OfficeError('Memory record changed. Inspect its current revision.', 409)
+                timestamp = memory._new_timestamp()
+                if action in ('propose', 'revise'):
+                    if action == 'revise' and (current['admission_status'] != 'accepted' or not _office_guidance_source(current, project_id)):
+                        raise OfficeError('Only accepted current guidance can be revised.')
+                    content = fields['content']
+                    digest = hashlib.sha256(content.encode('utf-8')).hexdigest()
+                    mid = 'mem_' + uuid4().hex
+                    record = dict(schema_version=memory.V2_SCHEMA_VERSION, memory_id=mid, revision=1,
+                        workspace_id=project_id, category=fields['category'] if action == 'propose' else current['category'],
+                        content=content, content_sha256=digest, created=timestamp, updated=timestamp,
+                        source_kind='user_explicit', source_refs=[dict(kind='event', ref='office:propose:' + mid,
+                        sha256=digest, scope=project_id)], verification_status='unverified', admission_status='candidate',
+                        accepted_by='', updated_by='office-user', supersedes=[] if action == 'propose' else [current['memory_id']])
+                    records.append(memory.parse_v2_record(record))
+                elif action == 'retire':
+                    if current['admission_status'] != 'accepted':
+                        raise OfficeError('Only accepted guidance can be retired.')
+                    current.update(admission_status='retired', retired_at=timestamp, updated=timestamp,
+                                   updated_by='office-user', revision=current['revision'] + 1)
+                    record = current
+                else:
+                    records = [r for r in records if r['memory_id'] != current['memory_id']]
+                    record = None
+                validate(records)
+                write(records)
+                return record
+            try:
+                record = memory._mutate_v2_store(store.root, path, change, allow_missing=action == 'propose')
+            except memory.MemoryMigrationError as exc:
+                raise OfficeError('Office memory could not be saved safely.') from exc
+        result = office_memory_view(store)
+        result['record'] = record
+        return result

@@ -178,3 +178,113 @@ class ProjectMutationTests(unittest.TestCase):
                     update_project_metadata(store, 'project-' + 'b' * 32, instruction_revision=2, instructions='foreign')
             finally:
                 store.close()
+
+
+class OfficeMemoryLifecycleTests(unittest.TestCase):
+    def test_propose_accept_replace_forget_and_recall_are_project_bound(self):
+        from pocketchat.office_context import office_memory_action, office_memory_view, update_project_metadata
+        from pocketchat.office_store import OfficeStore
+        with tempfile.TemporaryDirectory() as tmp:
+            store = OfficeStore(Path(tmp).resolve() / 'project')
+            try:
+                project = read_project_metadata(store)
+                view = office_memory_view(store, 'concise')
+                self.assertEqual(view['selected'], [])
+                proposed = office_memory_action(store, 'propose', project['project_id'], view['store_sha256'],
+                                               content='Prefer concise replies', category='user_preference', personal_guidance=True)
+                record = proposed['record']
+                self.assertEqual(record['admission_status'], 'candidate')
+                self.assertEqual(office_memory_view(store, 'concise')['selected'], [])
+                accepted = office_memory_action(store, 'accept', project['project_id'], proposed['store_sha256'],
+                                               memory_id=record['memory_id'], revision=record['revision'], personal_guidance=True)
+                self.assertEqual(accepted['record']['admission_status'], 'accepted')
+                update_project_metadata(store, project['project_id'], memory_revision=1, memory_enabled=True)
+                self.assertEqual(office_memory_view(store, 'concise')['selected'][0]['memory_id'], record['memory_id'])
+                revised = office_memory_action(store, 'revise', project['project_id'], accepted['store_sha256'],
+                                              memory_id=record['memory_id'], revision=accepted['record']['revision'],
+                                              content='Prefer concise responses in Chinese', personal_guidance=True)
+                self.assertEqual(revised['record']['admission_status'], 'candidate')
+                self.assertEqual(office_memory_view(store, 'concise')['selected'][0]['memory_id'], record['memory_id'])
+                replaced = office_memory_action(store, 'accept', project['project_id'], revised['store_sha256'],
+                                               memory_id=revised['record']['memory_id'], revision=1, personal_guidance=True)
+                old = next(r for r in replaced['records'] if r['memory_id'] == record['memory_id'])
+                self.assertEqual(old['admission_status'], 'retired')
+                forgotten = office_memory_action(store, 'forget', project['project_id'], replaced['store_sha256'],
+                                                 memory_id=record['memory_id'], revision=old['revision'], acknowledge_history=True)
+                successor = revised['record']['memory_id']
+                self.assertEqual(office_memory_view(store, 'concise')['selected'][0]['memory_id'], successor)
+                forgotten = office_memory_action(store, 'forget', project['project_id'], forgotten['store_sha256'],
+                                                 memory_id=successor, revision=replaced['record']['revision'], acknowledge_history=True)
+                self.assertEqual(forgotten['records'], [])
+                self.assertEqual(office_memory_view(store, 'concise')['selected'], [])
+            finally:
+                store.close()
+
+    def test_stale_foreign_fact_and_implicit_acceptance_refuse_without_store_changes(self):
+        from pocketchat.office_context import office_memory_action, office_memory_view
+        from pocketchat.office_store import OfficeStore
+        with tempfile.TemporaryDirectory() as tmp:
+            store = OfficeStore(Path(tmp).resolve() / 'project')
+            try:
+                project = read_project_metadata(store)
+                view = office_memory_view(store, 'reply')
+                for project_id, digest, changes in [
+                        ('foreign', view['store_sha256'], dict(content='text', category='user_preference', personal_guidance=True)),
+                        (project['project_id'], '0' * 64, dict(content='text', category='user_preference', personal_guidance=True)),
+                        (project['project_id'], view['store_sha256'], dict(content='fact', category='source_note', personal_guidance=True)),
+                        (project['project_id'], view['store_sha256'], dict(content='fact', category='user_preference', personal_guidance=False))]:
+                    with self.subTest(changes=changes), self.assertRaises(OfficeError):
+                        office_memory_action(store, 'propose', project_id, digest, **changes)
+                    self.assertFalse((store.root / 'office-memory.v2.jsonl').exists())
+                proposed = office_memory_action(store, 'propose', project['project_id'], view['store_sha256'],
+                                               content='Prefer concise replies', category='user_preference', personal_guidance=True)
+                before = (store.root / 'office-memory.v2.jsonl').read_bytes()
+                for revision, declared in [(0, True), (True, True), (1, False)]:
+                    with self.subTest(revision=revision, declared=declared), self.assertRaises(OfficeError):
+                        office_memory_action(store, 'accept', project['project_id'], proposed['store_sha256'],
+                                             memory_id=proposed['record']['memory_id'], revision=revision, personal_guidance=declared)
+                    self.assertEqual((store.root / 'office-memory.v2.jsonl').read_bytes(), before)
+            finally:
+                store.close()
+
+    def test_legacy_accepted_or_candidate_without_office_declaration_cannot_be_recalled_or_accepted(self):
+        import hashlib
+        from pocketchat.office_context import office_memory_action, office_memory_view, update_project_metadata
+        from pocketchat import memory_migration as memory
+        from pocketchat.office_store import OfficeStore
+        with tempfile.TemporaryDirectory() as tmp:
+            store = OfficeStore(Path(tmp).resolve() / 'project')
+            try:
+                project = read_project_metadata(store)
+                path = store.root / 'office-memory.v2.jsonl'
+                proposed = memory.propose_v2_record(store.root, path, 'Prefer concise replies', workspace_id=project['project_id'], proposed_by='legacy-user')
+                digest = hashlib.sha256(memory._store_payload(memory.read_v2_store(store.root, path))).hexdigest()
+                with self.assertRaises(OfficeError):
+                    office_memory_action(store, 'accept', project['project_id'], digest, memory_id=proposed['memory_id'], revision=1, personal_guidance=True)
+                memory.accept_v2_record(store.root, path, proposed['memory_id'], 'legacy-user', verification_status='not_required')
+                update_project_metadata(store, project['project_id'], memory_revision=1, memory_enabled=True)
+                self.assertEqual(office_memory_view(store, 'concise')['selected'], [])
+            finally:
+                store.close()
+
+    def test_multiple_pending_revisions_do_not_block_one_accepted_replacement(self):
+        from pocketchat.office_context import office_memory_action, office_memory_view
+        from pocketchat.office_store import OfficeStore
+        with tempfile.TemporaryDirectory() as tmp:
+            store = OfficeStore(Path(tmp).resolve() / 'project')
+            try:
+                view = office_memory_view(store)
+                pid = view['project_id']
+                proposed = office_memory_action(store, 'propose', pid, view['store_sha256'], content='Concise replies', category='user_preference', personal_guidance=True)
+                accepted = office_memory_action(store, 'accept', pid, proposed['store_sha256'], memory_id=proposed['record']['memory_id'], revision=1, personal_guidance=True)
+                old = accepted['record']
+                first = office_memory_action(store, 'revise', pid, accepted['store_sha256'], memory_id=old['memory_id'], revision=old['revision'], content='Concise Chinese replies', personal_guidance=True)
+                second = office_memory_action(store, 'revise', pid, first['store_sha256'], memory_id=old['memory_id'], revision=old['revision'], content='Concise English replies', personal_guidance=True)
+                saved = office_memory_action(store, 'accept', pid, second['store_sha256'], memory_id=first['record']['memory_id'], revision=1, personal_guidance=True)
+                self.assertEqual(saved['record']['admission_status'], 'accepted')
+                competing = next(r for r in saved['records'] if r['memory_id'] == second['record']['memory_id'])
+                self.assertEqual(competing['admission_status'], 'candidate')
+                with self.assertRaises(OfficeError):
+                    office_memory_action(store, 'accept', pid, saved['store_sha256'], memory_id=competing['memory_id'], revision=1, personal_guidance=True)
+            finally:
+                store.close()

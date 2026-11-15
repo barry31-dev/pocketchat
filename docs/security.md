@@ -151,3 +151,16 @@ Office-only provider preflight refuses URL userinfo, queries, fragments and
 control characters before creating/opening the workspace, so those credential
 carriers cannot enter its send preview or model snapshot. Use the existing
 credential environment variable instead; the legacy profile parser is unchanged.
+
+
+### Office project guidance admission
+
+Logical project identity is not native service authentication. Project preference
+CAS and whole-memory-store digests prevent stale saves; no request may choose a
+memory path. Only original office proposal events are eligible as explicit
+non-factual guidance. Accepted legacy records, source facts and verification labels
+never grant authority. Replacement acceptance retires its predecessor in one locked
+publication; backups validate normalized lifecycle edges even after rehashing.
+Forgotten historical IDs confer no recall and never recreate text. Forget does
+not promise to remove earlier traces, sent payloads, exports or backups. At this
+checkpoint these controls are independent of the not-yet-wired prepared send path.

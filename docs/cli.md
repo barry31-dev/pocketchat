@@ -917,7 +917,7 @@ the top-level `restore --from` instead creates a new workspace from a backup.
 
 Schema-2 users must explicitly run `upgrade` before archive. It requires no model,
 uses the current writer, keeps a validated pre-upgrade backup inside the private
-workspace and is idempotent on the current schema 4. See [backup format](formats.md#office-data-backup-v1).
+workspace and is idempotent on the current schema 5. See [backup format](formats.md#office-data-backup-v1).
 
 Message search `message_id` and conversation message `id` are opaque decimal
 strings, not JSON numbers; they identify the exact saved message without
@@ -999,3 +999,28 @@ confirmation hash. `/chat`, `/report` or `/revise VERSION` leaves branch mode;
 `/sources` can change explicit material. Reopening keeps the branch draft without
 sending. Only completed ordinary-chat turns in this conversation are eligible.
 Run `office upgrade` first for schema-2/3 workspaces; backup readback must succeed.
+
+
+### Office project and explicit memory controls
+
+```sh
+pocketchat office --data-dir PRIVATE_DIR --json project show
+pocketchat office --data-dir PRIVATE_DIR --json project instructions --project-id PROJECT_ID --revision 1 --text "Keep reports concise."
+pocketchat office --data-dir PRIVATE_DIR --json project memory --project-id PROJECT_ID --revision 1 --enabled true
+pocketchat office --data-dir PRIVATE_DIR --json memory list
+pocketchat office --data-dir PRIVATE_DIR --json memory propose --project-id PROJECT_ID --store-sha256 HASH --text "Prefer concise replies" --category user_preference --personal-guidance
+pocketchat office --data-dir PRIVATE_DIR --json memory accept --project-id PROJECT_ID --store-sha256 HASH --memory-id MEMORY_ID --revision 1 --personal-guidance
+pocketchat office --data-dir PRIVATE_DIR --json memory recall --query "concise"
+pocketchat office --data-dir PRIVATE_DIR --json memory revise --project-id PROJECT_ID --store-sha256 HASH --memory-id MEMORY_ID --revision REVISION --text "Prefer concise Chinese replies" --personal-guidance
+pocketchat office --data-dir PRIVATE_DIR --json memory retire --project-id PROJECT_ID --store-sha256 HASH --memory-id MEMORY_ID --revision REVISION
+pocketchat office --data-dir PRIVATE_DIR --json memory forget --project-id PROJECT_ID --store-sha256 HASH --memory-id MEMORY_ID --revision REVISION --acknowledge-history
+```
+
+Use the current project revisions and whole-store hash from readback, not the
+example placeholders. Proposals/revisions do not become accepted automatically.
+`--personal-guidance` declares non-factual personal or project guidance, not
+independent fact verification. `--acknowledge-history` acknowledges that prior
+traces, exports and backups are not erased. These actions never call a provider.
+Recall is disabled until explicitly enabled; this checkpoint's recall preview
+does not yet integrate remembered text or project instructions into sent requests.
+Old schemas require explicit verified-backup upgrade for these controls.

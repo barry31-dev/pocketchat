@@ -256,7 +256,7 @@ task-record/policy/plan 身份、时间、执行状态及逐项 bytes/SHA-256。
 CLI 回执在受支持版本 payload 中均可附加 `confirmation` 及 `model_snapshot`。schema 3 仅给会话新增
 `archived` 整数字段（只接受 0 或 1），消息 ID 和其他表形状不变。
 
-schema 3 引入归档；当前新建工作区使用下节 schema 4。既有 schema 2/3 不静默升级。显式 `office upgrade` 或网页
+schema 3 引入归档；当前新建工作区使用 schema 5（见下节）。既有 schema 2/3 不静默升级。显式 `office upgrade` 或网页
 **Back up & upgrade** 会先在私有工作区写入 0600 的 `office-vVERSION-before-upgrade-SHA256.json`，
 校验、回读字节并同步备份父目录后才在一个事务中更新版本（版本 2 同时补归档列）。失败不删除备份；中断留下的完全相同备份可复用，
 不同字节或不安全路径拒绝。备份恢复到新目录时保留记录中的 schema 版本；旧版会话在显式升级前仍不启用归档；
@@ -292,7 +292,7 @@ CLI state HTTP 路由仅允许 native 身份，网页 cookie／CSRF 不授予 CL
 
 ### Office 分支上下文（数据库 schema 4）
 
-新工作区使用 schema 4；旧 schema 2/3 的已有操作仍可使用，创建聊天分支须先显式备份升级。
+新工作区使用 schema 5，schema 4 保留为原分支格式；旧 schema 2/3 的已有操作仍可使用，创建聊天分支须先显式备份升级。
 数据备份信封仍为 `pocketchat-office-backup.v1`，支持数据库 2、3、4；恢复保留原数据库版本，
 不暗中升级。旧程序拒绝 schema 4，不会把各分支串接为单一路径。
 
@@ -304,3 +304,21 @@ schema-4 请求的 `history_run_ids` 固定实际使用的已完成轮次前缀�
 会话 JSON 新增 `active_run_ids`、`chat_run_ids`；`messages` 仍返回按时间保存的完整消息。
 办公请求及草稿仅在 chat 下接受可选 `branch_from`；它属于内容，不授予新权限。发送同意、
 模型/上下文绑定确认和原请求回执恢复不放宽。旧 CLI 会话 JSONL 不变。
+
+
+### Office 项目基础数据（数据库 schema 5）
+
+真正新建的工作区创建一次逻辑 `project_id`（`project-` 加 32 位小写十六进制）、
+空项目指令及 revision 1、默认关闭召回及 memory revision 1。它不替代基于路径的服务身份。
+旧 schema 2/3/4 只通过显式 `office upgrade` 升级：先验证并持久保存 v1 备份、回读及同步目录，
+再在一次 SQL 事务内创建项目元数据。
+
+`pocketchat-office-backup.v2` 在五张原逻辑表之外包含 `project`、`summaries`、`memory`。
+摘要绑定同会话当前分支的原 message/run、Unicode 码点范围及 UTF-8 SHA-256；
+记忆保留固定私有 `office-memory.v2.jsonl` 的原 v2 记录。替换 DAG 区分候选出处与
+accepted/retired 已生效替换；已忘记的历史 ID 可缺失，不复活记录。v1 仍只接受数据库 2/3/4，
+恢复保持原版本不生成身份；v2 保留逻辑身份，不保留原传输凭据或预览授权。
+
+办公接受／召回仅限带项目与正文摘要绑定的原始办公提案事件及显式非事实个人指引。
+替换接受与前任退休在一次受锁 v2 写入完成；整体摘要与记录 revision 拒绝过期修改。
+忘记不删除历史 trace、导出或备份。本检查点已接服务／CLI，统一冻结请求及浏览器控件仍待完成。

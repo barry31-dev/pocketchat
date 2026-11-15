@@ -153,3 +153,14 @@ real-provider/manual artifact requirements are described in [release-1.2.md](rel
 Browser workspace schema 2 rejects the unreleased schema-1 development workspace.
 Keep the old directory intact and use a fresh directory; no automatic migration
 or citation relabeling is performed. Current schema-2 reopen retains all versions.
+
+
+### Office schema-5 foundation checkpoint
+
+New office directories use schema 5; existing 2/3/4 versions upgrade only through
+explicit durable-backup admission. V1 backups retain their original versions;
+v2 data-only backups preserve logical identity, summaries and v2 memory without
+restoring transport credentials. Older writers must refuse schema 5. Project and
+memory CLI operations are additive; legacy memory commands are unchanged. This
+checkpoint does not yet change office request context or claim complete foundation
+acceptance. Secure filesystem operations still refuse unsupported runtimes.
