@@ -3,6 +3,7 @@ const $ = id => document.getElementById(id);
 let csrf = '', current = null, selected = new Set(), report = false, revision = null, activeRun = null, polling = null;
 let conversations = [], lastSubmission = null, displayedModelRevision = null;
 let receiptKey = '', draftPrefix = '', viewKey = '', draftReady = false, opening = false, searchSequence = 0;
+let projectState = null, memoryState = null, summaryState = null, contextReview = null;
 let searchTimer = null, mutation = false, legacyPending = false, branchFrom = null, branchReview = null;
 function editingBlocked() { return Boolean(activeRun || lastSubmission || opening || mutation || legacyPending); }
 const node = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
@@ -30,8 +31,10 @@ function busy(value) {
   const readOnly = value || Boolean(current?.archived);
   const choice=$('model-choice');if(choice)choice.disabled=value;
   for (const id of ['send','upload','prompt','consent','report-toggle','leave-branch']) $(id).disabled = readOnly;
-  $('consent').disabled=readOnly || Boolean(branchFrom && !branchReview);
-  $('send').textContent=branchFrom && !branchReview ? 'Review branch' : 'Send ↑';
+  for (const e of $('project-settings')?.querySelectorAll('button, input, textarea') || []) e.disabled = value;
+  if ($('preview-request')) $('preview-request').disabled = readOnly;
+  $('consent').disabled=readOnly || Boolean(branchFrom && !branchReview && !contextReview);
+  $('send').textContent=branchFrom && !branchReview && !contextReview ? 'Review branch' : 'Send ↑';
   $('stop').hidden = !value || !activeRun; $('new-chat').disabled = value;
   $('archive').disabled = value; $('rename').disabled = readOnly;
   for (const button of document.querySelectorAll('[data-branch-run]')) button.disabled = readOnly;
@@ -46,6 +49,10 @@ function saveDraft() {
   catch { notice('Draft could not be saved in this browser. Copy it before leaving.'); }
 }
 function restoreDraft() {
+  contextReview=null;summaryState=null;
+  if($('summary-originals'))$('summary-originals').replaceChildren();
+  if($('summary-content'))$('summary-content').value='';
+  if($('summary-accept'))$('summary-accept').checked=false;
   let draft = null;
   try { draft = JSON.parse(sessionStorage.getItem(draftPrefix + (current?.id || 'new')) || 'null'); }
   catch { notice('Saved draft could not be read; no message was sent.'); }
@@ -58,7 +65,7 @@ function restoreDraft() {
   $('consent').checked = false; draftReady = true;
   try { sessionStorage.setItem(viewKey, current?.id || 'new'); } catch { /* Draft save reports unavailable storage. */ }
 }
-function changedDraft() { $('consent').checked = false; branchReview=null; $('branch-preview').hidden=true; saveDraft(); busy(false); }
+function changedDraft() { contextReview=null; $('consent').checked = false; branchReview=null; $('branch-preview').hidden=true; saveDraft(); busy(false); }
 async function searchMessages() {
   const sequence = ++searchSequence, query = $('search').value.trim();
   $('search-results').replaceChildren(); renderList();
@@ -205,17 +212,144 @@ async function dispatchPending() {
     else uncertainSubmission(e);
   }
 }
+function requestBody() {
+  const body={prompt:$('prompt').value,intent:report?'report':'chat',source_ids:[...selected],revision_id:revision,request_id:crypto.randomUUID(),consent:true};
+  if(branchFrom)body.branch_from=branchFrom;
+  return body;
+}
+function requestKey(cid, body) {
+  return JSON.stringify([cid,body.prompt,body.intent,body.source_ids,body.revision_id,body.branch_from||null,$('model-choice').value,displayedModelRevision]);
+}
+async function previewRequest() {
+  if(editingBlocked()||current?.archived)return;
+  mutation=true;busy(true);contextReview=null;$('consent').checked=false;
+  try {
+    const cid=await ensureConversation(), body=requestBody();
+    const key=requestKey(cid,body), preview=await api('/api/conversations/'+cid+'/preview',body);
+    if(key!==requestKey(current?.id,requestBody()))throw new Error('Draft changed. Preview again.');
+    if(preview.model_revision!==displayedModelRevision){await refreshModels();throw new Error('Model changed. Preview again.');}
+    contextReview={cid,body,confirmation:preview.confirmation,key};
+    $('context-payload').textContent=JSON.stringify(preview.prepared_payload || {messages:[...preview.history,{role:'user',content:preview.message}]},null,2);
+    $('context-manifest').textContent=JSON.stringify(preview.context_manifest || {note:'Legacy workspace: back up and upgrade for project context.'},null,2);
+    $('context-preview').showModal();notice('Request previewed. Nothing has been sent.');
+  }catch(e){notice(e.message);}finally{mutation=false;busy(false);}
+}
+function foundationStatus(text) { if($('foundation-status'))$('foundation-status').textContent=text; }
+function renderMemory() {
+  const list=$('memory-records');list.replaceChildren();
+  for(const record of memoryState.records){
+    const card=node('div',undefined,'memory-record');card.dataset.memoryId=record.memory_id;
+    card.append(node('strong',record.admission_status+' · revision '+record.revision),node('p',record.content));
+    for(const action of record.admission_status==='candidate'?['accept','revise','forget']:record.admission_status==='accepted'?['revise','retire','forget']:['forget']){
+      const b=node('button',action[0].toUpperCase()+action.slice(1));
+      b.onclick=()=>mutateMemory(action,record);card.append(b);
+    }
+    list.append(card);
+  }
+  if(!memoryState.records.length)list.append(node('p','No project guidance saved.','muted'));
+}
+async function refreshProject() {
+  projectState=null;memoryState=null;
+  foundationStatus('Reading project…');
+  try {
+    const project=await api('/api/project'), memory=await api('/api/memory');
+    if(project.project_id!==memory.project_id)throw new Error('Project identity changed. Refresh before saving.');
+    projectState=project;memoryState=memory;
+    $('project-identity').textContent=project.project_id+' · instructions r'+project.instruction_revision+' · memory r'+project.memory_revision;
+    $('project-instructions').value=project.instructions;$('memory-enabled').checked=project.memory_enabled;
+    renderMemory();foundationStatus('Project loaded. Unsent context can be previewed.');
+  }catch(e){$('memory-records').replaceChildren();foundationStatus(e.message+' Back up & upgrade an older workspace before using project controls.');throw e;}
+}
+async function foundationAction(action) {
+  if(editingBlocked())return;
+  foundationStatus('Working…');mutation=true;busy(true);
+  try{await action();changedDraft();}catch(e){foundationStatus(e.message);}
+  finally{changedDraft();mutation=false;busy(false);}
+}
+async function saveProject(field) {
+  await foundationAction(async()=>{
+    if(!projectState)throw new Error('Refresh the project before saving.');
+    const body=field==='instructions'?{project_id:projectState.project_id,instruction_revision:projectState.instruction_revision,instructions:$('project-instructions').value}:{project_id:projectState.project_id,memory_revision:projectState.memory_revision,memory_enabled:$('memory-enabled').checked};
+    await api('/api/project/'+field,body);
+    try{await refreshProject();}catch(e){throw new Error('Project '+field+' saved, but refresh failed: '+e.message);}
+    foundationStatus('Project '+field+' saved. Preview again before sending.');
+  });
+}
+async function mutateMemory(action, record=null) {
+  // Native confirmations describe actual writes; model text never triggers them.
+  if(['accept','revise'].includes(action)&&!window.confirm('This is personal/project guidance, not a verified external fact. '+action+' this record?'))return;
+  if(action==='forget'&&!window.confirm('Forget this live memory record? Old traces, exports and backups are historical copies and are NOT erased.'))return;
+  let content=$('memory-content').value;
+  if(action==='revise'){content=window.prompt('Propose revised guidance; it requires new acceptance.',record.content);if(content===null)return;}
+  await foundationAction(async()=>{
+    if(!memoryState)throw new Error('Refresh project memory before saving.');
+    if(action==='propose'&&!$('memory-guidance').checked)throw new Error('Explicitly declare personal/project guidance before proposing.');
+    const body={project_id:memoryState.project_id,store_sha256:memoryState.store_sha256};
+    if(record){body.memory_id=record.memory_id;body.revision=record.revision;}
+    if(['propose','accept','revise'].includes(action))body.personal_guidance=true;
+    if(['propose','revise'].includes(action))body.content=content;
+    if(action==='propose')body.category='project_decision';
+    if(action==='forget')body.acknowledge_history=true;
+    await api('/api/memory/'+action,body);
+    try{await refreshProject();}catch(e){throw new Error('Memory '+action+' saved, but refresh failed: '+e.message);}
+    $('memory-content').value='';$('memory-guidance').checked=false;foundationStatus('Memory '+action+' saved. Preview again before sending.');
+  });
+}
+async function loadSummary() {
+  await foundationAction(async()=>{
+    if(!current)throw new Error('Open a conversation first.');
+    summaryState=await api('/api/conversations/'+current.id+'/summary');summaryState.cid=current.id;
+    const list=$('summary-originals');list.replaceChildren();
+    for(const message of summaryState.original_messages){
+      const label=node('label'),input=node('input');input.type='checkbox';input.dataset.messageId=message.id;
+      label.append(input,node('span',message.role+': '+message.content));list.append(label);
+    }
+    $('summary-content').value=summaryState.summary?.content || '';$('summary-accept').checked=false;
+    foundationStatus('Original messages loaded. Select evidence and explicitly accept a summary.');
+  });
+}
+async function saveSummary() {
+  await foundationAction(async()=>{
+    if(!summaryState||summaryState.cid!==current?.id)throw new Error('Load this conversation’s originals first.');
+    if(!$('summary-accept').checked)throw new Error('Explicitly accept the summary before saving.');
+    const ids=new Set(Array.from($('summary-originals').querySelectorAll('input')).filter(i=>i.checked).map(i=>Number(i.dataset.messageId)));
+    const refs=[];
+    for(const message of summaryState.original_messages.filter(m=>ids.has(m.id))){
+      const bytes=new TextEncoder().encode(message.content),digest=await crypto.subtle.digest('SHA-256',bytes);
+      refs.push({message_id:message.id,run_id:message.run_id,start:0,end:Array.from(message.content).length,sha256:Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('')});
+    }
+    if(!refs.length)throw new Error('Select at least one original message.');
+    const body={project_id:summaryState.project_id,revision:summaryState.summary?.revision || 0,content:$('summary-content').value,refs,accept:true};
+    const saved=await api('/api/conversations/'+summaryState.cid+'/summary',body);saved.cid=summaryState.cid;summaryState=saved;
+    $('summary-accept').checked=false;foundationStatus('Summary saved. Originals remain available; preview again before sending.');
+  });
+}
+if($('project-settings')){
+  $('refresh-project').onclick=()=>foundationAction(refreshProject);
+  $('save-instructions').onclick=()=>saveProject('instructions');
+  $('save-memory-preference').onclick=()=>saveProject('memory');
+  $('propose-memory').onclick=()=>mutateMemory('propose');
+  $('load-summary').onclick=loadSummary;$('save-summary').onclick=saveSummary;
+  $('preview-request').onclick=previewRequest;$('close-context-preview').onclick=()=>$('context-preview').close();
+}
 $('composer').onsubmit=async event=>{event.preventDefault();try{
   if(mutation||opening||legacyPending||activeRun)return;
   notice();
   if(lastSubmission){await dispatchPending();return;}
   if(!$('consent').checked && !(branchFrom && !branchReview))throw new Error('Confirm sending this conversation and selected material to the provider.');
   if(current?.archived)throw new Error('Restore this conversation before sending.');
+  if(contextReview){
+    if(!$('consent').checked)throw new Error('Review the preview and confirm sending before dispatch.');
+    if(contextReview.key!==requestKey(current?.id,requestBody())){changedDraft();throw new Error('Draft changed. Preview and confirm again.');}
+    lastSubmission={cid:contextReview.cid,body:contextReview.body,confirmation:contextReview.confirmation};
+    sessionStorage.setItem(receiptKey,JSON.stringify(lastSubmission));contextReview=null;
+    await dispatchPending();return;
+  }
   // Capture every content/consent dependency before creating a conversation.
   const body={prompt:$('prompt').value,intent:report?'report':'chat',source_ids:[...selected],revision_id:revision,request_id:crypto.randomUUID(),consent:true};
   if(branchFrom)body.branch_from=branchFrom;
   const displayedModel=$('model').textContent, displayedProvider=$('provider').textContent, displayedProfile=$('model-choice').value, modelRevision=displayedModelRevision;
-  const reviewingBranch=Boolean(branchFrom && !branchReview);
+  const reviewingBranch=Boolean(branchFrom && !branchReview && !contextReview);
   mutation=true;busy(true);
   const cid=await ensureConversation();
   if((!$('consent').checked && !reviewingBranch) || body.prompt!==$('prompt').value || body.intent!==(report?'report':'chat') || body.revision_id!==revision || (body.branch_from||null)!==branchFrom || JSON.stringify(body.source_ids)!==JSON.stringify([...selected]))
@@ -241,7 +375,7 @@ $('archive').onclick=async()=>{if(!current||editingBlocked())return;mutation=tru
   $('show-archived').checked=current.archived;await refreshList();await searchMessages();$('consent').checked=false;
 }catch(e){notice(e.message);}finally{mutation=false;busy(false);}};
 $('show-archived').onchange=async()=>{try{await refreshList();await searchMessages();}catch(e){notice(e.message);}};
-$('upgrade').onclick=async()=>{if(editingBlocked())return;mutation=true;busy(true);try{const result=await api('/api/upgrade',{});$('upgrade').hidden=true;notice(result.upgraded?'Workspace upgraded. A verified backup was saved in the private workspace.':'Workspace is already current.');}catch(e){notice(e.message);}finally{mutation=false;busy(false);}};
+$('upgrade').onclick=async()=>{if(editingBlocked())return;mutation=true;busy(true);try{const result=await api('/api/upgrade',{});$('upgrade').hidden=true;if($('project-settings'))await refreshProject();notice(result.upgraded?'Workspace upgraded. A verified backup was saved in the private workspace.':'Workspace is already current.');}catch(e){notice(e.message);}finally{mutation=false;busy(false);}};
 $('prompt').oninput=changedDraft;
 $('rename').onclick=async()=>{if(!current||editingBlocked()||current.archived)return;const title=window.prompt('Conversation title',current.title);if(title===null)return;mutation=true;busy(true);try{renderConversation(await api('/api/conversations/'+current.id+'/rename',{title}));await refreshList();}catch(e){notice(e.message);}finally{mutation=false;busy(false);}};
 $('search').oninput=()=>{++searchSequence;clearTimeout(searchTimer);searchTimer=setTimeout(searchMessages,160);};$('report-toggle').onclick=()=>{if(editingBlocked()||current?.archived)return;setReport(!report);changedDraft();};
@@ -299,7 +433,8 @@ async function boot() {
   $('model').textContent=data.model || 'No model selected';
   $('provider').textContent=data.provider ? new URL(data.provider).origin : 'the configured provider';
   await refreshModels();
-  $('upgrade').hidden=![2,3].includes(data.database_version); $('connect').close(); await refreshList();
+  $('upgrade').hidden=![2,3,4].includes(data.database_version);
+  if($('project-settings'))await refreshProject().catch(()=>{}); $('connect').close(); await refreshList();
   let saved=null, lastView=null;
   try { saved=JSON.parse(sessionStorage.getItem(receiptKey)||'null');lastView=sessionStorage.getItem(viewKey); }
   catch { notice('Saved browser state could not be read. No message was sent.'); }

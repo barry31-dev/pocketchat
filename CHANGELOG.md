@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — explicit office project context
+
+- Share revisioned project instructions and default-off accepted guidance across
+  browser and office CLI, without enabling legacy global memory or model tools.
+- Preview exact provider JSON and source provenance; send the frozen confirmation
+  or refuse changed inputs instead of silently selecting a different request.
+- Keep continuity summaries linked to original messages and preserve historical
+  versions through verified-backup schema upgrades and explicit restore.
+- Separate memory proposal, acceptance, replacement, retirement and forgetting;
+  historical traces/exports/backups remain distinct from live memory.
+- Require fresh consent after branch previews and distinguish saved writes from
+  failed readbacks. Synthetic local checks are not model or release evidence.
+
 ## Unreleased — non-destructive office chat branches
 
 - Edit or regenerate completed chat turns from their original context prefix,

@@ -642,3 +642,40 @@ class MemoryMigrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(SECURE_DESCRIPTOR_READS, 'requires secure descriptor I/O')
+class AtomicReplacementTests(unittest.TestCase):
+    def test_accept_replacement_is_one_write_and_stale_revision_keeps_original(self):
+        from pocketchat import memory_migration as memory
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            path = root / 'office-memory.v2.jsonl'
+            first = memory.propose_v2_record(root, path, 'Prefer short replies', workspace_id='project-one', proposed_by='user')
+            records = memory.read_v2_store(root, path)
+            digest = hashlib.sha256(memory._store_payload(records)).hexdigest()
+            accepted = memory.accept_v2_replacement(root, path, first['memory_id'], accepted_by='user',
+                                                    workspace_id='project-one', expected_revision=1, expected_store_sha256=digest)
+            second = memory.propose_v2_record(root, path, 'Prefer short Chinese replies', workspace_id='project-one', proposed_by='user')
+            def relate(records, write):
+                records[-1]['supersedes'] = [first['memory_id']]
+                write(records)
+            memory._mutate_v2_store(root, path, relate)
+            records = memory.read_v2_store(root, path)
+            digest = hashlib.sha256(memory._store_payload(records)).hexdigest()
+            before = path.read_bytes()
+            with self.assertRaises(memory.MemoryMigrationError):
+                memory.accept_v2_replacement(root, path, second['memory_id'], accepted_by='user', workspace_id='project-one',
+                                             expected_revision=2, expected_store_sha256=digest)
+            self.assertEqual(path.read_bytes(), before)
+            with patch.object(memory, '_write_store_from_parent', wraps=memory._write_store_from_parent) as write:
+                replacement = memory.accept_v2_replacement(root, path, second['memory_id'], accepted_by='user', workspace_id='project-one',
+                                                           expected_revision=1, expected_store_sha256=digest)
+                self.assertEqual(write.call_count, 1)
+            final = memory.read_v2_store(root, path)
+            old = next(r for r in final if r['memory_id'] == first['memory_id'])
+            self.assertEqual(old['admission_status'], 'retired')
+            self.assertEqual(old['superseded_by'], second['memory_id'])
+            self.assertEqual(old['revision'], accepted['revision'] + 1)
+            self.assertEqual(replacement['admission_status'], 'accepted')

@@ -392,7 +392,7 @@ class OfficeBranchTests(unittest.TestCase):
         r = self.app.submit(self.cid, self.branch_body(first))
         self.app.wait(r['id'], 3)
         document = json.loads(snapshot(self.app.store))
-        self.assertEqual(validate(encoded(document).encode())['database_version'], 4)
+        self.assertEqual(validate(encoded(document).encode())['database_version'], 5)
         row = document['data']['tables']['runs'][-1]
         payload = json.loads(row['payload'])
         payload['history_run_ids'] = [r['id']]
@@ -407,13 +407,15 @@ class OfficeBranchTests(unittest.TestCase):
         first, _ = self.seed()
         # Fixture represents a v3 database; remove newly introduced payload keys.
         for row in self.app.store.db.execute('SELECT id,payload FROM runs').fetchall():
-            p = json.loads(row['payload']); p.pop('history_run_ids', None)
+            p = json.loads(row['payload']); p.pop('history_run_ids', None); p.pop('prepared_context', None)
             self.app.store.db.execute('UPDATE runs SET payload=? WHERE id=?', (json.dumps(p), row['id']))
+        self.app.store.db.execute('DROP TABLE office_project')
+        self.app.store.db.execute('DROP TABLE office_summaries')
         self.app.store.db.execute('PRAGMA user_version=3'); self.app.store.db.commit()
         with self.assertRaisesRegex(OfficeError, 'upgrade|Upgrade'):
             self.app.preview(self.cid, self.branch_body(first))
         result = upgrade(self.app.store)
-        self.assertEqual(result['database_version'], 4)
+        self.assertEqual(result['database_version'], 5)
         self.assertEqual(validate((self.root / result['backup']).read_bytes())['database_version'], 3)
         self.assertEqual(self.app.preview(self.cid, self.branch_body(first))['history'], [])
 
@@ -435,3 +437,281 @@ class OfficeBranchTests(unittest.TestCase):
         self.assertEqual(report['request']['source_ids'], [])
         self.assertEqual(report['request']['history_run_ids'], [changed['id']])
         self.assertEqual(len(self.app.store.get(self.cid)['messages']), 8)
+
+
+class OfficeFoundationSendTests(OfficeTests):
+    def test_memory_write_without_no_follow_directories_refuses_without_side_effects(self):
+        from unittest import mock
+        from pocketchat.office_context import office_memory_action, office_memory_view
+        view = office_memory_view(self.app.store)
+        before = self.app.store.db.execute('SELECT id, request_id, status FROM runs ORDER BY id').fetchall()
+        project_before = self.app.store.db.execute('SELECT * FROM office_project').fetchall()
+        with mock.patch('pocketchat.memory_migration.os.supports_dir_fd', set()):
+            with self.assertRaisesRegex(OfficeError, 'could not be saved safely'):
+                office_memory_action(self.app.store, 'propose', view['project_id'], view['store_sha256'],
+                    content='Prefer concise replies', category='user_preference', personal_guidance=True)
+        self.assertFalse((self.root / 'office-memory.v2.jsonl').exists())
+        self.assertEqual(office_memory_view(self.app.store), view)
+        self.assertEqual(self.app.store.db.execute('SELECT * FROM office_project').fetchall(), project_before)
+        self.assertEqual(self.app.store.db.execute('SELECT id, request_id, status FROM runs ORDER BY id').fetchall(), before)
+        self.assertEqual(self.adapter.calls, [])
+
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and hasattr(os, 'O_DIRECTORY')
+                         and os.open in os.supports_dir_fd,
+                         'requires no-follow directory descriptors for memory writes')
+    def test_project_memory_plan_matches_sent_snapshot_and_stale_confirmation_refuses(self):
+        from pocketchat.office_context import office_memory_action, office_memory_view, read_project_metadata, update_project_metadata
+        project = read_project_metadata(self.app.store)
+        update_project_metadata(self.app.store, project['project_id'], instruction_revision=1, instructions='Use concise Chinese explanations.')
+        view = office_memory_view(self.app.store)
+        proposal = office_memory_action(self.app.store, 'propose', project['project_id'], view['store_sha256'],
+            content='Prefer concise replies about releases', category='user_preference', personal_guidance=True)
+        acceptance = office_memory_action(self.app.store, 'accept', project['project_id'], proposal['store_sha256'],
+            memory_id=proposal['record']['memory_id'], revision=1, personal_guidance=True)
+        update_project_metadata(self.app.store, project['project_id'], memory_revision=1, memory_enabled=True)
+        body = dict(prompt='Explain releases concisely', intent='chat', source_ids=[], revision_id=None, request_id='foundation-send', consent=True)
+        preview = self.app.preview(self.cid, body)
+        self.assertEqual(preview['project_id'], project['project_id'])
+        self.assertIn('Use concise Chinese explanations.', str(preview['prepared_payload']))
+        self.assertIn('Prefer concise replies about releases', str(preview['prepared_payload']))
+        old_confirmation = preview['confirmation']
+        retired = office_memory_action(self.app.store, 'retire', project['project_id'], acceptance['store_sha256'],
+            memory_id=acceptance['record']['memory_id'], revision=acceptance['record']['revision'])
+        with self.assertRaises(OfficeError):
+            self.app.submit_confirmed(self.cid, body, old_confirmation)
+        self.assertEqual(self.adapter.calls, [])
+        fresh = self.app.preview(self.cid, body)
+        self.assertNotIn('Prefer concise replies about releases', str(fresh['prepared_payload']))
+        run = self.app.submit_confirmed(self.cid, body, fresh['confirmation'])
+        self.app.wait(run['id'], 3)
+        self.assertEqual(self.app.status(run['id'])['status'], 'completed')
+        self.assertEqual(self.adapter.calls[0], fresh['prepared_payload']['messages'])
+        snapshot = next((self.root / 'traces' / 'requests').glob('*.json'))
+        self.assertEqual(json.loads(snapshot.read_text())['request'], fresh['prepared_payload'])
+        # Already admitted original receipt is recoverable after preferences change.
+        update_project_metadata(self.app.store, project['project_id'], instruction_revision=2, instructions='Changed future guidance')
+        recovered = self.app.submit_confirmed(self.cid, body, fresh['confirmation'])
+        self.assertEqual(recovered['id'], run['id'])
+        self.assertEqual(len(self.adapter.calls), 1)
+        self.assertEqual(retired['record']['admission_status'], 'retired')
+
+    def test_preview_full_history_budget_and_disabled_recall_do_not_call_provider(self):
+        from pocketchat.office_context import read_project_metadata, update_project_metadata
+        project = read_project_metadata(self.app.store)
+        update_project_metadata(self.app.store, project['project_id'], instruction_revision=1, instructions='x' * 12000)
+        self.app.config['max_context_chars'] = 500
+        body = dict(prompt='Hi', intent='chat', source_ids=[], revision_id=None, request_id='oversize-project', consent=True)
+        with self.assertRaises(OfficeError):
+            self.app.preview(self.cid, body)
+        self.assertEqual(self.adapter.calls, [])
+
+    def test_foundation_preview_rejects_each_changed_dependency_without_admission(self):
+        import hashlib
+        from pocketchat.office_context import read_project_metadata, update_project_metadata, save_office_summary
+        original = self.app.store.begin(self.cid, 'original-context', dict(prompt='Original decision', intent='chat', source_ids=[], revision_id=None))
+        self.app.store.finish(original['id'], 'completed', 'Keep the draft local.', None)
+        body = dict(prompt='Continue the local draft', intent='chat', source_ids=[], revision_id=None,
+                    request_id='dependency-preview', consent=True)
+        def refused(preview, incoming=body):
+            with self.assertRaises(OfficeError):
+                self.app.submit_confirmed(self.cid, incoming, preview['confirmation'])
+            self.assertEqual(self.adapter.calls, [])
+            self.assertIsNone(self.app.store.db.execute('SELECT id FROM runs WHERE request_id=?',
+                                                       (body['request_id'],)).fetchone())
+        preview = self.app.preview(self.cid, body)
+        project = read_project_metadata(self.app.store)
+        update_project_metadata(self.app.store, project['project_id'], instruction_revision=1, instructions='New project instruction')
+        refused(preview)
+        preview = self.app.preview(self.cid, body)
+        update_project_metadata(self.app.store, project['project_id'], memory_revision=1, memory_enabled=True)
+        refused(preview)
+        preview = self.app.preview(self.cid, body)
+        self.app.config['model'] += '-changed'
+        refused(preview)
+        preview = self.app.preview(self.cid, body)
+        source = self.app.store.add_source(self.cid, 'notes.txt', 'Pinned local source')
+        refused(preview, dict(body, source_ids=[source['id']]))
+        preview = self.app.preview(self.cid, body)
+        message = self.app.store.db.execute('SELECT * FROM messages WHERE cid=? ORDER BY id', (self.cid,)).fetchone()
+        refs = [dict(message_id=message['id'], run_id=message['run_id'], start=0, end=len(message['content']),
+                     sha256=hashlib.sha256(message['content'].encode()).hexdigest())]
+        save_office_summary(self.app.store, self.cid, project['project_id'], revision=0,
+                            content='Original decision remains; finish the local draft.', refs=refs, accept=True)
+        refused(preview)
+        preview = self.app.preview(self.cid, body)
+        newer = self.app.store.begin(self.cid, 'new-context', dict(prompt='Later decision', intent='chat', source_ids=[], revision_id=None))
+        self.app.store.finish(newer['id'], 'completed', 'Changed history.', None)
+        refused(preview)
+
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and hasattr(os, 'O_DIRECTORY')
+                         and os.open in os.supports_dir_fd,
+                         'requires no-follow directory descriptors for memory writes')
+    def test_expiring_sensitive_and_corrupt_office_memory_never_silently_enters_a_request(self):
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import patch
+        from pocketchat.office_context import office_memory_action, office_memory_view, read_project_metadata, update_project_metadata
+        from pocketchat.memory_migration import _store_payload
+        project = read_project_metadata(self.app.store)
+        update_project_metadata(self.app.store, project['project_id'], memory_revision=1, memory_enabled=True)
+        proposed = office_memory_action(self.app.store, 'propose', project['project_id'],
+            office_memory_view(self.app.store)['store_sha256'], content='Prefer concise office guidance',
+            category='project_decision', personal_guidance=True)
+        accepted = office_memory_action(self.app.store, 'accept', project['project_id'], proposed['store_sha256'],
+            memory_id=proposed['record']['memory_id'], revision=1, personal_guidance=True)
+        path = self.root / 'office-memory.v2.jsonl'
+        record = dict(accepted['record'])
+        clock = datetime.now(timezone.utc)
+        record['expires_at'] = (clock + timedelta(minutes=1)).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        path.write_bytes(_store_payload([record]))
+        body = dict(prompt='Explain office guidance', intent='chat', source_ids=[], revision_id=None,
+                    request_id='expired-memory-preview', consent=True)
+        preview = self.app.preview(self.cid, body)
+        self.assertIn(record['content'], str(preview['prepared_payload']))
+        class AfterExpiry(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls.fromtimestamp((clock + timedelta(minutes=2)).timestamp(), tz)
+        with patch('datetime.datetime', AfterExpiry):
+            with self.assertRaises(OfficeError):
+                self.app.submit_confirmed(self.cid, body, preview['confirmation'])
+            expired = self.app.preview(self.cid, body)
+            self.assertNotIn(record['content'], str(expired['prepared_payload']))
+            self.assertIn('expired', str(expired['context_manifest']['memory_excluded']))
+        record['sensitive'] = True
+        path.write_bytes(_store_payload([record]))
+        sensitive = self.app.preview(self.cid, body)
+        self.assertNotIn(record['content'], str(sensitive['prepared_payload']))
+        path.write_bytes(b'not-valid-memory\n')
+        with self.assertRaises(OfficeError):
+            self.app.preview(self.cid, body)
+        self.assertEqual(self.adapter.calls, [])
+        self.assertIsNone(self.app.store.db.execute('SELECT id FROM runs WHERE request_id=?', (body['request_id'],)).fetchone())
+
+    def test_confirmed_admission_does_not_project_a_third_time(self):
+        from unittest.mock import patch
+        from pocketchat import office_context
+        body = dict(prompt='Hi', intent='chat', source_ids=[], revision_id=None, request_id='one-admission-plan', consent=True)
+        original = office_context.prepare_office_turn
+        plans = []
+        def prepare(*args, **kwargs):
+            plan = original(*args, **kwargs)
+            plans.append(plan)
+            if len(plans) > 2:
+                raise AssertionError('a second admission projection was attempted')
+            return plan
+        with patch.object(office_context, 'prepare_office_turn', side_effect=prepare):
+            preview = self.app.preview(self.cid, body)
+            run = self.app.submit_confirmed(self.cid, body, preview['confirmation'])
+            self.app.wait(run['id'], 3)
+        self.assertEqual(self.app.status(run['id'])['status'], 'completed')
+        self.assertEqual(len(plans), 2)
+        self.assertEqual(self.adapter.calls[0], plans[1].messages)
+
+    def test_recording_loopback_stream_wire_equals_preview_snapshot_and_saved_plan(self):
+        from http.server import BaseHTTPRequestHandler
+        from tests._helpers import StubHTTPServer
+        calls = []
+        class Provider(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+            def do_POST(self):
+                calls.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+                event = dict(choices=[dict(delta=dict(content='Recorded reply'), finish_reason='stop')])
+                raw = ('data: ' + json.dumps(event) + '\n\ndata: [DONE]\n\n').encode()
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/event-stream')
+                self.send_header('Content-Length', str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+        server = StubHTTPServer(Provider)
+        self.addCleanup(server.close)
+        self.app.config.pop('provider_adapter', None)
+        self.app.config['base_url'] = 'http://127.0.0.1:%d/v1' % server.port
+        body = dict(prompt='Exact streaming request', intent='chat', source_ids=[], revision_id=None,
+                    request_id='recorded-wire', consent=True)
+        preview = self.app.preview(self.cid, body)
+        self.assertEqual(calls, [])
+        run = self.app.submit_confirmed(self.cid, body, preview['confirmation'])
+        self.app.wait(run['id'], 3)
+        status = self.app.status(run['id'])
+        self.assertEqual(status['status'], 'completed', status)
+        self.assertEqual(calls, [preview['prepared_payload']])
+        snapshot = next((self.root / 'traces' / 'requests').glob('*.json'))
+        self.assertEqual(json.loads(snapshot.read_text())['request'], calls[0])
+        self.assertEqual(status['request']['prepared_context']['payload'], calls[0])
+
+    def test_tight_budget_keeps_recent_complete_history_and_discloses_omitted_runs(self):
+        first = self.send('Old decision ' + 'a' * 350, key='old-history')
+        second = self.send('Recent correction ' + 'b' * 350, key='recent-history')
+        self.app.config['max_context_chars'] = 1600
+        body = dict(prompt='Continue', intent='chat', source_ids=[], revision_id=None, request_id='window-history', consent=True)
+        preview = self.app.preview(self.cid, body)
+        sent = str(preview['prepared_payload']['messages'])
+        self.assertIn('Recent correction', sent)
+        self.assertNotIn('Old decision', sent)
+        manifest = preview['context_manifest']
+        self.assertEqual(manifest['selected_history_run_ids'], [second['id']])
+        self.assertEqual(manifest['omitted_history_run_ids'], [first['id']])
+
+    def test_rehashed_backup_cannot_change_prepared_request_model_or_history(self):
+        import hashlib
+        from pocketchat.office_backup import snapshot, validate
+        run = self.send('Bound original prompt', key='backup-prepared')
+        raw = snapshot(self.app.store)
+        for kind in ('model', 'history', 'prompt'):
+            document = json.loads(raw)
+            row = next(r for r in document['data']['tables']['runs'] if r['id'] == run['id'])
+            payload = json.loads(row['payload'])
+            plan = payload['prepared_context']
+            if kind == 'model':
+                plan['payload']['model'] = 'foreign-model'
+            elif kind == 'history':
+                plan['manifest']['history_run_ids'] = ['missing-history']
+            else:
+                plan['messages'][-1]['content'] = 'Unrelated prompt'
+                plan['payload']['messages'] = plan['messages']
+            row['payload'] = json.dumps(payload)
+            document['sha256'] = hashlib.sha256(json.dumps(document['data'], ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+            with self.subTest(kind=kind), self.assertRaises(OfficeError):
+                validate(json.dumps(document).encode())
+
+    def test_summary_bound_to_current_branch_refuses_a_replacement_that_excludes_original(self):
+        import hashlib
+        from pocketchat.office_context import office_summary_view, save_office_summary
+        first = self.send('Original decision', key='summary-original')
+        view = office_summary_view(self.app.store, self.cid)
+        message = view['original_messages'][0]
+        refs = [dict(message_id=message['id'], run_id=message['run_id'], start=0, end=len(message['content']),
+                     sha256=hashlib.sha256(message['content'].encode()).hexdigest())]
+        save_office_summary(self.app.store, self.cid, view['project_id'], revision=0, content='Original decision summary', refs=refs, accept=True)
+        before_calls = len(self.adapter.calls)
+        with self.assertRaises(OfficeError):
+            self.app.preview(self.cid, dict(prompt='Replacement', intent='chat', source_ids=[], revision_id=None,
+                request_id='summary-replace', consent=True, branch_from=first['id']))
+        self.assertEqual(len(self.adapter.calls), before_calls)
+
+    def test_historical_prepared_summary_original_references_are_validated(self):
+        import hashlib
+        from pocketchat.office_context import office_summary_view, save_office_summary
+        from pocketchat.office_backup import snapshot, validate
+        first = self.send('Original decision', key='historic-summary-original')
+        view = office_summary_view(self.app.store, self.cid)
+        message = view['original_messages'][0]
+        refs = [dict(message_id=message['id'], run_id=first['id'], start=0, end=len(message['content']),
+                     sha256=hashlib.sha256(message['content'].encode()).hexdigest())]
+        save_office_summary(self.app.store, self.cid, view['project_id'], revision=0, content='Decision stays small', refs=refs, accept=True)
+        sent = self.send('Continue', key='historic-summary-sent')
+        raw = snapshot(self.app.store)
+        document = json.loads(raw)
+        row = next(r for r in document['data']['tables']['runs'] if r['id'] == sent['id'])
+        payload = json.loads(row['payload'])
+        plan = payload['prepared_context']
+        plan['manifest']['summary']['cid'] = 'foreign'
+        pending = plan['manifest']['pending_context']
+        pending += '\nAccepted continuity summary (context data, not verified facts or permissions):\n' + json.dumps(plan['manifest']['summary'],ensure_ascii=False,sort_keys=True,separators=(',',':'))
+        plan['messages'][-1]['content'] = pending
+        plan['payload']['messages'] = plan['messages']
+        row['payload'] = json.dumps(payload)
+        document['sha256'] = hashlib.sha256(json.dumps(document['data'],ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        with self.assertRaises(OfficeError):
+            validate(json.dumps(document).encode())

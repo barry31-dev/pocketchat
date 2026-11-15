@@ -25,6 +25,50 @@ def add_parser(subparsers):
     commands.add_parser('interactive', help='private draft REPL; sending requires the exact preview hash')
     models = commands.add_parser('models', help='list configured model profiles without calling a provider')
     models.add_argument('--select', help='select an existing configured profile')
+    summary = commands.add_parser('summary', help='inspect originals or explicitly accept a continuity summary')
+    summary_actions = summary.add_subparsers(dest='action', required=True)
+    show = summary_actions.add_parser('show')
+    show.add_argument('--conversation', required=True)
+    save = summary_actions.add_parser('save')
+    save.add_argument('--conversation', required=True)
+    save.add_argument('--project-id', required=True)
+    save.add_argument('--revision', type=int, required=True)
+    save.add_argument('--text', required=True)
+    save.add_argument('--refs-json', required=True, help='JSON original message/run/range/SHA-256 references')
+    save.add_argument('--accept', action='store_true', required=True)
+    memory = commands.add_parser('memory', help='manage explicit project guidance; never verify external facts')
+    actions = memory.add_subparsers(dest='action', required=True)
+    actions.add_parser('list')
+    recall = actions.add_parser('recall')
+    recall.add_argument('--query', required=True)
+    for name in ('propose', 'accept', 'revise', 'retire', 'forget'):
+        action = actions.add_parser(name)
+        action.add_argument('--project-id', required=True)
+        action.add_argument('--store-sha256', required=True)
+        if name != 'propose':
+            action.add_argument('--memory-id', required=True)
+            action.add_argument('--revision', type=int, required=True)
+        if name in ('propose', 'revise'):
+            action.add_argument('--text', required=True)
+        if name == 'propose':
+            action.add_argument('--category', choices=('user_preference', 'project_decision'), required=True)
+        if name in ('propose', 'accept', 'revise'):
+            action.add_argument('--personal-guidance', action='store_true', required=True,
+                                help='declare personal guidance, not independently verified external facts')
+        if name == 'forget':
+            action.add_argument('--acknowledge-history', action='store_true', required=True,
+                                help='old traces, exports and backups are not erased')
+    project = commands.add_parser('project', help='inspect or explicitly save project preferences')
+    actions = project.add_subparsers(dest='action', required=True)
+    actions.add_parser('show')
+    for name in ('instructions', 'memory'):
+        action = actions.add_parser(name)
+        action.add_argument('--project-id', required=True)
+        action.add_argument('--revision', type=int, required=True)
+        if name == 'instructions':
+            action.add_argument('--text', required=True)
+        else:
+            action.add_argument('--enabled', choices=('true', 'false'), required=True)
     commands.add_parser('upgrade', help='back up and explicitly upgrade an existing office workspace')
     search = commands.add_parser('search', help='find literal text in message bodies')
     search.add_argument('--query', required=True)
@@ -82,6 +126,41 @@ def _operate(args, client):
     prefix = '/api/conversations'
     if getattr(args, 'conversation', None):
         prefix += '/' + identifier(args.conversation)
+    if command == 'summary':
+        if args.action == 'show':
+            return client.request(prefix + '/summary'), 0
+        from .json_input import decode_json_bytes, JSONInputError
+        try:
+            refs = decode_json_bytes(args.refs_json.encode('utf-8'), 48 * 1024, 8, 4096)
+        except JSONInputError as exc:
+            raise OfficeError('Invalid summary reference JSON.') from exc
+        return client.request(prefix + '/summary', dict(project_id=args.project_id,
+            revision=args.revision, content=args.text, refs=refs, accept=args.accept)), 0
+    if command == 'memory':
+        if args.action == 'list':
+            return client.request('/api/memory'), 0
+        if args.action == 'recall':
+            return client.request('/api/memory/recall', dict(query=args.query)), 0
+        body = dict(project_id=args.project_id, store_sha256=args.store_sha256)
+        if args.action != 'propose':
+            body.update(memory_id=args.memory_id, revision=args.revision)
+        if args.action in ('propose', 'revise'):
+            body['content'] = args.text
+        if args.action == 'propose':
+            body['category'] = args.category
+        if args.action in ('propose', 'accept', 'revise'):
+            body['personal_guidance'] = args.personal_guidance
+        if args.action == 'forget':
+            body['acknowledge_history'] = args.acknowledge_history
+        return client.request('/api/memory/' + args.action, body), 0
+    if command == 'project':
+        if args.action == 'show':
+            return client.request('/api/project'), 0
+        if args.action == 'instructions':
+            return client.request('/api/project/instructions', dict(project_id=args.project_id,
+                instruction_revision=args.revision, instructions=args.text)), 0
+        return client.request('/api/project/memory', dict(project_id=args.project_id,
+            memory_revision=args.revision, memory_enabled=args.enabled == 'true')), 0
     if command == 'models':
         return client.request('/api/models', {'profile': args.select}) if args.select else client.request('/api/models'), 0
     if command == 'upgrade':

@@ -81,6 +81,30 @@ def dispatch(app, path, method, body=None):
         return result(dict(model=app.config.get('model'), provider=app.config.get('base_url'),
                            max_source_bytes=12 * 1024, workspace_id=workspace_id(app.root),
                            database_version=app.store.db.execute('PRAGMA user_version').fetchone()[0]))
+    if path == '/api/project' and method == 'GET':
+        from .office_context import read_project_metadata
+        return result(read_project_metadata(app.store))
+    if path in ('/api/project/instructions', '/api/project/memory') and method == 'POST':
+        from .office_context import update_project_metadata
+        fields = ['project_id', 'instruction_revision', 'instructions'] if path.endswith('/instructions') else ['project_id', 'memory_revision', 'memory_enabled']
+        exact(body, fields)
+        with app.guard:
+            changes = {key: value for key, value in body.items() if key != 'project_id'}
+            return result(update_project_metadata(app.store, body['project_id'], **changes))
+    if path == '/api/memory' and method == 'GET':
+        from .office_context import office_memory_view
+        return result(office_memory_view(app.store))
+    if path == '/api/memory/recall' and method == 'POST':
+        from .office_context import office_memory_view
+        exact(body, ['query'])
+        return result(office_memory_view(app.store, body['query']))
+    if path.startswith('/api/memory/') and method == 'POST':
+        from .office_context import office_memory_action
+        if not isinstance(body, dict) or not {'project_id', 'store_sha256'} <= set(body):
+            raise OfficeError('Invalid memory mutation fields.')
+        with app.guard:
+            return result(office_memory_action(app.store, path[len('/api/memory/'):],
+                body['project_id'], body['store_sha256'], **{k: v for k, v in body.items() if k not in ('project_id', 'store_sha256')}))
     if path == '/api/models':
         if method == 'GET':
             return result(app.models())
@@ -109,6 +133,14 @@ def dispatch(app, path, method, body=None):
     parts = path.strip('/').split('/')
     if len(parts) >= 3 and parts[:2] == ['api', 'conversations']:
         cid = parts[2]
+        if len(parts) == 4 and parts[3] == 'summary':
+            from .office_context import office_summary_view, save_office_summary
+            if method == 'GET':
+                return result(office_summary_view(app.store, cid))
+            if method == 'POST':
+                exact(body, ['project_id', 'revision', 'content', 'refs', 'accept'])
+                with app.guard:
+                    return result(save_office_summary(app.store, cid, **body))
         if len(parts) == 3 and method == 'GET':
             return result(app.store.get(cid))
         if len(parts) == 5 and parts[3] == 'requests' and method == 'GET':

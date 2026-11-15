@@ -1,0 +1,240 @@
+{
+  "paths": [
+    "CHANGELOG.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/compatibility.md",
+    "docs/formats.md",
+    "docs/formats.zh-CN.md",
+    "docs/handovers/2026-11-15-office-foundations-implementation.md",
+    "docs/office-foundations.md",
+    "docs/office-web.md",
+    "docs/office-web.zh-CN.md",
+    "docs/review-office-foundations-implementation-v1.json",
+    "docs/security.md",
+    "pocketchat/memory_migration.py",
+    "pocketchat/office.py",
+    "pocketchat/office_backup.py",
+    "pocketchat/office_cli.py",
+    "pocketchat/office_context.py",
+    "pocketchat/office_service.py",
+    "pocketchat/office_static/app.js",
+    "pocketchat/office_static/index.html",
+    "pocketchat/office_static/style.css",
+    "pocketchat/office_store.py",
+    "pocketchat/session.py",
+    "tests/office_foundations_browser.cjs",
+    "tests/test_memory_migration.py",
+    "tests/test_office.py",
+    "tests/test_office_backup.py",
+    "tests/test_office_cli.py",
+    "tests/test_office_context.py",
+    "tests/test_office_service.py",
+    "tests/test_session.py"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "OF-LIFE-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "candidate-edge-conflicts-with-selected-replacement",
+      "reason": "Candidate supersedes now remains provenance; multiple pending revision regression accepts one and refuses the stale competitor."
+    },
+    {
+      "id": "OF-LIFE-2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "accepted-successor-without-retired-predecessor",
+      "reason": "Present predecessor of accepted/retired successor must be retired with exact backlink; rehashed corrupt backup regression now refuses dual accepted replacement."
+    },
+    {
+      "id": "OF-PREP-REPLAY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "failed-prepared-session-replay",
+      "reason": "Prepared execution marks consumption before attempt and rejects finished or consumed sessions; failure/cancellation red regression remains one provider call."
+    },
+    {
+      "id": "OF-WIRE-HISTORY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "oldest-history-retained-without-disclosure",
+      "reason": "Recent complete contiguous history window selected newest-first; selected/omitted exact run IDs disclosed; tight-budget red regression passed."
+    },
+    {
+      "id": "OF-WIRE-BACKUP",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "prepared-backup-owning-run-lineage",
+      "reason": "Backup validates query/model/history partition, original history messages and reconstructed source/report/pending envelope against owning run."
+    },
+    {
+      "id": "OF-SUMMARY-HISTORY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "historical-summary-reference-not-validated",
+      "reason": "Historical prepared summaries require owning run conversation and original references on admitted branch; rehashed foreign-summary red regression passed."
+    },
+    {
+      "id": "OF-SUMMARY-ROUTE",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "duplicate-run-summary-route-unbound-cid",
+      "reason": "Removed accidental run-summary route; GET/POST return 404 with regression."
+    },
+    {
+      "id": "OF-BROWSER-CONSENT",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "previewed-branch-bypasses-fresh-consent",
+      "reason": "Fresh-context reviewer reproduced an unchecked, disabled consent control reaching confirmed dispatch through cached branch preview. Actual dispatch now independently requires checked consent and cached branch preview enables review-confirm-send; real Chrome failed before correction and passed afterward."
+    },
+    {
+      "id": "OF-BROWSER-READBACK",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "saved-status-hides-project-readback-failure",
+      "reason": "Fresh-context reviewer injected memory readback failure after successful project write. Refresh errors now propagate; callers preserve saved-but-refresh-failed and its original cause. Real Chrome route-injected HTTP409 confirms write happened without claiming readback success; startup remains tolerant without auto-upgrade."
+    },
+    {
+      "id": "OF-ACCEPTANCE-RECEIPT",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "over-budget-zero-new-runs-without-receipt-assertion",
+      "reason": "Final test/docs review noted that unchanged400 messages and provider count did not rule out failed receipts. The owned fixture now compares complete ordered id/request_id/status rows before and after the oversized preview with read-only SQLite. Static correction review closed this exact evidence gap; actual Chrome rerun passed."
+    }
+  ],
+  "slice_contract": "docs/office-foundations.md",
+  "status": "local-acceptance-and-scoped-reviews-complete-required-ci-pending",
+  "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
+  "reviewer": "Fresh-context scoped reviewers; original backend reviews preserved, new browser initial review and correction review tracked independently.",
+  "scope": "Original backend initial/correction scopes retained with seven closed findings; independent browser initial and precise consent/readback corrections closed; final added acceptance/test/docs static review closed after adding actual oversized-preview run/receipt equality. All changed paths are enumerated. This is the union of bounded scopes, not a fabricated single full rerun/review.",
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "targeted schema/project/backup red-green tests",
+      "result": "Observed missing schema/upgrade/route/CLI failures first; schema/project tests, 29 backup tests and targeted shared-client/process tests subsequently passed on macOS Python3.9.6."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest discover -s tests -p 'test_office*.py' -v; ruff check --select E9,F pocketchat/office*.py tests/test_office*.py",
+      "result": "138 office tests passed with 1 skip; Ruff passed. Secure descriptor-I/O tests do not claim unsupported Windows filesystem behavior."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest discover -s tests -p 'test_office*.py' -v; python3 -m unittest discover -s tests -p test_memory_migration.py -v",
+      "result": "143 office tests with 1 skip and 41 memory migration tests passed before graph correction; correction separately passed 4 lifecycle/30 backup tests. Ruff E9/F and diff check passed. macOS Python3.9.6; reviewer reproduced both original defects on Python3.13.9."
+    },
+    {
+      "source_type": "current code/tests/schema (C)",
+      "status": "verified",
+      "command": "independent correction re-review",
+      "result": "Both findings closed; correction ready only within implemented partial checkpoint."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest discover -s tests -p test_session.py -v",
+      "result": "11 Session tests passed on macOS Python3.9.6, including no second projection, exact streaming snapshot, unsafe config, tampered object, missing snapshot and changed provider payload no-call refusals."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "recording loopback SSE office send; prepared/frozen/summary focused red-green and office/session regression",
+      "result": "Actual request body equals preview payload, saved plan and immutable snapshot; preview zero-call and stale confirmation/replay refuse. 166 office tests (1 skip) plus12 Session tests passed before final summary corrections; final corrected office count recorded in handover. macOS Python3.9.6."
+    },
+    {
+      "source_type": "current code/tests/schema (C)",
+      "status": "verified",
+      "command": "independent scoped correction re-reviews",
+      "result": "Prepared replay, history window, backup lineage, historical summary and duplicate route findings closed. Browser UI and complete acceptance excluded."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "node tests/office_foundations_browser.cjs; OFFICE_RACE_ONLY=1 node tests/office_p1_browser.cjs; python3 -B -m unittest discover -s tests -p test_office*.py -v",
+      "result": "New real Chrome browser/CLI journey passed; preview and stale submission yielded zero provider calls, final displayed payload equaled actual HTTP JSON with one provider call. 18 existing client race checks and 168 office tests (1 skip) passed on macOS Python3.9.6, Node22.23.4. Initial red: missing project-instruction control."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "node tests/office_foundations_browser.cjs; OFFICE_RACE_ONLY=1 node tests/office_p1_browser.cjs; python3 -B -m unittest tests.test_office.OfficeFoundationSendTests.test_foundation_preview_rejects_each_changed_dependency_without_admission -v; ruff check --select E9,F pocketchat tests",
+      "result": "Expanded real Chrome/native CLI journey passed with exactly one HTTP provider request, actual payload equality, original receipt recovery, zero-call stale refusal, explicit memory replacement, project isolation, 400 originals retained with visible summary/window omission, backup/restore, schema4 GET unchanged then browser explicit upgrade, consent and failed-readback corrections. 18 VM client races and six-dependency Python test passed. macOS Python3.9.6 and Node22.23.4. Full local suite not repeated."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_office.OfficeFoundationSendTests.test_expiring_sensitive_and_corrupt_office_memory_never_silently_enters_a_request -v",
+      "result": "A controlled UTC clock crosses an accepted memory expiry between preview/send; old confirmation refuses, expired or sensitive content is absent, corrupt store refuses rather than empty recall, and provider/receipt counts remain zero. macOS Python3.9.6."
+    },
+    {
+      "source_type": "current code/tests/schema (C)",
+      "status": "verified",
+      "command": "fresh-context two-finding correction review at b657dbb",
+      "result": "Consent dispatch independently checks checked user consent; cached preview is selectable without branch bypass. Successful writes and failed refreshes remain distinct, boot tolerates local readback failure without implicit migration. Both initial findings closed; whole OF01-10/model/Windows claims excluded."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "node tests/office_foundations_browser.cjs after OF-ACCEPTANCE-RECEIPT assertion correction",
+      "result": "Expanded actual Chrome156.0.8078.80/CLI journey passed again because the receipt assertion changed: exact oversized-preview ordered run/request/status snapshots equal before and after; provider request count exactly1 and frozen displayed JSON equals HTTP. Existing production, Python and other checks unchanged, not rerun."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_office_context and three affected OfficeFoundationSendTests; same selection with os.supports_dir_fd cleared; ruff check --select E9,F tests/test_office.py tests/test_office_context.py",
+      "result": "macOS Python3.9.6:17 tests passed0skip. Simulated unsupported directory APIs:17 discovered11 executed passed6 prerequisite skips; unskipped refusal test checks no memory file, unchanged project/recall/receipts and zero provider calls. Ruff E9/F passed. Original Windows3.9/3.13 logs show same7 failures; corrected WindowsCI pending."
+    }
+  ],
+  "unverified_scope": "Required CI for this precise portability candidate and actual main integration/readback pending. Unsupported-platform negative coverage does not verify successful Windows memory mutation, existing-store read/recall, every refusal path or browser journeys. Real-provider/model obedience, full accessibility, Word pagination, formal release and P2 excluded.",
+  "schema": "pocketchat-review-record.v1",
+  "ready_for_integration": true,
+  "review_history": [
+    {
+      "phase": "unchanged-backend",
+      "candidate": "5cb7564d79504b4ead2bfdf9b2e7df73e1de4d2f",
+      "reviewer_id": "01a1dee5-4b56-7e62-8fae-626e77e59feb",
+      "coverage": "Original initial scopes and precise correction responses recovered and read; schema/project/memory/backup, prepared hook/wire and summary. Seven findings closed; not a new full review."
+    },
+    {
+      "phase": "browser-initial",
+      "candidate": "65e7eeb",
+      "base": "5cb7564d79504b4ead2bfdf9b2e7df73e1de4d2f",
+      "reviewer_id": "01a1dffb-662a-7681-ac02-b3ae510f9273",
+      "coverage": "Browser controls, preview dispatch, CAS and recovery; one consent and one readback finding. Model/Windows/full accessibility excluded."
+    },
+    {
+      "phase": "browser-correction",
+      "status": "closed",
+      "candidate": "b657dbbd0c5cfb8b348c0096c819da3576ba1517",
+      "reviewer_id": "01a1e02a-e935-7bc0-86cb-4e6d735799ed",
+      "coverage": "Read requestKey, preview, busy, full composer, project/memory mutation and readback/boot/upgrade. Original two findings closed at precise app.js lines; no residual in those fixes. Static only; did not run VM, tests/browser or re-review backend. Original stalled reviewer was not treated as approval."
+    },
+    {
+      "phase": "final-added-tests-and-docs",
+      "reviewer_id": "01a1e02a-e935-7bc0-86cb-4e6d735799ed",
+      "candidate": "292a7c051c0dbc6f36b5704e63b2b9876eaa5bbf",
+      "status": "closed-with-scoped-correction",
+      "coverage": "Read OF01-10 contract, office English/Chinese guides, CHANGELOG, added dependency/expiry tests and expanded browser script. Evidence overclaim found in oversized-preview result; exact actual run/receipt snapshot equality added and statically closed. No backend re-review or tests run by reviewer."
+    },
+    {
+      "phase": "windows-ci-portability-correction",
+      "base": "71e73d6a47c5cadfd37fe023b8475f888cf87e68",
+      "reviewer_id": "01a1e0cd-cc10-7d41-b12b-2cad8bfc7e91",
+      "status": "accepted-no-blocking-findings",
+      "coverage": "Read only two test diffs and added security/handover paragraphs plus memory descriptor admission, office memory action and constructor cleanup. Six exact capability prerequisites match production; unsupported regression remains unskipped. SQLite fixture closing root cause accepted; no production changes. Static only; not Windows execution or re-review of prior backend/browser."
+    }
+  ]
+}

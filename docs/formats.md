@@ -368,7 +368,7 @@ run payload. These payload additions are supported in all supported database ver
 Schema 3 adds an integer `archived` field (only 0 or 1) to each conversation;
 message IDs and the remaining table shapes are unchanged.
 
-Schema 3 introduced archiving; new workspaces now use schema 4 (below). Existing schema 2/3 workspaces retain their version
+Schema 3 introduced archiving; new workspaces now use schema 5 (below). Existing schema 2/3 workspaces retain their version
 until `office upgrade` or the browser **Back up & upgrade** action. The owner
 first writes a validated, mode-0600 `office-vVERSION-before-upgrade-SHA256.json` in the
 private workspace, reads its exact bytes back and syncs the parent directory, then adds the archived column when upgrading version 2 and changes
@@ -426,7 +426,7 @@ a generic 4xx or transport-error interpretation and never authorizes replay.
 
 ### Office branch context (database schema 4)
 
-New workspaces use schema 4. Schema-2/3 workspaces remain readable/writable for
+New workspaces use schema 5; schema 4 remains the original branch format. Schema-2/3 workspaces remain readable/writable for
 existing operations, but branch creation requires explicit backup-first upgrade.
 Data-only backups retain `pocketchat-office-backup.v1` and accept database versions
 2, 3 and 4; restore preserves the source database version, not an implicit upgrade.
@@ -447,3 +447,32 @@ remains the full chronological archive. Office request/draft shapes accept an
 optional `branch_from` only for chat. Branch selection is content, not authority:
 consent, model/context-bound preview and original-request recovery rules still apply.
 No existing legacy CLI session JSONL format changes.
+
+
+### Office project foundation data (database schema 5)
+
+A genuinely new workspace creates one logical `project_id` (`project-` plus 32
+lowercase hexadecimal characters), empty project instructions at revision 1,
+and recall disabled at memory revision 1. Native path-derived service identity
+is separate and unchanged. Existing schema 2/3/4 directories keep their version
+until explicit `office upgrade`: validated v1 backup bytes are durably written,
+read back and directory-synced before one SQL transaction creates metadata.
+
+`pocketchat-office-backup.v2` retains the five original logical tables plus
+`project`, `summaries` and `memory`. Project preferences have closed typed fields;
+summary references bind message/run IDs, Unicode-code-point ranges and original
+UTF-8 SHA-256 digests on the active conversation branch. Memory preserves bounded
+original `pocketchat-memory.v2` records at fixed `office-memory.v2.jsonl`.
+Normalized replacement DAG checks distinguish candidate provenance from committed
+accepted/retired successor edges; missing forgotten historical IDs remain allowed.
+V1 backups still accept only database versions 2/3/4 and restore that original
+version without synthesizing project identity. V2 restores preserve logical
+identity, not transport credentials, current requests or preview authority.
+
+Office memory acceptance is explicit non-factual guidance, not verified facts.
+Only original office proposal events with project/text digest binding enter office
+acceptance and recall. Replacement acceptance and predecessor retirement publish
+in one locked v2 write. Store digest and record revisions guard mutations. Forget
+removes an active record but does not erase historical traces, exports or backups.
+Project controls and memory actions exist at shared service/CLI boundaries;
+frozen request context is now wired; browser controls remain pending this checkpoint.

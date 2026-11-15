@@ -184,7 +184,7 @@ class OfficeCLITests(unittest.TestCase):
         code, data = self.cli('conversations', 'restore', '--conversation', self.cid)
         self.assertEqual(code, 0, data)
         self.assertFalse(data['result']['archived'])
-        self.assertEqual(self.cli('upgrade')[1]['result'], {'database_version': 4, 'upgraded': False})
+        self.assertEqual(self.cli('upgrade')[1]['result'], {'database_version': 5, 'upgraded': False})
 
 
     @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
@@ -510,3 +510,57 @@ class OfficeCLITests(unittest.TestCase):
         self.assertIn('Original', second.stdout)
         self.assertEqual(len(adapter.calls), 1)
         self.assertEqual(len(app.store.get(self.cid)['messages']), 2)
+
+    @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
+    def test_project_show_save_enable_and_stale_revision_are_process_visible(self):
+        code, response = self.cli('project', 'show')
+        self.assertEqual(code, 0)
+        project = response['result']
+        code, saved = self.cli('project', 'instructions', '--project-id', project['project_id'],
+                               '--revision', '1', '--text', 'Keep reports concise.')
+        self.assertEqual(code, 0)
+        self.assertEqual(saved['result']['instruction_revision'], 2)
+        self.assertEqual(self.cli('project', 'instructions', '--project-id', project['project_id'],
+                                  '--revision', '1', '--text', 'Stale')[0], 2)
+        code, enabled = self.cli('project', 'memory', '--project-id', project['project_id'],
+                                 '--revision', '1', '--enabled', 'true')
+        self.assertEqual(code, 0)
+        self.assertTrue(enabled['result']['memory_enabled'])
+
+    @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
+    def test_memory_propose_accept_and_forget_require_explicit_process_arguments(self):
+        code, response = self.cli('memory', 'list')
+        self.assertEqual(code, 0)
+        view = response['result']
+        code, proposal = self.cli('memory', 'propose', '--project-id', view['project_id'], '--store-sha256', view['store_sha256'],
+                                  '--text', 'Prefer concise replies', '--category', 'user_preference', '--personal-guidance')
+        self.assertEqual(code, 0)
+        proposed = proposal['result']
+        code, acceptance = self.cli('memory', 'accept', '--project-id', view['project_id'], '--store-sha256', proposed['store_sha256'],
+                                    '--memory-id', proposed['record']['memory_id'], '--revision', '1', '--personal-guidance')
+        self.assertEqual(code, 0)
+        accepted = acceptance['result']
+        code, forgotten = self.cli('memory', 'forget', '--project-id', view['project_id'], '--store-sha256', accepted['store_sha256'],
+                                   '--memory-id', accepted['record']['memory_id'], '--revision', str(accepted['record']['revision']), '--acknowledge-history')
+        self.assertEqual(code, 0)
+        self.assertEqual(forgotten['result']['records'], [])
+
+    @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
+    def test_summary_readback_and_save_are_explicit_subprocess_actions(self):
+        import hashlib
+        with self.open_store() as store:
+            run = store.begin(self.cid, 'summary-process-run', dict(prompt='Keep it small', intent='chat', source_ids=[], revision_id=None))
+            store.finish(run['id'], 'completed', 'Small first', None)
+        code, project = self.cli('project', 'show')
+        self.assertEqual(code, 0)
+        code, view = self.cli('summary', 'show', '--conversation', self.cid)
+        self.assertEqual(code, 0)
+        message = view['result']['original_messages'][0]
+        refs = [dict(message_id=message['id'], run_id=message['run_id'], start=0, end=len(message['content']),
+                     sha256=hashlib.sha256(message['content'].encode()).hexdigest())]
+        code, saved = self.cli('summary', 'save', '--conversation', self.cid, '--project-id', project['result']['project_id'],
+                              '--revision', '0', '--text', 'Small first delivery', '--refs-json', json.dumps(refs), '--accept')
+        self.assertEqual(code, 0)
+        self.assertEqual(saved['result']['summary']['revision'], 1)
+        self.assertEqual(self.cli('summary', 'save', '--conversation', self.cid, '--project-id', project['result']['project_id'],
+                              '--revision', '0', '--text', 'Stale', '--refs-json', json.dumps(refs), '--accept')[0], 2)

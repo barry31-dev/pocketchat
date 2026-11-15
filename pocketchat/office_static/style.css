@@ -17,3 +17,26 @@
 
 /* Keep the native, visually hidden file control visible to keyboard users. */
 .file-button:focus-within { outline: 3px solid #91ae9b; outline-offset: 3px; }
+
+/* Project context is an explicit local surface, not another chat composer. */
+.foundations { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 24px; font-size: 12px; }
+.foundations summary { cursor: pointer; font-weight: 600; }
+.foundations label { display: block; margin: 12px 0 6px; line-height: 1.5; }
+.foundations textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font: inherit; }
+.foundations button { font-size: 11px; margin: 5px 4px 3px 0; padding: 6px 8px; }
+.foundations input { accent-color: var(--accent); }
+#foundation-status { overflow-wrap: anywhere; color: var(--muted); line-height: 1.6; }
+.memory-record { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; overflow-wrap: anywhere; }
+.memory-record p { white-space: pre-wrap; line-height: 1.5; }
+#summary-originals { max-height: 240px; overflow: auto; }
+#summary-originals label { white-space: pre-wrap; overflow-wrap: anywhere; }
+#context-preview { width: min(740px, 90vw); box-sizing: border-box; max-height: 85dvh; overflow: auto; }
+#context-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+#preview-request { font-size: 11px; }
+.foundations :focus-visible, #context-preview :focus-visible { outline: 3px solid #91ae9b; outline-offset: 2px; }
+
+@media (max-width: 650px) {
+  .topbar { flex-wrap: wrap; }
+  .topbar > div { flex: 0 0 100%; }
+  #model-choice { flex: 1; max-width: 100%; min-width: 0; }
+}

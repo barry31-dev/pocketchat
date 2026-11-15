@@ -341,6 +341,22 @@ class Session:
             "pocketchat_version": pocketchat.__version__,
         }
 
+    def run_prepared(self, plan) -> str:
+        """Execute one office-host turn without legacy selection or prompt append."""
+        from .office_context import PreparedOfficeTurn
+        if (type(plan) is not PreparedOfficeTurn or self.turn_count or self.finished or
+                getattr(self, '_office_prepared_consumed', False) or self.session_file is not None or self.file_work is not None):
+            raise ValueError('A fresh office-host prepared turn is required')
+        plan.validate(self.config)
+        if bool(plan.payload.get('stream', False)) != (self.on_delta is not None):
+            raise ValueError('Prepared streaming options do not match execution')
+        self._office_prepared_consumed = True
+        self._office_prepared_turn = plan
+        try:
+            return self.run([plan.messages[-1]['content']])
+        finally:
+            self._office_prepared_turn = None
+
     def run(self, prompts) -> str:
         """Run one session: emit every trace event for it and return a status.
 
@@ -482,7 +498,12 @@ class Session:
         # trim that happens here is decided with it included. A prompt is never
         # the thing that gets dropped to make room for itself.
         try:
-            context = self._context_with_budget(prompt)
+            prepared = getattr(self, '_office_prepared_turn', None)
+            if prepared is not None:
+                prepared.validate(self.config)
+                context = prepared.messages
+            else:
+                context = self._context_with_budget(prompt)
         except ContextBudgetExceeded as exc:
             # The prompt plus the system prompt does not fit the budget. That
             # is a configuration fact, not something to trim harder: the run
@@ -622,6 +643,11 @@ class Session:
                     raise SessionError(
                         "request_payload_mismatch",
                         "provider rebuilt a different request payload")
+                prepared = getattr(self, '_office_prepared_turn', None)
+                if prepared is not None:
+                    if request_digest(payload) != request_digest(prepared.payload):
+                        raise SessionError('request_payload_mismatch', 'prepared office payload changed before sending')
+                    payload = prepared.payload
                 admitted = admit_for_config(
                     payload,
                     {**config, "max_input_tokens": turn_budget},
@@ -643,7 +669,7 @@ class Session:
             except AdmissionError as exc:
                 raise SessionError(exc.error_type, str(exc)) from exc
             except OSError as exc:
-                if self._context_projection is not None:
+                if self._context_projection is not None or getattr(self, '_office_prepared_turn', None) is not None:
                     raise SessionError(
                         "request_snapshot_unwritable",
                         "request snapshot not written: %s" % exc)
@@ -653,7 +679,7 @@ class Session:
                     "fatal": False,
                 })
             except CredentialInRequestError as exc:
-                if self._context_projection is not None:
+                if self._context_projection is not None or getattr(self, '_office_prepared_turn', None) is not None:
                     raise SessionError("credential_in_request", str(exc))
                 self.recorder.append("error.recorded", {
                     "error": {"type": "credential_in_request",

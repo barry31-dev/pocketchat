@@ -100,7 +100,23 @@ Chrome 的环境运行 `node tests/office_p1_browser.cjs`。该模式只核本�
 ## 基础接续契约（2026-11-15）
 
 办公入口的项目指令、统一上下文预览／发送与显式 v2 项目记忆只在
-[office-foundations.md](office-foundations.md) 维护；OF01–OF10 是待实施验收，
-不是本轮运行结果。该契约按已批准方向与日常委托制定，本轮不改运行开关、
-工作区 schema 或备份格式。原首包对记忆／上下文的排除描述初始范围，不是永久禁止
+[office-foundations.md](office-foundations.md) 维护；具体运行与未验证范围见实现交接和审查记录，不把契约表当作通过记录。
+schema 5 的共享服务现接入项目指令、默认关闭的已接受记忆、显式摘要与冻结预览／发送；
+旧工作区必须显式备份后升级，打开网页不迁移。原首包对记忆／上下文的排除描述初始范围，不是永久禁止
 此扩展；旧 CLI 能力也不等于办公端已接通。P1 不重复开发，基础出口收口后衔接 P2。
+
+### 网页怎样使用项目上下文
+
+在“Materials & drafts”侧栏打开“Project & context”。项目指令和记忆开关绑定当前 revision；
+“Propose guidance”要求明确声明个人／项目指导，提议和接受分开。修订先产生新候选，接受后原记录
+退休；“Forget”须确认旧 trace、导出与备份并未擦除。
+
+“Load summary & originals”回读当前分支原消息，选来源后自行写摘要并显式接受；服务绑定
+message/run、Unicode 范围及 UTF-8 摘要。摘要／记忆不是已核验事实或工具权限。
+“Preview request”展示准确 provider JSON 和来源清单，不调用模型。关闭后重新勾选发送确认；
+另一客户端修改状态会拒绝旧确认，不悄悄重新选择上下文。丢响应恢复保留原 ID/body/confirmation，
+仅恢复原回执。保存成功但随后回读失败时，两种结果分别显示。
+
+新增验收入口 `tests/office_foundations_browser.cjs` 使用新建私有 `OFFICE_OUTPUT`、兼容
+`OFFICE_PYTHON`、Playwright 与 Chrome。合成 fixture 核准确 HTTP、零调用拒绝、跨端项目隔离、
+显式替换、摘要、备份恢复及 schema4 显式升级；不证明真实模型、Windows 浏览器、完整无障碍或发布。

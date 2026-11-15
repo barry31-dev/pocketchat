@@ -1,6 +1,8 @@
 # Office project instructions, context and controlled memory
 
-2026-11-15 · **Approved design and continuation contract, not an implemented feature.**
+2026-11-15 · **Approved implementation/completion contract.**
+Runtime and integration evidence: [implementation handover](handovers/2026-11-15-office-foundations-implementation.md) and [review](review-office-foundations-implementation-v1.json).
+The cases below remain requirements, not automatic proof of a tested environment.
 This is the product-owned foundation extension to [office-web.md](office-web.md),
 under the maintainer's approved chat/office direction and routine slice delegation.
 It must precede P2 document-reading integration; it does not reopen P1 A01–A06.
@@ -244,7 +246,7 @@ of the pre-upgrade backup into a new directory, not downgrade or shared-history 
 
 ## 7. Discriminating acceptance (both Web and office CLI)
 
-These cases are **required future checks, not results from this commit**. Use local
+These cases are **required checks; this table is not a run report**. Use local
 synthetic data and a recording loopback provider; pin candidate/Python/browser,
 request bytes, manifests and zero-call refusals. Do not rerun unchanged P1 cases.
 

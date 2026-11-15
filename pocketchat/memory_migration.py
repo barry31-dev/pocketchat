@@ -919,3 +919,52 @@ def migrate_v1_to_v2(root: Path, *, workspace_id: str, out: Path,
         "migrated": len(converted),
         "source_bytes": source.stat().st_size if source.exists() else 0,
     }
+
+
+def accept_v2_replacement(root: Path, store: Path, memory_id: str, *,
+                          accepted_by: str, workspace_id: str,
+                          expected_revision: int, expected_store_sha256: str,
+                          validate_records=None) -> Dict[str, Any]:
+    """Accept explicit guidance and retire its current predecessor in one write.
+
+    The old CLI accept/retire calls stay unchanged. This bounded primitive uses
+    the existing file lock and publication mechanism, not two sequential writes.
+    """
+    author = _text(accepted_by, 'accepted_by')
+    _bounded_revision(expected_revision)
+    _sha(expected_store_sha256, 'expected_store_sha256')
+
+    def change(records, write):
+        if hashlib.sha256(_store_payload(records)).hexdigest() != expected_store_sha256:
+            raise MemoryMigrationError('memory store changed before acceptance')
+        if any(r['workspace_id'] != workspace_id for r in records):
+            raise MemoryMigrationError('memory belongs to another workspace')
+        if validate_records is not None:
+            validate_records(records)
+        by_id = {r['memory_id']: r for r in records}
+        candidate = by_id.get(memory_id)
+        if (candidate is None or candidate['revision'] != expected_revision or
+                candidate['admission_status'] != 'candidate' or
+                candidate['source_kind'] != 'user_explicit' or
+                candidate['category'] not in {'user_preference', 'project_decision'} or
+                candidate['verification_status'] != 'unverified' or
+                len(candidate['supersedes']) > 1):
+            raise MemoryMigrationError('candidate identity, revision or guidance admission does not match')
+        timestamp = _new_timestamp()
+        for predecessor in candidate['supersedes']:
+            old = by_id.get(predecessor)
+            if old is None or old['admission_status'] != 'accepted':
+                raise MemoryMigrationError('replacement requires a current accepted predecessor')
+            old.update(admission_status='retired', superseded_by=memory_id,
+                       retired_at=timestamp, updated=timestamp, updated_by=author,
+                       revision=old['revision'] + 1)
+        candidate.update(admission_status='accepted', verification_status='not_required',
+                         accepted_by=author, updated_by=author, updated=timestamp,
+                         revision=candidate['revision'] + 1)
+        result = [parse_v2_record(record) for record in records]
+        if validate_records is not None:
+            validate_records(result)
+        write(result)
+        return next(r for r in result if r['memory_id'] == memory_id)
+
+    return _mutate_v2_store(root, store, change)

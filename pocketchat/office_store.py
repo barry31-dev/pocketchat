@@ -71,6 +71,7 @@ def safe_root(root):
 class OfficeStore:
     def __init__(self, root):
         self.root = safe_root(root)
+        database_new = not (self.root / 'office.sqlite').exists()
         self.lock = threading.RLock()
         self.db = None
         self._lock_fd = None
@@ -95,8 +96,11 @@ class OfficeStore:
             self.db.row_factory = sqlite3.Row
             os.chmod(self.root / 'office.sqlite', 0o600)
             version = self.db.execute('PRAGMA user_version').fetchone()[0]
-            if version not in (0, 2, 3, 4):
+            if version not in (0, 2, 3, 4, 5) or (version == 0 and not database_new):
                 raise OfficeError('Unsupported office workspace version.')
+            if version == 5:
+                from .office_context import read_project_metadata
+                read_project_metadata(self)
             self.db.executescript('''
                 CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, title TEXT, created REAL, archived INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS sources(id TEXT PRIMARY KEY, cid TEXT, name TEXT, text TEXT, sha256 TEXT);
@@ -108,7 +112,10 @@ class OfficeStore:
                     content TEXT, sources TEXT, predecessor TEXT, created REAL);
             ''')
             if version == 0:
-                self.db.execute('PRAGMA user_version=4')
+                from .office_context import create_project_schema
+                with self.db:
+                    create_project_schema(self.db)
+                    self.db.execute('PRAGMA user_version=5')
             with self.db:
                 self.db.execute("UPDATE runs SET status='unknown', error='Interrupted before completion; inspect before retrying.' WHERE status IN ('running','stopping')")
         except Exception:
