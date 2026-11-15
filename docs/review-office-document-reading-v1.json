@@ -1,0 +1,68 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/office-document-reading.md",
+    "docs/review-office-document-reading-v1.json",
+    "docs/handovers/2026-11-16-office-document-reading.md",
+    "scripts/office_document_probe.py",
+    "docs/office-web.md",
+    "docs/office-web.zh-CN.md"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "P2-PROBE-OPTIMIZE",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "optimized-assertions-print-success",
+      "reason": "main refuses sys.flags.optimize before outputmkdir;actual optimizedredRC0 afterfixRC1 namedrefusal/nooutput;ordinarycorrected12fixtures green"
+    },
+    {
+      "id": "P2-A07-CITATIONS",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "a07-output-citation-binding-missing",
+      "reason": "A07 now explicitly requires deterministic summary/QA citation-to-frozen-document/version/selection and invalid locator handling; historical snapshot links unchanged, not model factuality"
+    }
+  ],
+  "ready_for_integration": true,
+  "approved_scope": "Routine bounded P2 preparation under AGENTS3.1 and office-roadmapP2; PC-OFFICE-P2-CONTRACT-1. Does not lease runtime ingestion.",
+  "base": "12403b897f652fd0008eafec245d4919ac8b4996",
+  "review_history": [
+    {
+      "reviewer_id": "01a1e0e9-12c0-7992-bd0a-c55397b5634f",
+      "phase": "initial-preparation-review",
+      "status": "requested-two-corrections",
+      "coverage": "Read scoped script/contract/handovers/links/reviewevidence and authenticated private12sampledigests; reported optimizefalsegreen and A07citationgap. Static/in-memorycompile only; no parser rerun or PNG inspection by reviewer."
+    },
+    {
+      "reviewer_id": "01a1e0e9-12c0-7992-bd0a-c55397b5634f",
+      "phase": "two-finding-correction-review",
+      "status": "approved-preparation-only",
+      "coverage": "Read optimization guard beforemkdir and A07summary/QA frozenbindings/invalidlocator/historicalsnapshot corrections; both findings closed, no further blocker in thatscope. No test rerun/runtimeP2approval."
+    }
+  ],
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python scripts/office_document_probe.py --out ABSENT_DIRECTORY; ruff check --select E9,F scripts/office_document_probe.py",
+      "result": "12 generated synthetic PDF/DOCX observations passed assertions;Python3.12.14/macOS27arm64 pypdf6.21.4/docx1.2.0/ReportLab4.4.9. Peak parser childRSS40.4MB; over-proposed-size and external relationships parse successfully, host enforcement not inferred. Existing-output refusalRC1 preserved report digest. First textPDF/body-tableDOCX pages rendered and visually inspected legible only."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python -O scripts/office_document_probe.py before/after guard; ordinary corrected probe12fixtures; ruff E9,F",
+      "result": "Originaloptimizedrun printedpassedRC0 withoutassertions; corrected optimizedrunRC1 namedrefusal before destinationcreated; ordinarycorrected12fixtures green. SamePython3.12.14/macOS27. Prior measured report remains original-run evidence; rerun justified bycodecorrection."
+    }
+  ],
+  "unverified_scope": "ProductionPDF/DOCXWebCLI paths, source/backupmigration, parserresource/network/sandboxguard, dense/CJK/complexfiles, Python3.9/3.13optional parsermatrix,Windows,modelquality,fullP2/formalrelease. Generatorknowninputs only;workerCLI not safe arbitraryfile boundary."
+}

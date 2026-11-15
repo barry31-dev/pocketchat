@@ -243,3 +243,10 @@ and Chrome. It records actual request equality, no-call refusals, project isolat
 explicit replacement, summaries, historical backup/restore and explicit schema-4
 upgrade. Its local fixtures do not prove model obedience, Windows browser behavior,
 complete accessibility, Word pagination or formal release readiness.
+
+## P2 document reading preparation
+
+The [bounded document-reading contract](office-document-reading.md) records the
+next approved P2 preparation, synthetic measurements and exact acceptance scope.
+It does not enable PDF/DOCX import; current TXT/Markdown/CSV admission remains
+unchanged until the versioned shared-service implementation is accepted.

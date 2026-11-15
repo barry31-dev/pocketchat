@@ -120,3 +120,9 @@ message/run、Unicode 范围及 UTF-8 摘要。摘要／记忆不是已核验事
 新增验收入口 `tests/office_foundations_browser.cjs` 使用新建私有 `OFFICE_OUTPUT`、兼容
 `OFFICE_PYTHON`、Playwright 与 Chrome。合成 fixture 核准确 HTTP、零调用拒绝、跨端项目隔离、
 显式替换、摘要、备份恢复及 schema4 显式升级；不证明真实模型、Windows 浏览器、完整无障碍或发布。
+
+## P2 文档阅读准备
+
+下一步按[受限文档阅读契约](office-document-reading.md)推进；已完成自建样本测量与边界设计，
+尚未实现 Web/CLI PDF/DOCX 导入。现有 TXT/Markdown/CSV 来源输入保持不变；
+生产资源限制、备份迁移及 A07–A09 完整两端路径须在实施切片另行验证。
