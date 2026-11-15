@@ -130,6 +130,34 @@ class SharedOfficeTests(unittest.TestCase):
         with self.assertRaises(OfficeError):
             client.request(prefix + '/confirmed', dict(message=dict(body, prompt='different'), confirmation=fresh['confirmation']))
 
+    def test_native_cli_state_can_save_multiple_bounded_drafts_over_96k(self):
+        client=self.connect();state=client.request('/api/cli-state');drafts={}
+        for i in range(9):
+            cid=self.app.store.create('Draft '+str(i))['id']
+            drafts[cid]=dict(prompt='x'*12000,intent='chat',source_ids=[],revision_id=None)
+        saved=client.request('/api/cli-state',dict(state,drafts=drafts))
+        self.assertEqual(len(saved['drafts']),9)
+        self.assertEqual(client.request('/api/cli-state'),saved)
+        self.assertEqual(self.adapter.calls,[])
+
+    def test_read_only_receipt_lookup_is_exact_and_models_are_shared(self):
+        client = self.connect()
+        cid = self.app.store.create('Receipt lookup')['id']
+        body = dict(prompt='Hi', intent='chat', source_ids=[], revision_id=None,
+                    request_id='lookup-exact-request', consent=True)
+        run = self.app.submit(cid, body)
+        self.app.wait(run['id'], 3)
+        result = client.request('/api/conversations/'+cid+'/requests/'+body['request_id'])
+        self.assertEqual(result['id'], run['id'])
+        self.assertEqual(result['request_id'], body['request_id'])
+        with self.assertRaises(OfficeError):
+            client.request('/api/conversations/'+cid+'/requests/missing-request')
+        models = client.request('/api/models')
+        self.assertEqual(len(models['items']), 1)
+        selected = client.request('/api/models', {'profile': models['items'][0]['profile']})
+        self.assertEqual(selected['selected'], models['items'][0]['profile'])
+        self.assertEqual(len(self.adapter.calls), 1)
+
     def test_wrong_listener_cannot_echo_workspace_identity_to_steal_client_data(self):
         from http.server import BaseHTTPRequestHandler
         from tests._helpers import StubHTTPServer

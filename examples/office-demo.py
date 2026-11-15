@@ -51,7 +51,9 @@ def main():
     threading.Thread(target=provider.serve_forever,daemon=True).start()
     config_file = root / 'fixture-config.json'
     config_file.write_text(json.dumps(dict(schema_version='2',name='offline-office-fixture',default_profile='fixture',profiles={'fixture':dict(base_url='http://127.0.0.1:%d/v1'%provider.server_port,model='offline-fixture',api_key_env='OFFICE_UNUSED',requires_api_key=False,timeout_seconds=10,max_context_chars=60000)})))
-    app = OfficeWorkspace(root/'workspace',profile_config(load_config(config_file)))
+    loaded = load_config(config_file)
+    first = profile_config(loaded)
+    app = OfficeWorkspace(root/'workspace',first,profiles={'fixture':first,'alternate':dict(first,model='offline-alternate')})
     server = create_server(app)
     print(json.dumps(dict(origin=server.origin,token=server.bootstrap_token,fixture=True)),flush=True)
     try:

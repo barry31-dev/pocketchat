@@ -1,7 +1,11 @@
 """Explicit office commands; content-bound sending, never the historical task agent."""
 from __future__ import annotations
 
+import copy
 import json
+import secrets
+import shlex
+import sys
 import time
 from pathlib import Path
 
@@ -18,6 +22,9 @@ def add_parser(subparsers):
     office.add_argument('--config', type=Path, help='provider configuration for an offline writer')
     office.add_argument('--profile', help='existing provider profile for an offline writer')
     commands = office.add_subparsers(dest='office_command', required=True)
+    commands.add_parser('interactive', help='private draft REPL; sending requires the exact preview hash')
+    models = commands.add_parser('models', help='list configured model profiles without calling a provider')
+    models.add_argument('--select', help='select an existing configured profile')
     commands.add_parser('upgrade', help='back up and explicitly upgrade an existing office workspace')
     search = commands.add_parser('search', help='find literal text in message bodies')
     search.add_argument('--query', required=True)
@@ -73,6 +80,8 @@ def _operate(args, client):
     prefix = '/api/conversations'
     if getattr(args, 'conversation', None):
         prefix += '/' + identifier(args.conversation)
+    if command == 'models':
+        return client.request('/api/models', {'profile': args.select}) if args.select else client.request('/api/models'), 0
     if command == 'upgrade':
         return client.request('/api/upgrade', {}), 0
     if command == 'search':
@@ -120,23 +129,323 @@ def _operate(args, client):
     return run, 0 if run['status'] == 'completed' else 1
 
 
+class _StateSaveFailed(OfficeError):
+    """A stale/unknown CAS must end the REPL, never save again on exit."""
+
+
+class _InteractiveOffice:
+    def __init__(self, client):
+        self.client = client
+        self.state = client.request('/api/cli-state')
+        self.models = client.request('/api/models')
+        self.conversations = client.request('/api/conversations')
+        self.unsaved = None
+
+    @staticmethod
+    def empty_draft():
+        return dict(prompt='', intent='chat', source_ids=[], revision_id=None)
+
+    def key(self):
+        return self.state['current'] or 'new'
+
+    def draft(self):
+        return copy.deepcopy(self.state['drafts'].get(self.key(), self.empty_draft()))
+
+    def save(self, candidate):
+        # Keep the attempted state in memory; do not overwrite another writer or
+        # run a finally-save after any refused/unknown CAS.
+        self.unsaved = candidate
+        try:
+            saved = self.client.request('/api/cli-state', candidate)
+        except (OfficeError, OSError, ValueError) as exc:
+            # User-visible recovery content is not an error/log message. The
+            # private file stays untouched; let the user copy uncommitted text.
+            draft = candidate['drafts'].get(candidate['current'] or 'new')
+            if draft:
+                print('Uncommitted draft (not saved; copy before reopening):', flush=True)
+                print(draft['prompt'], flush=True)
+            raise _StateSaveFailed('State save refused or outcome unknown. Interaction stopped; no automatic replay. '
+                                   'Uncommitted input was not saved. Reopen before editing.') from exc
+        self.state = saved
+        self.unsaved = None
+
+    def change(self, **fields):
+        candidate = copy.deepcopy(self.state)
+        candidate.update(fields)
+        self.save(candidate)
+
+    def update_draft(self, draft):
+        drafts = copy.deepcopy(self.state['drafts'])
+        drafts[self.key()] = draft
+        self.change(drafts=drafts)
+
+    def show_draft(self):
+        draft = self.draft()
+        print('Draft: %s (%s)' % (self.key(), draft['intent']), flush=True)
+        print('Sources: ' + ', '.join(draft['source_ids']), flush=True)
+        if draft['revision_id']:
+            print('Revision: ' + draft['revision_id'], flush=True)
+        print(draft['prompt'] or '(empty)', flush=True)
+
+    def show_models(self, models):
+        print('Selected model profile: ' + str(models['selected'] or '(none)'), flush=True)
+        for item in models['items']:
+            print('%s: %s | %s | chat=%s report=%s tools=%s' % (
+                item['profile'], item['model'], item['provider'],
+                item['capabilities']['chat'], item['capabilities']['report'],
+                item['capabilities']['tools']), flush=True)
+
+    def listing(self, result):
+        for item in result['items']:
+            print('%s: %s' % (item['id'], item['title']), flush=True)
+        if not result['items']:
+            print('(no conversations)', flush=True)
+
+    def new(self, title):
+        # Admission CAS precedes the conversation creation side effect.
+        self.change(current=None)
+        created = self.client.request('/api/conversations', {'title': title or 'New conversation'})
+        drafts = copy.deepcopy(self.state['drafts'])
+        drafts[created['id']] = drafts.pop('new', self.empty_draft())
+        self.change(current=created['id'], drafts=drafts)
+        print('Opened: ' + created['id'], flush=True)
+        self.show_draft()
+
+    def receipt_matches(self, run):
+        pending = self.state['pending']
+        wire = {k: v for k, v in pending['body'].items() if k not in ('request_id', 'consent')}
+        return (run.get('request_id') == pending['body']['request_id'] and
+                run.get('conversation_id') == pending['cid'] and
+                run.get('request', {}).get('wire') == wire and
+                (pending['run_id'] is None or run.get('id') == pending['run_id']))
+
+    def receipt(self, run):
+        if not self.receipt_matches(run):
+            print('Request outcome unknown: receipt does not match. Pending request retained.', flush=True)
+            return
+        pending = copy.deepcopy(self.state['pending'])
+        pending['run_id'] = identifier(run['id'])
+        if run['status'] in ('completed', 'failed', 'cancelled'):
+            drafts = copy.deepcopy(self.state['drafts'])
+            original = {k: v for k, v in pending['body'].items() if k not in ('request_id', 'consent')}
+            # Preserve a draft edited while a run was active. Failed/cancelled
+            # requests also retain their original draft for an explicit retry.
+            if run['status'] == 'completed' and drafts.get(pending['cid']) == original:
+                drafts[pending['cid']] = self.empty_draft()
+            self.change(pending=None, drafts=drafts)
+        else:
+            self.change(pending=pending)
+        print('Receipt: %s %s' % (run['id'], run['status']), flush=True)
+        if run.get('reply'):
+            print(run['reply'], flush=True)
+        if run.get('error'):
+            print('Request did not complete successfully.', flush=True)
+
+    def recover(self):
+        pending = self.state['pending']
+        if pending is None:
+            print('No pending request.', flush=True)
+            return
+        try:
+            if pending['run_id'] is not None:
+                run = self.client.request('/api/runs/' + identifier(pending['run_id']))
+            else:
+                run = self.client.request('/api/conversations/' + identifier(pending['cid']) +
+                                          '/requests/' + identifier(pending['body']['request_id']))
+        except OfficeError:
+            print('Request outcome unknown. Pending request retained; no replay is allowed.', flush=True)
+            return
+        self.receipt(run)
+
+    def send(self):
+        if self.state['pending'] is not None:
+            print('A pending request has an unresolved outcome. Use /recover; no replay is allowed.', flush=True)
+            return True
+        draft = self.draft()
+        if not draft['prompt'].strip():
+            print('Draft is empty; not sent.', flush=True)
+            return True
+        if self.state['current'] is None:
+            self.new('New conversation')
+        cid = self.state['current']
+        body = dict(draft, request_id=secrets.token_hex(16), consent=True)
+        preview = self.client.request('/api/conversations/' + cid + '/preview', body)
+        print('Provider: %s | Model: %s' % (preview['provider'], preview['model']), flush=True)
+        print('History:', flush=True)
+        for message in preview['history']:
+            print('%s: %s' % (message['role'], message['content']), flush=True)
+        print('Material/message:', flush=True)
+        print(preview['message'], flush=True)
+        print('Selected sources: ' + ', '.join(preview['source_ids']), flush=True)
+        print('Type the complete confirmation hash to send, or any other line to return.', flush=True)
+        print('Confirmation: ' + preview['confirmation'], flush=True)
+        try:
+            confirmation = input()
+        except (EOFError, KeyboardInterrupt):
+            print('Not sent. Draft retained.', flush=True)
+            return False
+        if confirmation != preview['confirmation']:
+            print('Confirmation did not match; not sent. Draft retained.', flush=True)
+            return True
+        pending = dict(cid=cid, body=body, confirmation=confirmation, run_id=None)
+        self.change(pending=pending)
+        try:
+            run = self.client.request('/api/conversations/' + cid + '/confirmed',
+                                      dict(message=body, confirmation=confirmation))
+        except OfficeError as exc:
+            if exc.request_not_accepted:
+                self.change(pending=None)
+                print('Request not accepted. Draft retained; preview and confirm again.',flush=True)
+                return True
+            print('Request outcome unknown. Pending request retained. Use /recover; do not resend.', flush=True)
+            return True
+        except KeyboardInterrupt:
+            print('Request outcome unknown. Pending request retained. Use /recover; do not resend.',flush=True)
+            return True
+        self.receipt(run)
+        return True
+
+    def command(self, line):
+        name, _, tail = line.partition(' ')
+        tail = tail.strip()
+        if name == '/quit':
+            return False
+        if name == '/draft':
+            self.show_draft()
+        elif name == '/list':
+            self.listing(self.client.request('/api/conversations'))
+        elif name == '/new':
+            self.new(tail)
+        elif name == '/open':
+            cid = identifier(tail)
+            self.client.request('/api/conversations/' + cid)
+            self.change(current=cid)
+            self.show_draft()
+        elif name == '/models':
+            self.show_models(self.client.request('/api/models'))
+        elif name == '/model':
+            # CAS guards this interaction before the configuration side effect.
+            self.change()
+            self.show_models(self.client.request('/api/models', {'profile': tail}))
+        elif name == '/materials':
+            cid = identifier(self.state['current'])
+            materials = self.client.request('/api/conversations/' + cid)['sources']
+            for material in materials:
+                print('%s: %s | %s' % (material['id'], material['name'], material['sha256']), flush=True)
+            if not materials:
+                print('(no materials)', flush=True)
+        elif name == '/import':
+            paths = shlex.split(tail)
+            if len(paths) != 1:
+                raise OfficeError('Use /import PATH.')
+            cid = identifier(self.state['current'])
+            path = Path(paths[0])
+            text = read_file(path, MAX_SOURCE_BYTES).decode('utf-8')
+            self.change()
+            material = self.client.request('/api/conversations/' + cid + '/sources',
+                                           dict(name=path.name, text=text))
+            print('Imported material: ' + material['id'] + '; select with /sources.', flush=True)
+        elif name in ('/sources', '/report', '/chat', '/revise'):
+            draft = self.draft()
+            if name == '/sources':
+                ids = [identifier(value) for value in tail.replace(',', ' ').split()]
+                if len(ids) > 8 or len(set(ids)) != len(ids):
+                    raise OfficeError('Select at most eight distinct sources.')
+                draft['source_ids'] = ids
+            elif name == '/revise':
+                version = identifier(tail)
+                cid = identifier(self.state['current'])
+                self.client.request('/api/conversations/' + cid + '/artifacts/' + version + '/view')
+                draft.update(intent='report', revision_id=version)
+            else:
+                draft.update(intent=name[1:], revision_id=None)
+            self.update_draft(draft)
+            self.show_draft()
+        elif name == '/send':
+            return self.send()
+        elif name == '/recover':
+            self.recover()
+        elif name == '/stop':
+            pending = self.state['pending']
+            if pending is None or pending['run_id'] is None:
+                print('No known active run. Use /recover first.', flush=True)
+            else:
+                self.change()
+                run = self.client.request('/api/runs/' + identifier(pending['run_id']) + '/stop', {})
+                self.receipt(run)
+        elif name == '/export':
+            parts = shlex.split(tail)
+            if len(parts) != 3 or parts[1] not in ('md', 'docx'):
+                raise OfficeError('Use /export VERSION md|docx PATH.')
+            version, format_name, path = parts
+            target = Path(path)
+            if target.suffix.lower() != '.' + format_name:
+                raise OfficeError('Output extension must match the selected format.')
+            cid = identifier(self.state['current'])
+            data = self.client.request('/api/conversations/' + cid + '/artifacts/' + identifier(version) + '/' + format_name)
+            write_new(target, data)
+            print('Exported version: ' + version, flush=True)
+        else:
+            print('Unknown command. Use /new /open /list /draft /sources /chat /report /revise '
+                  '/send /recover /stop /export /materials /import /models /model /quit.', flush=True)
+        return True
+
+    def run(self):
+        print('Office interactive: text saves drafts; /send requires a fresh exact confirmation.', flush=True)
+        self.show_models(self.models)
+        self.listing(self.conversations)
+        self.show_draft()
+        if self.state['pending'] is not None:
+            print('Pending request retained. Use /recover; saved confirmation is not new consent.', flush=True)
+        while True:
+            try:
+                line = input()
+            except (EOFError, KeyboardInterrupt):
+                print('Draft retained. Nothing sent on exit.', flush=True)
+                return 0
+            try:
+                if line.startswith('/'):
+                    if not self.command(line):
+                        return 0
+                else:
+                    draft = self.draft()
+                    draft['prompt'] = draft['prompt'] + ('\n' if self.key() in self.state['drafts'] else '') + line
+                    self.update_draft(draft)
+                    print('Draft saved; not sent.', flush=True)
+            except _StateSaveFailed:
+                raise
+            except (OfficeError, OSError, ValueError, TypeError, KeyError):
+                print('Office command refused. No success is implied; draft and pending request retained.', flush=True)
+
+
 def run_office(args):
     try:
+        if args.office_command == 'interactive' and args.as_json:
+            raise OfficeError('--json is not available for interactive office sessions.')
         if args.office_command == 'restore':
             result, code = restore(read_file(args.source), args.data_dir), 0
         else:
-            if not args.data_dir.is_dir() and not (args.office_command == 'conversations' and args.action == 'create'):
+            if (not args.data_dir.is_dir() and args.office_command != 'interactive' and
+                    not (args.office_command == 'conversations' and args.action == 'create')):
                 raise OfficeError('The office workspace does not exist. Create a conversation first.')
-            config = profile_config(load_config(args.config), args.profile) if args.config else None
+            config = load_config(args.config) if args.config else None
             if args.profile and config is None:
                 raise OfficeError('--profile requires --config for an offline workspace.')
+            if config and args.profile:
+                profile_config(config, args.profile)  # Validate, but retain all configured choices.
+                config = dict(config, default_profile=args.profile)
             with OfficeConnection(args.data_dir, config) as client:
                 if client.remote and (args.config or args.profile):
                     raise OfficeError('The running server owns model configuration; omit CLI config/profile overrides.')
+                if args.office_command == 'interactive':
+                    return _InteractiveOffice(client).run()
                 result, code = _operate(args, client)
         response = dict(schema_version='pocketchat-office-cli.v1', ok=code == 0, result=result)
     except OfficeError as exc:
-        response = dict(schema_version='pocketchat-office-cli.v1', ok=False, error=str(exc))
+        # Interactive errors are content-free even if a server sends unsafe text.
+        error = (str(exc) if isinstance(exc, _StateSaveFailed) else
+                 'Office interactive operation refused. Draft and pending request were not overwritten.') if args.office_command == 'interactive' else str(exc)
+        response = dict(schema_version='pocketchat-office-cli.v1', ok=False, error=error)
         code = 2
     except (OSError, ValueError, ConfigError):
         response = dict(schema_version='pocketchat-office-cli.v1', ok=False,
@@ -151,6 +460,5 @@ def run_office(args):
         else:
             print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        import sys
         print(response['error'], file=sys.stderr)
     return code

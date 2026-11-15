@@ -106,7 +106,8 @@ class OfficeHandler(BaseHTTPRequestHandler):
             if len(lengths) != 1 or not lengths[0].isdigit():
                 raise OfficeError('One bounded content length is required.')
             length = int(lengths[0])
-            if not 0 < length <= MAX_BODY:
+            body_limit=3*1024*1024 if native and parsed.path=='/api/cli-state' else MAX_BODY
+            if not 0 < length <= body_limit:
                 raise OfficeError('Request exceeds its size limit.', 413)
             if self.headers.get('Content-Type') != 'application/json':
                 raise OfficeError('JSON content type is required.', 415)
@@ -115,11 +116,13 @@ class OfficeHandler(BaseHTTPRequestHandler):
             if len(raw) != length:
                 raise OfficeError('Incomplete request body.')
             try:
-                body = decode_json_bytes(raw, MAX_BODY, 12, 4000)
+                body = decode_json_bytes(raw, body_limit, 12, 20000 if native and parsed.path=='/api/cli-state' else 4000)
             except JSONInputError as exc:
                 raise OfficeError('Invalid bounded JSON.') from exc
         else:
             body = None
+        if parsed.path == '/api/cli-state' and not native:
+            raise OfficeError('CLI state requires native client authentication.', 403)
         if parsed.path == '/api/login' and self.command == 'POST':
             return parsed.path, body
         if parsed.path not in ASSETS:
@@ -161,7 +164,9 @@ class OfficeHandler(BaseHTTPRequestHandler):
                 value['csrf'] = self.server.csrf_token
             self._send(status, value, mime, headers)
         except OfficeError as exc:
-            self._send(exc.status, {'error': str(exc)})
+            error={'error':str(exc)}
+            if exc.request_not_accepted:error['request_not_accepted']=True
+            self._send(exc.status,error)
         except (OSError, ValueError):
             self._send(400, {'error': 'Request could not be read or completed.'})
         except Exception:
@@ -183,10 +188,11 @@ def create_server(app, port=0):
 def run_web(args):
     app = server = None
     try:
-        config = profile_config(load_config(args.config), args.profile)
+        loaded = load_config(args.config)
+        config = profile_config(loaded, args.profile)
         if requires_api_key(config) and not load_api_key(config):
             raise OfficeError('Configured provider credential is not available.')
-        app = OfficeWorkspace(args.data_dir, config)
+        app = OfficeWorkspace(args.data_dir, config, profiles={name:profile_config(loaded,name) for name in loaded['profiles']})
         server = create_server(app, args.port)
         print('PocketChat local workspace: %s/#%s' % (server.origin, server.bootstrap_token), flush=True)
         print('Keep this launch link private. Press Ctrl+C to stop.', flush=True)

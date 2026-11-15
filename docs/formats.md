@@ -393,3 +393,32 @@ Message allocation is explicitly ordered. A workspace whose integer message IDs
 cannot fit another user/assistant pair refuses new requests before sending; old
 receipts, reads and backups remain available. This is not proof of physical
 power-loss recovery on every filesystem.
+
+
+### Office CLI UI state v1
+
+`office-cli-state.json` is a mode-0600, bounded (3 MiB) private UI document,
+not the office database or a data-backup member. `schema` is
+`pocketchat-office-cli-state.v1`; `workspace` binds the canonical directory/device/
+inode; `state` contains `revision`, `current`, `drafts`, `pending`. Draft keys
+are conversation IDs or `new`, with `prompt`, `intent`, `source_ids`,
+`revision_id`; they do not imply consent or sent history. Pending additionally
+pins the exact confirmed request, confirmation hash and optional run ID.
+
+The HTTP state route is native-authentication-only; browser cookies/CSRF do
+not grant access to CLI drafts. Only the exclusive workspace owner writes, using exact revision CAS, a private
+no-follow temporary file, fsync and atomic replacement. A stale revision, unknown
+version, foreign workspace, unsafe linked file, malformed/oversized record or
+cross-conversation reference refuses. Copying this file to a different restore
+directory is not draft migration. Restore continues to exclude CLI/browser UI
+state; it restores data/receipts, not an automatic resend. Directory fsync failure
+is an unknown UI-save outcome, not proof of physical power-loss recovery.
+
+Every new office run can carry `model_snapshot` without `confirmation`; the
+closed snapshot is `{model, provider}` and requires the original `wire`.
+Confirmed runs still require both snapshot and exact hex confirmation. Historical
+runs without these additive fields remain readable and restorable.
+
+Stale confirmed-request previews can return the boolean `request_not_accepted`
+only when the exact request has no receipt and fails before admission. It is not
+a generic 4xx or transport-error interpretation and never authorizes replay.

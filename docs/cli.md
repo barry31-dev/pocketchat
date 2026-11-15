@@ -925,3 +925,51 @@ JavaScript integer rounding. Backup row IDs retain their integer format.
 
 Office run receipts additionally expose their original `request_id` for read-only
 receipt matching; this does not change the original request or call the provider.
+
+
+### Configured office models and the interactive entrance
+
+```sh
+pocketchat office --data-dir PRIVATE_DIR models
+pocketchat office --data-dir PRIVATE_DIR models --select PROFILE
+pocketchat office --data-dir PRIVATE_DIR interactive
+# Offline: explicitly load existing profiles; the live server owns its own config.
+pocketchat office --data-dir PRIVATE_DIR --config config.json --profile PROFILE interactive
+```
+
+`models` reads/selects only existing office profiles. It does not probe the
+endpoint, spend a model call, create credentials, or enable legacy tools/fallback.
+Choices display profile, model, safe provider endpoint and office chat/report
+capabilities. Selection is owned by the current workspace writer, affects only
+new requests and refuses while a request/worker is still active. Restart loads the
+explicit config again; selection is not a new persistent global configuration.
+
+`interactive` is an ordinary line entrance, not the historical task agent.
+Each non-command line appends to the current **unsent** draft; Enter never sends.
+Use `/new TITLE`, `/open CID`, `/list`, `/draft`, `/materials`, `/import PATH`,
+`/sources ID [ID…]`, `/chat`, `/report`, `/revise VERSION`, `/models`, `/model PROFILE`,
+`/send`, `/recover`, `/stop`, `/export VERSION md|docx PATH`, `/quit`.
+The source file is an explicitly selected bounded TXT/Markdown/CSV copy, not
+arbitrary provider file access. `/export` uses the same exact-version export and
+exclusive-create destination rules as the noninteractive office command.
+
+`/send` displays the actual history, selected material/message, endpoint/model
+and content-bound preview hash. Only typing the **entire hash** sends. A mismatch,
+EOF or Ctrl+C at confirmation leaves the draft unsent. Each confirmed request is
+saved as pending before the network operation. Reopening never resends; `/recover`
+reads the exact request-ID receipt, verifies conversation/wire, and never calls
+the provider. Missing/unknown receipts remain pending, not permission to retry. A verified
+`request_not_accepted` response from the owner (stale preview, before admission)
+clears pending by CAS, keeps the draft, and requires a fresh preview/hash;
+ordinary errors do not receive that interpretation.
+Failed/cancelled receipts retain a draft for a new explicit request. `/stop` uses
+the same live owner and worker lifetime as the browser. `--json` is refused for
+interactive input; use the existing noninteractive commands for one JSON result.
+
+CLI drafts and pending state are private workspace-local UI state, distinct from
+browser-tab drafts and excluded from data backups. A competing CLI state edit
+causes compare-and-swap refusal; interaction stops without overwriting it or
+sending, and displays any uncommitted draft for the operator to copy. Protect
+terminal output containing previews/drafts; local-first does not mean private
+content is never sent after confirmation. Old request snapshots do not change
+when profiles switch, and old confirmed receipts remain recoverable.

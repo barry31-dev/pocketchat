@@ -1,5 +1,15 @@
 # Changelog
 
+
+## Unreleased — office configured profiles and interactive drafts
+
+- Add explicit existing-profile choices shared by browser and office CLI;
+  pin new request models and invalidate stale content-bound confirmation.
+- Add an ordinary interactive office entrance with private CAS-protected drafts,
+  exact-hash sending and read-only receipt recovery, reusing the live owner.
+- Preserve legacy CLI and database formats; UI state is not a backup member.
+  Fixture checks do not establish real-provider quality or full P1 completion.
+
 ## Unreleased — local office workspace
 
 - Add literal message search with exact hit navigation, reversible conversation

@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let csrf = '', current = null, selected = new Set(), report = false, revision = null, activeRun = null, polling = null;
-let conversations = [], lastSubmission = null;
+let conversations = [], lastSubmission = null, displayedModelRevision = null;
 let receiptKey = '', draftPrefix = '', viewKey = '', draftReady = false, opening = false, searchSequence = 0;
 let searchTimer = null, mutation = false, legacyPending = false;
 function editingBlocked() { return Boolean(activeRun || lastSubmission || opening || mutation || legacyPending); }
@@ -10,7 +10,7 @@ function notice(message = '') { $('notice').textContent = message; }
 async function api(path, body) {
   const response = await fetch(path, {method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : {'Content-Type':'application/json','X-CSRF-Token':csrf}, body: body === undefined ? undefined : JSON.stringify(body)});
   const data = await response.json();
-  if (!response.ok) { const e=new Error(data.error || 'Request failed.');e.status=response.status;throw e; }
+  if (!response.ok) { const e=new Error(data.error || 'Request failed.');e.status=response.status;e.requestNotAccepted=data.request_not_accepted===true;throw e; }
   return data;
 }
 function markdown(parent, content) {
@@ -28,6 +28,7 @@ function markdown(parent, content) {
 function busy(value) {
   value = value || editingBlocked();
   const readOnly = value || Boolean(current?.archived);
+  const choice=$('model-choice');if(choice)choice.disabled=value;
   for (const id of ['send','upload','prompt','consent','report-toggle']) $(id).disabled = readOnly;
   $('stop').hidden = !value || !activeRun; $('new-chat').disabled = value;
   $('archive').disabled = value; $('rename').disabled = readOnly;
@@ -166,11 +167,11 @@ async function dispatchPending() {
   if(!lastSubmission)return;
   try {
     const {cid,body}=lastSubmission;
-    const r=await api('/api/conversations/'+cid+'/runs',body);
+    const r=lastSubmission.confirmation ? await api('/api/conversations/'+cid+'/confirmed',{message:body,confirmation:lastSubmission.confirmation}) : await api('/api/conversations/'+cid+'/runs',body);
     if(current?.id===cid && $('prompt').value===body.prompt){$('prompt').value='';saveDraft();}
     $('consent').checked=false;notice();watch(r.id);
   }catch(e){
-    if([400,403,404,413,415].includes(e.status)){lastSubmission=null;sessionStorage.removeItem(receiptKey);busy(false);notice(e.message);}
+    if(e.requestNotAccepted || [400,403,404,413,415].includes(e.status)){lastSubmission=null;sessionStorage.removeItem(receiptKey);$('consent').checked=false;busy(false);notice(e.message);}
     else uncertainSubmission(e);
   }
 }
@@ -182,11 +183,15 @@ $('composer').onsubmit=async event=>{event.preventDefault();try{
   if(current?.archived)throw new Error('Restore this conversation before sending.');
   // Capture every content/consent dependency before creating a conversation.
   const body={prompt:$('prompt').value,intent:report?'report':'chat',source_ids:[...selected],revision_id:revision,request_id:crypto.randomUUID(),consent:true};
+  const displayedModel=$('model').textContent, displayedProvider=$('provider').textContent, displayedProfile=$('model-choice').value, modelRevision=displayedModelRevision;
   mutation=true;busy(true);
   const cid=await ensureConversation();
   if(!$('consent').checked || body.prompt!==$('prompt').value || body.intent!==(report?'report':'chat') || body.revision_id!==revision || JSON.stringify(body.source_ids)!==JSON.stringify([...selected]))
     throw new Error('The draft changed. Review and confirm it again.');
-  lastSubmission={cid,body};sessionStorage.setItem(receiptKey,JSON.stringify(lastSubmission));await dispatchPending();
+  const preview=await api('/api/conversations/'+cid+'/preview',body);
+  if((preview.model_revision!==undefined && modelRevision!==preview.model_revision) || (preview.profile!==undefined && preview.profile!==displayedProfile) || preview.model!==displayedModel || new URL(preview.provider).origin!==displayedProvider){$('consent').checked=false;await refreshModels();throw new Error('Model changed in another client. Review and confirm again.');}
+  if(!$('consent').checked || body.prompt!==$('prompt').value || body.intent!==(report?'report':'chat') || body.revision_id!==revision || JSON.stringify(body.source_ids)!==JSON.stringify([...selected]))throw new Error('The draft changed. Review and confirm it again.');
+  lastSubmission={cid,body,confirmation:preview.confirmation};sessionStorage.setItem(receiptKey,JSON.stringify(lastSubmission));await dispatchPending();
 }catch(e){notice(e.message);}finally{mutation=false;busy(Boolean(activeRun||lastSubmission));}};
 $('stop').onclick=()=>api('/api/runs/'+activeRun+'/stop',{}).catch(e=>notice(e.message));
 $('new-chat').onclick=()=>{if(editingBlocked())return;saveDraft();current=null;restoreDraft();$('messages').replaceChildren();$('sources').replaceChildren();$('artifacts').replaceChildren();$('rename').textContent='New conversation';$('archive').hidden=true;notice();renderList();busy(false);$('prompt').focus();};
@@ -227,6 +232,25 @@ function showLegacyReceipt() {
   discard.onclick=()=>{if(mutation)return;if(!window.confirm('Remove only this tab record? Check the old workspace first; an unknown request must not be sent again.'))return;sessionStorage.removeItem('pocketchat.pending-request.v1');legacyPending=false;notice('Old tab record removed. No request was sent.');busy(false);};
   $('notice').append(' ',recover,' ',discard);
 }
+async function refreshModels() {
+  const result=await api('/api/models'), choice=$('model-choice');
+  choice.replaceChildren();
+  for(const model of result.items){
+    const option=node('option',model.profile+' · '+model.model);option.value=model.profile;
+    choice.append(option);
+  }
+  choice.value=result.selected || '';displayedModelRevision=result.revision ?? null;
+  const selectedModel=result.items.find(model=>model.profile===result.selected);
+  $('model').textContent=selectedModel?.model || 'No model selected';
+  $('provider').textContent=selectedModel?.provider ? new URL(selectedModel.provider).origin : 'the configured provider';
+}
+$('model-choice').onchange=async()=>{
+  if(editingBlocked())return;
+  const profile=$('model-choice').value;changedDraft();mutation=true;busy(true);
+  try{await api('/api/models',{profile});await refreshModels();notice('Model changed for new requests. Review and confirm before sending.');}
+  catch(e){notice(e.message);await refreshModels().catch(()=>{});}
+  finally{mutation=false;busy(false);}
+};
 async function boot() {
   const data=await api('/api/bootstrap'); csrf=data.csrf;
   receiptKey='pocketchat.pending-request.v2:'+data.workspace_id;
@@ -234,6 +258,7 @@ async function boot() {
   viewKey=draftPrefix+'current';
   $('model').textContent=data.model || 'No model selected';
   $('provider').textContent=data.provider ? new URL(data.provider).origin : 'the configured provider';
+  await refreshModels();
   $('upgrade').hidden=data.database_version!==2; $('connect').close(); await refreshList();
   let saved=null, lastView=null;
   try { saved=JSON.parse(sessionStorage.getItem(receiptKey)||'null');lastView=sessionStorage.getItem(viewKey); }
