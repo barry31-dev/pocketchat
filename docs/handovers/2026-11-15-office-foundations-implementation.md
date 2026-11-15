@@ -17,3 +17,17 @@ integration. This checkpoint does not certify full foundation acceptance, Window
 model quality or release. No paid provider or formal release.
 Contract: [foundations](../office-foundations.md).
 Review: [record](../review-office-foundations-implementation-v1.json).
+
+## Browser continuation plan — 2026-11-16
+
+Keep the approved backend and existing visual language. First add a discriminating
+real-browser/CLI regression for project instructions, explicit memory, frozen
+preview and stale confirmation (red before controls). Wire the current sidebar to
+the existing authenticated operations; preserve request IDs and confirmation on
+previewed sends, and never automatically accept remembered text or summaries.
+Add explicit summary-original selection and show payload/manifest without model
+calls. Then run only the new browser journey and affected client regressions,
+review the new diff independently, and continue the same original slice to its
+remaining OF01–OF10 checks. No new product approval or release is implied.
+
+Browser controls now cover explicit project instructions, guidance proposal/acceptance/forget, summary-original selection and frozen payload/manifest preview. Real browser/CLI subset passed with actual HTTP equality and stale-preview zero runs; 18 client race checks and 168 office tests (1 skip) passed. Full foundation acceptance and fresh new-diff review remain pending.

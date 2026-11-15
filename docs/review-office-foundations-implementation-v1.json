@@ -1,38 +1,42 @@
 {
   "paths": [
-    "pocketchat/office_context.py",
-    "pocketchat/office_store.py",
-    "pocketchat/office_backup.py",
-    "pocketchat/office_service.py",
-    "pocketchat/office_cli.py",
-    "tests/test_office_context.py",
-    "tests/test_office_backup.py",
-    "tests/test_office.py",
-    "tests/test_office_service.py",
-    "tests/test_office_cli.py",
-    "docs/review-office-foundations-implementation-v1.json",
-    "docs/handovers/2026-11-15-office-foundations-implementation.md",
-    "pocketchat/memory_migration.py",
-    "tests/test_memory_migration.py",
     "docs/cli.md",
     "docs/cli.zh-CN.md",
+    "docs/compatibility.md",
     "docs/formats.md",
     "docs/formats.zh-CN.md",
-    "docs/compatibility.md",
+    "docs/handovers/2026-11-15-office-foundations-implementation.md",
+    "docs/review-office-foundations-implementation-v1.json",
     "docs/security.md",
+    "pocketchat/memory_migration.py",
+    "pocketchat/office.py",
+    "pocketchat/office_backup.py",
+    "pocketchat/office_cli.py",
+    "pocketchat/office_context.py",
+    "pocketchat/office_service.py",
+    "pocketchat/office_static/app.js",
+    "pocketchat/office_static/index.html",
+    "pocketchat/office_static/style.css",
+    "pocketchat/office_store.py",
     "pocketchat/session.py",
-    "tests/test_session.py",
-    "pocketchat/office.py"
+    "tests/office_foundations_browser.cjs",
+    "tests/test_memory_migration.py",
+    "tests/test_office.py",
+    "tests/test_office_backup.py",
+    "tests/test_office_cli.py",
+    "tests/test_office_context.py",
+    "tests/test_office_service.py",
+    "tests/test_session.py"
   ],
   "categories": [
-    "python-tools",
-    "docs"
+    "docs",
+    "python-tools"
   ],
   "tier": "medium",
   "review_depth": "standard",
   "rounds": 2,
   "round_decision": "review",
-  "round_scope": "new-diff-only",
+  "round_scope": "full",
   "findings": [
     {
       "id": "OF-LIFE-1",
@@ -85,7 +89,7 @@
     }
   ],
   "slice_contract": "docs/office-foundations.md",
-  "status": "partial-frozen-send-summary-checkpoint-browser-pending",
+  "status": "partial-browser-controls-cross-client-acceptance-review-pending",
   "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
   "reviewer": "independent fresh-context agent; focused correction reviews",
   "scope": "Independent scoped review of prepared hook, office preview/admission/execution and summary controls; each new area has a separate initial review and focused correction re-review, not a full repeated review. All concrete findings closed.",
@@ -131,7 +135,15 @@
       "status": "verified",
       "command": "independent scoped correction re-reviews",
       "result": "Prepared replay, history window, backup lineage, historical summary and duplicate route findings closed. Browser UI and complete acceptance excluded."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "node tests/office_foundations_browser.cjs; OFFICE_RACE_ONLY=1 node tests/office_p1_browser.cjs; python3 -B -m unittest discover -s tests -p test_office*.py -v",
+      "result": "New real Chrome browser/CLI journey passed; preview and stale submission yielded zero provider calls, final displayed payload equaled actual HTTP JSON with one provider call. 18 existing client race checks and 168 office tests (1 skip) passed on macOS Python3.9.6, Node22.23.4. Initial red: missing project-instruction control."
     }
   ],
-  "unverified_scope": "Browser project/context/memory/summary controls and OF01–OF10 complete cross-client acceptance remain incomplete. This checkpoint not independently verified on Windows. No paid provider, formal release or P2."
+  "unverified_scope": "Full OF01–OF10 cross-client acceptance and independent review of new browser diff pending; no new Windows/model/release claim. Backend prior scoped reviews remain distinct.",
+  "schema": "pocketchat-review-record.v1",
+  "ready_for_integration": false
 }
