@@ -28,8 +28,8 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 7,
-  "round_decision": "reconsider",
+  "rounds": 9,
+  "round_decision": "pass",
   "round_scope": "non-destructive-chat-branches-new-diff-only",
   "findings": [
     {
@@ -84,27 +84,36 @@
     {
       "id": "BRANCH-BACKUP-CHRONOLOGY",
       "severity": "major",
-      "status": "fixed",
+      "status": "closed",
       "fingerprint": "completed-run-order-versus-saved-message-order",
-      "reason": "Independent review reproduced reordered runs silently inverting old message chronology. Red regression observed; completed runs must now match monotonic saved user-message order.18backup cases green; closure rereview pending."
+      "reason": "Independent review reproduced reordered runs silently inverting old message chronology. Red regression observed; completed runs must now match monotonic saved user-message order.18backup cases green; independent bounded closure review passed."
     },
     {
       "id": "BRANCH-HISTORY-DISCLOSURE",
       "severity": "major",
-      "status": "fixed",
+      "status": "closed",
       "fingerprint": "pending-old-branch-prefix-hidden",
-      "reason": "Independent review observed old branch history under not-sent label. New explicit Review branch displays actual history and message/material before fresh consent; content/model/context changes re-review. Red regression then18Node cases green; closure rereview pending."
+      "reason": "Independent review observed old branch history under not-sent label. New explicit Review branch displays actual history and message/material before fresh consent; content/model/context changes re-review. Red regression then18Node cases green; independent bounded closure review passed."
     }
   ],
   "previous_checkpoint": "6083efa09cdfbdde3b75c5230d878a0bc537c8df",
   "candidate_base": "6083efa09cdfbdde3b75c5230d878a0bc537c8df",
   "slice_contract": "docs/handovers/2026-11-14-office-p1.md",
-  "status": "branch-checkpoint-under-independent-review",
+  "status": "chat-branch-checkpoint-reviewed",
   "actual_risk": "high: persisted context ancestry, backup restore and cross-client send consent",
   "actual_review_depth": "independent changed-path review plus branch-specific negative tests; earlier checkpoint scope not re-reviewed",
-  "authority": "agent technical review under maintainer routine-development delegation; no formal release authority",
+  "authority": "Agent technical review under maintainer standing routine-development delegation; independent reviewer, not a human signature.",
   "scope": "Latest-main configured-profile and interactive entrance delta only; prior checkpoints retained, fullP1 incomplete.",
-  "round_history": "Previous five rounds preserved; current latest-main delta and bounded finding closure only. No re-review of old foundation or closed findings.",
+  "round_history": [
+    "Previous five rounds preserved; current latest-main delta and bounded finding closure only. No re-review of old foundation or closed findings.",
+    {
+      "checkpoint": "office-chat-branches",
+      "base": "6083efa09cdfbdde3b75c5230d878a0bc537c8df",
+      "rounds": 2,
+      "outcome": "pass after two findings closed; final bounded pair-sequence hardening independently checked",
+      "scope": "new branch diff plus exact closure; prior checkpoint reviews retained"
+    }
+  ],
   "reviewed_evidence": [
     "CPython3.14.10 red branch test rejected Invalid message fields; after implementation six branch/controller cases passed0.143s. CLI red rejected --branch-from, then exposed missing forwarding; corrected case passed0.851s. Node22.23.4 red startBranch undefined, then onecase green.",
     "111 focused office/controller/store/backup/service/CLI/HTTP cases ran22.580s:107passed and4archive-v4 predicate failures. Corrected archive predicate;36 affected store/backup/CLI cases passed0.973s. A new v3 restore test reproduced4!=3 before preserving sourceversion.",
@@ -113,7 +122,8 @@
     "Focused Ruff0.17.3 E9,F, node syntax and diff whitespace passed;41 relative Markdown links resolve. MissingbundledRuff was handled withexisting Ruff,notinstalled; initial/tmpfixture path rejected symlink, rerunused resolved/private/tmp path. No application-security relaxation.",
     "Exact candidateCI/main integration still pending at this record; read back PR and main externally after commit.",
     "Independent first review found two issues; corrected both with red regressions.18backup cases and18Node races passed after fixes. Final real Chrome journey rerun after disclosure change: all13 assertions flags true and page_errors empty. Provider fixture persisted8real HTTP requests; edited/regenerated requests each contain only the new user prompt plus system, not old tail. All fixture server/browser processes closed.",
-    "Final chronology hardening: interleaved userA,userB,assistantA,assistantB red regression accepted invalid input; compare entire run/role pair sequence now. Negative plus unchanged positive restore cases2passed0.028s; no repeated whole suite."
+    "Final chronology hardening: interleaved userA,userB,assistantA,assistantB red regression accepted invalid input; compare entire run/role pair sequence now. Negative plus unchanged positive restore cases2passed0.028s; no repeated whole suite.",
+    "Independent final closure passed: Python3.9.6 in-memory normal v3/v4 pairs accepted; reordered runs, crossed/nested pairs refused. Final office_backup SHA25694e0c59d1ca2178dc1eed2d69a767b9517c2dc2f93fe5c088f58137792cf1ad6; app.js6b8d270def66b8dc0c43558f4d33b34a6eafcb567044272eeedb46868b13f642. No remaining known blocking findings in reviewed scope. Main separately reviewed all changed docs/relative links."
   ],
   "unverified_scope": "Real provider quality, arbitrary Word pagination/rendering, physical power loss, all multiwindow/signal/disk-fault combinations, native Windows secure I/O and full P1 end-to-end acceptance consolidation. No tag, Release, package upload or scheduler changes.",
   "reviewed_files": [
