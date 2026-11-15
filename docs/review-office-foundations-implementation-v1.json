@@ -1,0 +1,32 @@
+{
+  "paths": [
+    "pocketchat/office_context.py",
+    "tests/test_office_context.py",
+    "docs/review-office-foundations-implementation-v1.json",
+    "docs/handovers/2026-11-15-office-foundations-implementation.md"
+  ],
+  "categories": [
+    "python-tools",
+    "docs"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 1,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [],
+  "slice_contract": "docs/office-foundations.md",
+  "status": "partial-foundation-admission-checkpoint",
+  "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
+  "reviewer": "self (routine delegated technical review)",
+  "scope": "Full new project-admission module/test diff; existing OfficeError/text_value and SQL schema/backup upgrade call points. No runtime callers enabled.",
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest discover -s tests -p test_office_context.py -v",
+      "result": "Red: missing office_context module, exit 1; green: 5 tests passed, exit 0 on macOS Python 3.9.6. Closed metadata, byte bounds, project identity, revision types, schema4 zero-write refusal, schema5 corrupt/missing/duplicate rows covered."
+    }
+  ],
+  "unverified_scope": "Schema5 creation/upgrade, v2 backup, prepared context, memory lifecycle, summary, Web/CLI controls, wire equality and OF01–OF10 end-to-end acceptance not implemented. No paid provider or formal release."
+}
