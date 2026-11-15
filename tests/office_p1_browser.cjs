@@ -312,11 +312,165 @@ async function raceAcceptance() {
  if (failed) process.exitCode = 1;
 }
 
+async function remainingAcceptance(page, cli, workspace, fixtureRoot) {
+ const {execFile} = require('node:child_process');
+ const {promisify} = require('node:util');
+ const runCLI = promisify(execFile);
+ const waitFor = async (check, message) => {
+  const deadline = Date.now() + 12000;
+  while (Date.now() < deadline) {if (await check()) return; await new Promise(r => setTimeout(r, 80));}
+  throw new Error(message);
+ };
+ const pressTo = async selector => {
+  for (let n = 0; n < 20; n++) {
+   if (await page.locator(selector).evaluate(el => el === document.activeElement)) return;
+   await page.keyboard.press('Tab');
+  }
+  throw new Error('Keyboard could not reach ' + selector);
+ };
+ const long = cli(['conversations', 'list']).items.find(c => c.title === 'Long conversation fixture');
+ assert.ok(long);
+ await page.locator('#conversations button', {hasText: long.title}).click();
+ await page.locator('.message').last().waitFor();
+ assert.equal(await page.locator('.message').count(), 400);
+ assert.ok(await page.locator('#messages').evaluate(el => el.scrollHeight > el.clientHeight * 10));
+ await page.locator('#prompt').focus();
+ await page.keyboard.type('Unsent long chat draft');
+ await page.keyboard.press('Enter');
+ await page.keyboard.type('Second paragraph');
+ const draft = 'Unsent long chat draft\nSecond paragraph';
+ assert.equal(await page.locator('#prompt').inputValue(), draft);
+ await page.locator('#search').focus();
+ await page.keyboard.type('Saved question 003');
+ const hit = page.locator('#search-results button').first();
+ await hit.waitFor();
+ await pressTo('#show-archived'); await pressTo('#search-results button');
+ await page.keyboard.press('Enter');
+ await page.waitForFunction(() => document.activeElement?.classList.contains('search-hit'));
+ const message = page.locator('.search-hit');
+ assert.match(await message.innerText(), /Saved question 003/);
+ assert.ok(await message.evaluate(el => {const r=el.getBoundingClientRect(), p=el.closest('#messages').getBoundingClientRect();return r.bottom>p.top && r.top<p.bottom;}));
+ assert.equal(await page.locator('#prompt').inputValue(), draft);
+ await page.reload(); await page.locator('.message').last().waitFor();
+ assert.equal(await page.locator('#prompt').inputValue(), draft);
+ // Native tab order and form activation, without implicit Enter-to-send.
+ await page.locator('#new-chat').focus(); await page.keyboard.press('Enter');
+ await page.locator('#prompt').focus();
+ await page.keyboard.press('Shift+Tab');
+ assert.equal(await page.locator('#report-toggle').evaluate(el=>el===document.activeElement),true);
+ await page.keyboard.press('Shift+Tab');
+ assert.equal(await page.locator('#upload').evaluate(el=>el===document.activeElement),true);
+ assert.notEqual(await page.locator('.file-button').evaluate(el=>getComputedStyle(el).outlineStyle),'none', 'Keyboard material picker needs a visible focus indicator on its label.');
+ await page.locator('#prompt').fill('hold-browser');
+ await pressTo('#consent'); await page.keyboard.press('Space');
+ await pressTo('#send'); await page.keyboard.press('Enter');
+ await page.locator('#stop').waitFor();
+ await waitFor(async () => fs.access(path.join(fixtureRoot, 'hold-browser.started')).then(()=>true,()=>false), 'Provider never received browser request');
+ const created = cli(['conversations', 'list']).items.find(c => c.title === 'New conversation');
+ const browserRun = cli(['conversations', 'show', '--conversation', created.id]).runs[0];
+ assert.equal(cli(['runs', 'stop', '--run', browserRun.id]).status, 'stopping');
+ await page.waitForFunction(() => document.getElementById('pending').textContent.includes('Stopping'));
+ assert.equal(await page.locator('#send').isDisabled(), true);
+ const blockedConversation=cli(['conversations','create','--title','Blocked other conversation']);
+ const busyAttempt=await page.evaluate(async cid=>{
+  const bootstrap=await (await fetch('/api/bootstrap')).json();
+  const response=await fetch('/api/conversations/'+cid+'/runs',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':bootstrap.csrf},body:JSON.stringify({prompt:'Do not admit while stopping',intent:'chat',source_ids:[],revision_id:null,request_id:'blocked-while-stopping',consent:true})});
+  return response.status;
+ },blockedConversation.id);
+ assert.equal(busyAttempt,409, 'Stopping must retain the workspace execution slot across conversations.');
+ assert.deepEqual(cli(['conversations','show','--conversation',blockedConversation.id]).runs,[]);
+ await fs.writeFile(path.join(fixtureRoot, 'hold-browser.release'), 'release');
+ await waitFor(() => cli(['runs', 'show', '--run', browserRun.id]).status === 'cancelled', 'Browser request did not cancel');
+ await page.waitForFunction(() => !document.getElementById('send').disabled);
+ assert.match(await page.locator('#notice').innerText(), /Stopped by the user/);
+ assert.equal(cli(['conversations', 'show', '--conversation', created.id]).messages.length, 0);
+ // Other direction: real CLI submits, browser observes and stops the same receipt.
+ const args = ['chat', '--conversation', created.id, '--prompt', 'hold-cli', '--request-id', 'remaining-cli-stop'];
+ const preview = cli(args);
+ const child = runCLI(python, ['-m','pocketchat','office','--data-dir',workspace,'--json',...args,'--confirm',preview.confirmation], {cwd:root,encoding:'utf8',timeout:20000}).then(
+  r => ({code:0,...r}), e => ({code:e.code,stdout:e.stdout,stderr:e.stderr}));
+ await waitFor(async () => fs.access(path.join(fixtureRoot, 'hold-cli.started')).then(()=>true,()=>false), 'Provider never received CLI request');
+ await page.locator('#conversations button', {hasText: 'New conversation'}).click();
+ await page.locator('#stop').waitFor();
+ const cliRun = cli(['conversations','show','--conversation',created.id]).runs[0];
+ await page.locator('#stop').focus(); await page.keyboard.press('Enter');
+ await waitFor(() => cli(['runs','show','--run',cliRun.id]).status === 'stopping', 'CLI did not observe browser stop');
+ await page.waitForFunction(() => document.getElementById('pending').textContent.includes('Stopping'));
+ await fs.writeFile(path.join(fixtureRoot,'hold-cli.release'), 'release');
+ const terminal = await child;
+ assert.equal(terminal.code, 1, terminal.stderr);
+ const receipt = JSON.parse(terminal.stdout).result;
+ assert.equal(receipt.id, cliRun.id); assert.equal(receipt.status, 'cancelled');
+ await page.waitForFunction(() => !document.getElementById('send').disabled);
+ assert.match(await page.locator('#notice').innerText(), /Stopped by the user/);
+ assert.equal(cli(['conversations','show','--conversation',created.id]).messages.length, 0);
+ // A retry is explicit and requires new consent; it does not auto-dispatch.
+ await page.locator('#notice button').focus(); await page.keyboard.press('Enter');
+ assert.equal(await page.locator('#prompt').inputValue(), 'hold-cli');
+ assert.equal(await page.locator('#consent').isChecked(), false);
+ await page.locator('#new-chat').focus(); await page.keyboard.press('Enter');
+ await page.locator('#search').fill('');
+ await page.locator('#conversations button', {hasText: long.title}).click();
+ await page.waitForFunction(title => document.getElementById('rename').textContent === title && !document.getElementById('prompt').disabled, long.title);
+ assert.equal(await page.locator('#prompt').inputValue(), draft);
+ await page.screenshot({path:path.join(output,'p1-remaining-desktop.png')});
+ return {long_conversation_messages:400, keyboard_search_location:true, multiline_draft_reload:true, keyboard_send_stop_retry:true, keyboard_material_focus:true, stopping_retains_slot:true,
+  browser_request_cli_stop:true, cli_request_browser_stop:true, cancelled_output_not_saved:true, isolated_draft_retained:true};
+}
+
+async function reverseExportAcceptance(page, cli) {
+ const {createHash}=require('node:crypto');
+ const materials=[['browser-notes.txt','Completed 12 customer follow-ups.'],['browser-next.md','Prepare the handover.']];
+ await page.locator('#new-chat').click();
+ await page.locator('#upload').setInputFiles(materials.map(([name,text])=>({name,mimeType:'text/plain',buffer:Buffer.from(text)})));
+ await page.waitForFunction(()=>document.querySelectorAll('.source').length===2 && !document.getElementById('prompt').disabled);
+ await page.locator('#report-toggle').click();await page.locator('#prompt').fill('Make another report.');
+ await page.locator('#consent').check();await page.locator('#send').click();
+ await page.waitForFunction(()=>document.querySelectorAll('.artifact').length===1 && !document.getElementById('send').disabled);
+ const c=cli(['conversations','list']).items[0];
+ const old=cli(['conversations','show','--conversation',c.id]).artifacts[0];
+ const args=['report','revise','--conversation',c.id,'--version',old.id,'--prompt','Shorten it.','--request-id','reverse-export-revision'];
+ const preview=cli(args),done=cli([...args,'--confirm',preview.confirmation]);assert.equal(done.status,'completed');
+ await page.reload();await page.waitForFunction(()=>document.querySelectorAll('.artifact').length===2);
+ const versions=cli(['conversations','show','--conversation',c.id]).artifacts;
+ assert.equal(versions[1].id,old.id);assert.equal(versions[0].predecessor,old.id);
+ const expectedSources=materials.map(([name,text],i)=>({name,citation:'S'+(i+1),sha256:createHash('sha256').update(text).digest('hex')}));
+ const exports=[];
+ for(const [index,label] of [[1,'old'],[0,'new']]){
+  const card=page.locator('.artifact').nth(index);
+  // Open and dismiss the report preview with native keyboard activation.
+  await card.getByRole('button',{name:'Preview',exact:true}).focus();await page.keyboard.press('Enter');
+  await page.locator('#report-preview').waitFor();
+  assert.match(await page.locator('#preview-content').innerText(),/12/);
+  await page.keyboard.press('Escape');await page.locator('#report-preview').waitFor({state:'hidden'});
+  for(const [format,button] of [['md','Markdown'],['docx','Word']]){
+   const download=page.waitForEvent('download');
+   await card.getByRole('button',{name:button,exact:true}).click();
+   const item=await download;assert.equal(await item.failure(),null);
+   assert.equal(item.suggestedFilename(),'report-'+versions[index].id.slice(0,8)+'.'+format);
+   const filename=path.join(output,'reverse-'+label+'.'+format);await item.saveAs(filename);
+   exports.push({label,format,version:versions[index].id,filename});
+  }
+ }
+ const oldText=await fs.readFile(path.join(output,'reverse-old.md'),'utf8'),newText=await fs.readFile(path.join(output,'reverse-new.md'),'utf8');
+ assert.notEqual(oldText,newText);assert.match(oldText,/## Risks/);assert.doesNotMatch(newText,/## Risks/);
+ for(const version of versions){
+  const artifact=await page.evaluate(async ({cid,aid})=>(await fetch('/api/conversations/'+cid+'/artifacts/'+aid+'/view')).json(),{cid:c.id,aid:version.id});
+  assert.deepEqual(artifact.sources.map(({name,citation,sha256})=>({name,citation,sha256})),expectedSources);
+  const label=version.id===old.id?'old':'new';assert.equal(await fs.readFile(path.join(output,'reverse-'+label+'.md'),'utf8'),artifact.content);
+ }
+ const docxRead=JSON.parse(execFileSync(python,['-c',"import json,sys; from docx import Document; print(json.dumps(['\\n'.join(p.text for p in Document(f).paragraphs) for f in sys.argv[1:]]))",...['old','new'].map(label=>path.join(output,'reverse-'+label+'.docx'))],{encoding:'utf8'}));
+ assert.notEqual(docxRead[0],docxRead[1]);assert.match(docxRead[0],/Risks/);assert.doesNotMatch(docxRead[1],/Risks/);
+ for(const text of docxRead)for(const source of expectedSources){assert.ok(text.includes('['+source.citation+'] '+source.name));assert.ok(text.includes(source.sha256));}
+ await page.screenshot({path:path.join(output,'p1-reverse-exports.png')});
+ return {two_browser_materials:true,cli_revision_preserves_predecessor:true,old_new_browser_md_docx:true,exact_markdown_and_source_manifests:true,docx_readback:true,keyboard_preview_escape:true,exports:exports.map(({filename,...row})=>({...row,file:path.basename(filename)}))};
+}
+
 async function browserAcceptance() {
  const {chromium} = require('playwright');
  if (!output) throw new Error('Set OFFICE_OUTPUT to an existing private evidence directory.');
  const fixtureRoot = path.join(output, 'fixture');
- const server = spawn(python, ['examples/office-demo.py', '--output', fixtureRoot], {cwd: root, stdio: ['ignore', 'pipe', 'pipe']});
+ const server = spawn(python, ['examples/office-demo.py', '--output', fixtureRoot, ...(process.env.OFFICE_REMAINING_ONLY === '1' ? ['--acceptance'] : [])], {cwd: root, stdio: ['ignore', 'pipe', 'pipe']});
  let browser;
  try {
   const launch = await new Promise((resolve, reject) => {
@@ -339,6 +493,18 @@ async function browserAcceptance() {
    assert.equal(cli([...args, '--confirm', preview.confirmation]).id, done.id);
    return done;
   };
+  if (process.env.OFFICE_REMAINING_ONLY === '1' || process.env.OFFICE_REVERSE_EXPORT_ONLY === '1') {
+   browser = await chromium.launch({headless:true,channel:'chrome'});
+   const page = await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'});
+   const errors=[];page.on('pageerror',error=>errors.push(error.message));
+   await page.goto(launch.origin+'/#'+launch.token);
+   await page.waitForFunction(() => document.getElementById('model').textContent === 'offline-fixture');
+   const reverseOnly=process.env.OFFICE_REVERSE_EXPORT_ONLY === '1';
+   const result=reverseOnly ? await reverseExportAcceptance(page,cli) : await remainingAcceptance(page,cli,workspace,fixtureRoot);
+   assert.deepEqual(errors,[]);result.page_errors=errors;
+   await fs.writeFile(path.join(output,reverseOnly?'p1-reverse-export-result.json':'p1-remaining-result.json'),JSON.stringify(result,null,2));
+   console.log(JSON.stringify(result));return;
+  }
   const c = cli(['conversations', 'create', '--title', 'CLI to browser']);
   const ids = [];
   for (const [name, text] of [['sales.txt', 'Completed 12 customer follow-ups.'], ['next.md', 'Prepare the handover.']]) {

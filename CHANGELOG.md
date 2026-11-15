@@ -46,6 +46,10 @@ package-index publication.
 
 ## [Unreleased]
 
+- Make keyboard focus visible on the office material picker. Add a separate
+  offline P1 acceptance journey for cross-client stop receipts, held execution
+  slots, 400-message search/location, multiline drafts and native keyboard actions.
+
 - Add explicit project-memory candidate creation through `memory propose`, with separate acceptance and source/revision-bound opt-in Session recall. Initial writes refuse concurrent publication, non-regular targets, duplicate identities and malformed UTF-8 without replacing the store. Add an offline continuity fixture covering unaccepted, accepted, foreign-workspace, expired and retired records; this does not add automatic capture, model approval or secure deletion.
 - Bind code-repair requests to authorized source snapshots, preserve successful retry and original failure evidence for exact recovery, and add an offline Swift Package repair fixture.
 - Add a completed-read snapshot handoff into dependent task report writes, binding each Session result to the pinned read-trace completion and the task-record workspace to its authorized policy (see `docs/review-local-report-v1.json`). Add an offline real-file CLI report/revision/resume fixture; versioned outputs preserve report history, and unusable source evidence refuses before dependent provider work. This does not add tools, overwrite authority or certify real-provider analysis.

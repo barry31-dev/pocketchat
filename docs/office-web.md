@@ -175,3 +175,29 @@ regardless of the active chat branch. [CLI branch controls](cli.md#office-chat-b
 use the same service, receipts and confirmation. Branches require schema 4;
 older workspaces must explicitly back up and upgrade. Never downgrade the version
 number: restore a verified pre-upgrade backup to a new directory instead.
+
+### Keyboard and long conversations
+
+Tab / Shift+Tab move through native controls; Space toggles consent, and Enter
+activates the focused Send, Stop or retry button. Enter inside Message inserts a
+newline, not a request. The Add material label shows a focus ring while its native
+file input is focused. Search matches can be opened with Enter and move focus to
+the saved message. Unsent text remains tab-local when switching or reloading.
+
+A CLI request is visible when the browser opens/reopens its conversation. Either
+client can stop that same run; `stopping` is not completion. Wait for the final
+receipt before retrying, and explicitly review and confirm a retry. Stopped output
+is not appended as a completed message or report.
+
+The owned local fixture supports a separate remaining-P1 check, without rerunning
+the report/branch journey: set `OFFICE_REMAINING_ONLY=1`, `OFFICE_OUTPUT` to a new
+private evidence directory, and `OFFICE_PYTHON` to a compatible Python; run
+`node tests/office_p1_browser.cjs` with Playwright and Chrome available. The check
+uses 200 seeded turns (400 saved messages), two gated local-provider requests,
+keyboard/search/draft actions and both stop directions. This is not a benchmark,
+a live-provider test or a claim of unlimited history/accessibility coverage.
+
+Use `OFFICE_REVERSE_EXPORT_ONLY=1` instead for the narrow A01 reverse path:
+two browser-imported materials → browser report → CLI revision → browser downloads
+of each old/new Markdown and Word version, with exact content/source checks and
+python-docx readback. These modes use fresh fixtures and never a real account.
