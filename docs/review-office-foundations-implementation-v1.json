@@ -165,6 +165,12 @@
       "status": "verified",
       "command": "node tests/office_foundations_browser.cjs; OFFICE_RACE_ONLY=1 node tests/office_p1_browser.cjs; python3 -B -m unittest tests.test_office.OfficeFoundationSendTests.test_foundation_preview_rejects_each_changed_dependency_without_admission -v; ruff check --select E9,F pocketchat tests",
       "result": "Expanded real Chrome/native CLI journey passed with exactly one HTTP provider request, actual payload equality, original receipt recovery, zero-call stale refusal, explicit memory replacement, project isolation, 400 originals retained with visible summary/window omission, backup/restore, schema4 GET unchanged then browser explicit upgrade, consent and failed-readback corrections. 18 VM client races and six-dependency Python test passed. macOS Python3.9.6 and Node22.23.4. Full local suite not repeated."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_office.OfficeFoundationSendTests.test_expiring_sensitive_and_corrupt_office_memory_never_silently_enters_a_request -v",
+      "result": "A controlled UTC clock crosses an accepted memory expiry between preview/send; old confirmation refuses, expired or sensitive content is absent, corrupt store refuses rather than empty recall, and provider/receipt counts remain zero. macOS Python3.9.6."
     }
   ],
   "unverified_scope": "Final fresh-context correction response and exact-head CI/main integration pending. Real-provider/model obedience, Windows browser journeys, complete accessibility, Word pagination, formal release and P2 excluded.",

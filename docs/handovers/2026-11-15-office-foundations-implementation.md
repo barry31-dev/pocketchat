@@ -66,3 +66,5 @@ not a newly run full-suite result or this candidate's CI.
 Not verified here: model obedience/quality, paid services, complete accessibility,
 Windows browser journeys, Word pagination, formal release or P2 document reading.
 Exact candidate/PR CI and actual remote-main readback remain required for integration.
+
+Expiry/sensitivity/corruption negative coverage additionally passed with a controlled UTC clock: expiry between preview/send invalidates confirmation, expired/sensitive records do not enter payload, corrupt store is a named refusal, with zero provider calls and no receipt. Backend code is unchanged.

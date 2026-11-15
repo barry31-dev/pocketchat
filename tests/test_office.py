@@ -524,6 +524,47 @@ class OfficeFoundationSendTests(OfficeTests):
         self.app.store.finish(newer['id'], 'completed', 'Changed history.', None)
         refused(preview)
 
+    def test_expiring_sensitive_and_corrupt_office_memory_never_silently_enters_a_request(self):
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import patch
+        from pocketchat.office_context import office_memory_action, office_memory_view, read_project_metadata, update_project_metadata
+        from pocketchat.memory_migration import _store_payload
+        project = read_project_metadata(self.app.store)
+        update_project_metadata(self.app.store, project['project_id'], memory_revision=1, memory_enabled=True)
+        proposed = office_memory_action(self.app.store, 'propose', project['project_id'],
+            office_memory_view(self.app.store)['store_sha256'], content='Prefer concise office guidance',
+            category='project_decision', personal_guidance=True)
+        accepted = office_memory_action(self.app.store, 'accept', project['project_id'], proposed['store_sha256'],
+            memory_id=proposed['record']['memory_id'], revision=1, personal_guidance=True)
+        path = self.root / 'office-memory.v2.jsonl'
+        record = dict(accepted['record'])
+        clock = datetime.now(timezone.utc)
+        record['expires_at'] = (clock + timedelta(minutes=1)).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        path.write_bytes(_store_payload([record]))
+        body = dict(prompt='Explain office guidance', intent='chat', source_ids=[], revision_id=None,
+                    request_id='expired-memory-preview', consent=True)
+        preview = self.app.preview(self.cid, body)
+        self.assertIn(record['content'], str(preview['prepared_payload']))
+        class AfterExpiry(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls.fromtimestamp((clock + timedelta(minutes=2)).timestamp(), tz)
+        with patch('datetime.datetime', AfterExpiry):
+            with self.assertRaises(OfficeError):
+                self.app.submit_confirmed(self.cid, body, preview['confirmation'])
+            expired = self.app.preview(self.cid, body)
+            self.assertNotIn(record['content'], str(expired['prepared_payload']))
+            self.assertIn('expired', str(expired['context_manifest']['memory_excluded']))
+        record['sensitive'] = True
+        path.write_bytes(_store_payload([record]))
+        sensitive = self.app.preview(self.cid, body)
+        self.assertNotIn(record['content'], str(sensitive['prepared_payload']))
+        path.write_bytes(b'not-valid-memory\n')
+        with self.assertRaises(OfficeError):
+            self.app.preview(self.cid, body)
+        self.assertEqual(self.adapter.calls, [])
+        self.assertIsNone(self.app.store.db.execute('SELECT id FROM runs WHERE request_id=?', (body['request_id'],)).fetchone())
+
     def test_confirmed_admission_does_not_project_a_third_time(self):
         from unittest.mock import patch
         from pocketchat import office_context
