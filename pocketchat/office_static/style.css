@@ -34,3 +34,9 @@
 #context-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
 #preview-request { font-size: 11px; }
 .foundations :focus-visible, #context-preview :focus-visible { outline: 3px solid #91ae9b; outline-offset: 2px; }
+
+@media (max-width: 650px) {
+  .topbar { flex-wrap: wrap; }
+  .topbar > div { flex: 0 0 100%; }
+  #model-choice { flex: 1; max-width: 100%; min-width: 0; }
+}

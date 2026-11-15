@@ -31,3 +31,38 @@ review the new diff independently, and continue the same original slice to its
 remaining OF01–OF10 checks. No new product approval or release is implied.
 
 Browser controls now cover explicit project instructions, guidance proposal/acceptance/forget, summary-original selection and frozen payload/manifest preview. Real browser/CLI subset passed with actual HTTP equality and stale-preview zero runs; 18 client race checks and 168 office tests (1 skip) passed. Full foundation acceptance and fresh new-diff review remain pending.
+
+
+## Browser/CLI acceptance candidate — 2026-11-16
+
+The owned Chrome/CLI fixture now exercises project instructions in both directions;
+explicit proposal/acceptance/revision/retirement/forget; a changed project or recall
+preference refusing a previously previewed request; manual original receipt recovery
+without replay; unchanged raw HTTP request = displayed frozen payload; summary
+acceptance preserving 400 original messages with explicit bounded-window omission;
+independent project isolation; live-owner backup/restore preserving project ID,
+accepted memory, summaries and original messages while omitting native credentials;
+and schema-four GET remaining unchanged until explicit browser backup-first upgrade.
+Over-limit input admits no new request. Untrusted memory text stays in the user data
+envelope and the payload has no tools. A source/config/summary/history dependency
+matrix independently checks zero-call stale refusal at the shared service layer.
+
+Fresh-context review of the new browser diff found two issues: branch-preview
+consent bypass and save-success obscuring failed readback. Both have reproductions
+and focused corrections; correction review is recorded separately. Mobile controls
+no longer overlap the title at 390 px. A rejected 60,001-character preview leaves
+originals unchanged. HTTP fixture count is exactly one successful physical request
+for the entire cross-client journey, including old-receipt recovery.
+
+Evidence: `node tests/office_foundations_browser.cjs` with a fresh private output,
+macOS Python 3.9.6, Node 22.23.4, headless installed Chrome. Initial red: missing
+project control; subsequent branch-confirmation repro failed before its fix.
+Final expanded browser journey passed, as did 18 existing VM client race cases and
+the new six-dependency service test. The earlier 168-office-test run (one skip)
+remains evidence for unchanged Python implementations; it predates the new test.
+The prior candidate's full-suite and original scoped reviews are historical evidence,
+not a newly run full-suite result or this candidate's CI.
+
+Not verified here: model obedience/quality, paid services, complete accessibility,
+Windows browser journeys, Word pagination, formal release or P2 document reading.
+Exact candidate/PR CI and actual remote-main readback remain required for integration.

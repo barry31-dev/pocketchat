@@ -808,8 +808,9 @@ example placeholders. Proposals/revisions do not become accepted automatically.
 `--personal-guidance` declares non-factual personal or project guidance, not
 independent fact verification. `--acknowledge-history` acknowledges that prior
 traces, exports and backups are not erased. These actions never call a provider.
-Recall is disabled until explicitly enabled; this checkpoint's recall preview
-does not yet integrate remembered text or project instructions into sent requests.
+Recall is disabled until explicitly enabled. Schema-5 previews include accepted
+project guidance and project instructions in the final content-bound request;
+source text and remembered text remain data, never tool permissions.
 Old schemas require explicit verified-backup upgrade for these controls.
 
 

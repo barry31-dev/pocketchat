@@ -207,9 +207,39 @@ python-docx readback. These modes use fresh fixtures and never a real account.
 
 The bounded extension is owned by [office-foundations.md](office-foundations.md):
 project instructions, one context preview/send plan and explicit v2 project memory,
-with OF01–OF10 acceptance and staged write scope. It is approved design only;
-this commit changes no runtime flags, workspace schema or backup format.
+with OF01–OF10 acceptance and staged write scope. Schema-5 projects expose explicit
+instructions, default-off accepted memory, continuity summaries and one frozen
+preview/send plan through the shared browser/CLI service. Older workspaces require
+a verified-backup-first upgrade; opening a page never silently migrates them.
 The original slice's memory/context exclusions describe its initial scope, not a
 permanent ban on this reviewed extension. P1 remains the existing integrated
 result; foundations must close before P2 document-reading integration. Existing
 CLI memory/context features are not evidence of office-entry availability.
+
+### Using project context in the browser
+
+Open **Project & context** in Materials & drafts. Save instructions or an explicit
+memory preference with the current project revision. **Propose guidance** requires
+a personal/project-guidance declaration; **Accept** is separate. Revising creates
+a new candidate and accepting it retires the predecessor. **Forget** requires
+acknowledgement that historical traces, exports and backups are not erased.
+
+**Load summary & originals** exposes the active branch's unchanged messages.
+Select original evidence, write your own summary, and explicitly accept it. The
+service binds message/run IDs, Unicode ranges and UTF-8 digests; remembered text
+and summaries are not verified facts or tool grants.
+
+**Preview request** displays the exact provider JSON plus selected/omitted history,
+project revisions, memory digest and summary provenance, without a provider call.
+Close it, then explicitly confirm **Send**. Changes in another client refuse the
+old confirmation; the browser does not silently recompute what you reviewed.
+Lost-response recovery retains the original request ID/body/confirmation and
+recovers its receipt; it does not regenerate the request after project changes.
+A successful save followed by failed readback reports both outcomes distinctly.
+
+The synthetic browser/CLI acceptance entry is `tests/office_foundations_browser.cjs`
+with a fresh private `OFFICE_OUTPUT` directory, compatible `OFFICE_PYTHON`, Playwright
+and Chrome. It records actual request equality, no-call refusals, project isolation,
+explicit replacement, summaries, historical backup/restore and explicit schema-4
+upgrade. Its local fixtures do not prove model obedience, Windows browser behavior,
+complete accessibility, Word pagination or formal release readiness.

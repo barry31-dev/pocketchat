@@ -1,11 +1,15 @@
 {
   "paths": [
+    "CHANGELOG.md",
     "docs/cli.md",
     "docs/cli.zh-CN.md",
     "docs/compatibility.md",
     "docs/formats.md",
     "docs/formats.zh-CN.md",
     "docs/handovers/2026-11-15-office-foundations-implementation.md",
+    "docs/office-foundations.md",
+    "docs/office-web.md",
+    "docs/office-web.zh-CN.md",
     "docs/review-office-foundations-implementation-v1.json",
     "docs/security.md",
     "pocketchat/memory_migration.py",
@@ -86,13 +90,27 @@
       "status": "fixed",
       "fingerprint": "duplicate-run-summary-route-unbound-cid",
       "reason": "Removed accidental run-summary route; GET/POST return 404 with regression."
+    },
+    {
+      "id": "OF-BROWSER-CONSENT",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "previewed-branch-bypasses-fresh-consent",
+      "reason": "Fresh-context reviewer reproduced an unchecked, disabled consent control reaching confirmed dispatch through cached branch preview. Actual dispatch now independently requires checked consent and cached branch preview enables review-confirm-send; real Chrome failed before correction and passed afterward."
+    },
+    {
+      "id": "OF-BROWSER-READBACK",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "saved-status-hides-project-readback-failure",
+      "reason": "Fresh-context reviewer injected memory readback failure after successful project write. Refresh errors now propagate; callers preserve saved-but-refresh-failed and its original cause. Real Chrome route-injected HTTP409 confirms write happened without claiming readback success; startup remains tolerant without auto-upgrade."
     }
   ],
   "slice_contract": "docs/office-foundations.md",
-  "status": "partial-browser-controls-cross-client-acceptance-review-pending",
+  "status": "browser-cross-client-acceptance-passed-correction-review-pending",
   "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
-  "reviewer": "independent fresh-context agent; focused correction reviews",
-  "scope": "Independent scoped review of prepared hook, office preview/admission/execution and summary controls; each new area has a separate initial review and focused correction re-review, not a full repeated review. All concrete findings closed.",
+  "reviewer": "Fresh-context scoped reviewers; original backend reviews preserved, new browser initial review and correction review tracked independently.",
+  "scope": "Original schema/project/memory/backup/prepared-send/summary scoped initial and correction records cover unchanged backend. New browser controls and their authenticated service boundaries reviewed independently; latest correction final response pending, not accepted as approval.",
   "verification": [
     {
       "source_type": "local run (V)",
@@ -141,9 +159,35 @@
       "status": "verified",
       "command": "node tests/office_foundations_browser.cjs; OFFICE_RACE_ONLY=1 node tests/office_p1_browser.cjs; python3 -B -m unittest discover -s tests -p test_office*.py -v",
       "result": "New real Chrome browser/CLI journey passed; preview and stale submission yielded zero provider calls, final displayed payload equaled actual HTTP JSON with one provider call. 18 existing client race checks and 168 office tests (1 skip) passed on macOS Python3.9.6, Node22.23.4. Initial red: missing project-instruction control."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "node tests/office_foundations_browser.cjs; OFFICE_RACE_ONLY=1 node tests/office_p1_browser.cjs; python3 -B -m unittest tests.test_office.OfficeFoundationSendTests.test_foundation_preview_rejects_each_changed_dependency_without_admission -v; ruff check --select E9,F pocketchat tests",
+      "result": "Expanded real Chrome/native CLI journey passed with exactly one HTTP provider request, actual payload equality, original receipt recovery, zero-call stale refusal, explicit memory replacement, project isolation, 400 originals retained with visible summary/window omission, backup/restore, schema4 GET unchanged then browser explicit upgrade, consent and failed-readback corrections. 18 VM client races and six-dependency Python test passed. macOS Python3.9.6 and Node22.23.4. Full local suite not repeated."
     }
   ],
-  "unverified_scope": "Full OF01–OF10 cross-client acceptance and independent review of new browser diff pending; no new Windows/model/release claim. Backend prior scoped reviews remain distinct.",
+  "unverified_scope": "Final fresh-context correction response and exact-head CI/main integration pending. Real-provider/model obedience, Windows browser journeys, complete accessibility, Word pagination, formal release and P2 excluded.",
   "schema": "pocketchat-review-record.v1",
-  "ready_for_integration": false
+  "ready_for_integration": false,
+  "review_history": [
+    {
+      "phase": "unchanged-backend",
+      "candidate": "5cb7564d79504b4ead2bfdf9b2e7df73e1de4d2f",
+      "reviewer_id": "01a1dee5-4b56-7e62-8fae-626e77e59feb",
+      "coverage": "Original initial scopes and precise correction responses recovered and read; schema/project/memory/backup, prepared hook/wire and summary. Seven findings closed; not a new full review."
+    },
+    {
+      "phase": "browser-initial",
+      "candidate": "65e7eeb",
+      "base": "5cb7564d79504b4ead2bfdf9b2e7df73e1de4d2f",
+      "reviewer_id": "01a1dffb-662a-7681-ac02-b3ae510f9273",
+      "coverage": "Browser controls, preview dispatch, CAS and recovery; one consent and one readback finding. Model/Windows/full accessibility excluded."
+    },
+    {
+      "phase": "browser-correction",
+      "status": "pending",
+      "coverage": "Two original findings fixed with discriminating real-browser tests; final fresh-context response is required. First correction request disconnected and is not an approval."
+    }
+  ]
 }

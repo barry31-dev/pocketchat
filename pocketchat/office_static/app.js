@@ -33,8 +33,8 @@ function busy(value) {
   for (const id of ['send','upload','prompt','consent','report-toggle','leave-branch']) $(id).disabled = readOnly;
   for (const e of $('project-settings')?.querySelectorAll('button, input, textarea') || []) e.disabled = value;
   if ($('preview-request')) $('preview-request').disabled = readOnly;
-  $('consent').disabled=readOnly || Boolean(branchFrom && !branchReview);
-  $('send').textContent=branchFrom && !branchReview ? 'Review branch' : 'Send ↑';
+  $('consent').disabled=readOnly || Boolean(branchFrom && !branchReview && !contextReview);
+  $('send').textContent=branchFrom && !branchReview && !contextReview ? 'Review branch' : 'Send ↑';
   $('stop').hidden = !value || !activeRun; $('new-chat').disabled = value;
   $('archive').disabled = value; $('rename').disabled = readOnly;
   for (const button of document.querySelectorAll('[data-branch-run]')) button.disabled = readOnly;
@@ -258,19 +258,21 @@ async function refreshProject() {
     $('project-identity').textContent=project.project_id+' · instructions r'+project.instruction_revision+' · memory r'+project.memory_revision;
     $('project-instructions').value=project.instructions;$('memory-enabled').checked=project.memory_enabled;
     renderMemory();foundationStatus('Project loaded. Unsent context can be previewed.');
-  }catch(e){$('memory-records').replaceChildren();foundationStatus(e.message+' Back up & upgrade an older workspace before using project controls.');}
+  }catch(e){$('memory-records').replaceChildren();foundationStatus(e.message+' Back up & upgrade an older workspace before using project controls.');throw e;}
 }
 async function foundationAction(action) {
   if(editingBlocked())return;
-  mutation=true;busy(true);
+  foundationStatus('Working…');mutation=true;busy(true);
   try{await action();changedDraft();}catch(e){foundationStatus(e.message);}
-  finally{mutation=false;busy(false);}
+  finally{changedDraft();mutation=false;busy(false);}
 }
 async function saveProject(field) {
   await foundationAction(async()=>{
     if(!projectState)throw new Error('Refresh the project before saving.');
     const body=field==='instructions'?{project_id:projectState.project_id,instruction_revision:projectState.instruction_revision,instructions:$('project-instructions').value}:{project_id:projectState.project_id,memory_revision:projectState.memory_revision,memory_enabled:$('memory-enabled').checked};
-    await api('/api/project/'+field,body);await refreshProject();foundationStatus('Project '+field+' saved. Preview again before sending.');
+    await api('/api/project/'+field,body);
+    try{await refreshProject();}catch(e){throw new Error('Project '+field+' saved, but refresh failed: '+e.message);}
+    foundationStatus('Project '+field+' saved. Preview again before sending.');
   });
 }
 async function mutateMemory(action, record=null) {
@@ -288,7 +290,8 @@ async function mutateMemory(action, record=null) {
     if(['propose','revise'].includes(action))body.content=content;
     if(action==='propose')body.category='project_decision';
     if(action==='forget')body.acknowledge_history=true;
-    await api('/api/memory/'+action,body);await refreshProject();
+    await api('/api/memory/'+action,body);
+    try{await refreshProject();}catch(e){throw new Error('Memory '+action+' saved, but refresh failed: '+e.message);}
     $('memory-content').value='';$('memory-guidance').checked=false;foundationStatus('Memory '+action+' saved. Preview again before sending.');
   });
 }
@@ -336,6 +339,7 @@ $('composer').onsubmit=async event=>{event.preventDefault();try{
   if(!$('consent').checked && !(branchFrom && !branchReview))throw new Error('Confirm sending this conversation and selected material to the provider.');
   if(current?.archived)throw new Error('Restore this conversation before sending.');
   if(contextReview){
+    if(!$('consent').checked)throw new Error('Review the preview and confirm sending before dispatch.');
     if(contextReview.key!==requestKey(current?.id,requestBody())){changedDraft();throw new Error('Draft changed. Preview and confirm again.');}
     lastSubmission={cid:contextReview.cid,body:contextReview.body,confirmation:contextReview.confirmation};
     sessionStorage.setItem(receiptKey,JSON.stringify(lastSubmission));contextReview=null;
@@ -345,7 +349,7 @@ $('composer').onsubmit=async event=>{event.preventDefault();try{
   const body={prompt:$('prompt').value,intent:report?'report':'chat',source_ids:[...selected],revision_id:revision,request_id:crypto.randomUUID(),consent:true};
   if(branchFrom)body.branch_from=branchFrom;
   const displayedModel=$('model').textContent, displayedProvider=$('provider').textContent, displayedProfile=$('model-choice').value, modelRevision=displayedModelRevision;
-  const reviewingBranch=Boolean(branchFrom && !branchReview);
+  const reviewingBranch=Boolean(branchFrom && !branchReview && !contextReview);
   mutation=true;busy(true);
   const cid=await ensureConversation();
   if((!$('consent').checked && !reviewingBranch) || body.prompt!==$('prompt').value || body.intent!==(report?'report':'chat') || body.revision_id!==revision || (body.branch_from||null)!==branchFrom || JSON.stringify(body.source_ids)!==JSON.stringify([...selected]))
@@ -430,7 +434,7 @@ async function boot() {
   $('provider').textContent=data.provider ? new URL(data.provider).origin : 'the configured provider';
   await refreshModels();
   $('upgrade').hidden=![2,3,4].includes(data.database_version);
-  if($('project-settings'))await refreshProject(); $('connect').close(); await refreshList();
+  if($('project-settings'))await refreshProject().catch(()=>{}); $('connect').close(); await refreshList();
   let saved=null, lastView=null;
   try { saved=JSON.parse(sessionStorage.getItem(receiptKey)||'null');lastView=sessionStorage.getItem(viewKey); }
   catch { notice('Saved browser state could not be read. No message was sent.'); }

@@ -486,6 +486,44 @@ class OfficeFoundationSendTests(OfficeTests):
             self.app.preview(self.cid, body)
         self.assertEqual(self.adapter.calls, [])
 
+    def test_foundation_preview_rejects_each_changed_dependency_without_admission(self):
+        import hashlib
+        from pocketchat.office_context import read_project_metadata, update_project_metadata, save_office_summary
+        original = self.app.store.begin(self.cid, 'original-context', dict(prompt='Original decision', intent='chat', source_ids=[], revision_id=None))
+        self.app.store.finish(original['id'], 'completed', 'Keep the draft local.', None)
+        body = dict(prompt='Continue the local draft', intent='chat', source_ids=[], revision_id=None,
+                    request_id='dependency-preview', consent=True)
+        def refused(preview, incoming=body):
+            with self.assertRaises(OfficeError):
+                self.app.submit_confirmed(self.cid, incoming, preview['confirmation'])
+            self.assertEqual(self.adapter.calls, [])
+            self.assertIsNone(self.app.store.db.execute('SELECT id FROM runs WHERE request_id=?',
+                                                       (body['request_id'],)).fetchone())
+        preview = self.app.preview(self.cid, body)
+        project = read_project_metadata(self.app.store)
+        update_project_metadata(self.app.store, project['project_id'], instruction_revision=1, instructions='New project instruction')
+        refused(preview)
+        preview = self.app.preview(self.cid, body)
+        update_project_metadata(self.app.store, project['project_id'], memory_revision=1, memory_enabled=True)
+        refused(preview)
+        preview = self.app.preview(self.cid, body)
+        self.app.config['model'] += '-changed'
+        refused(preview)
+        preview = self.app.preview(self.cid, body)
+        source = self.app.store.add_source(self.cid, 'notes.txt', 'Pinned local source')
+        refused(preview, dict(body, source_ids=[source['id']]))
+        preview = self.app.preview(self.cid, body)
+        message = self.app.store.db.execute('SELECT * FROM messages WHERE cid=? ORDER BY id', (self.cid,)).fetchone()
+        refs = [dict(message_id=message['id'], run_id=message['run_id'], start=0, end=len(message['content']),
+                     sha256=hashlib.sha256(message['content'].encode()).hexdigest())]
+        save_office_summary(self.app.store, self.cid, project['project_id'], revision=0,
+                            content='Original decision remains; finish the local draft.', refs=refs, accept=True)
+        refused(preview)
+        preview = self.app.preview(self.cid, body)
+        newer = self.app.store.begin(self.cid, 'new-context', dict(prompt='Later decision', intent='chat', source_ids=[], revision_id=None))
+        self.app.store.finish(newer['id'], 'completed', 'Changed history.', None)
+        refused(preview)
+
     def test_confirmed_admission_does_not_project_a_third_time(self):
         from unittest.mock import patch
         from pocketchat import office_context
