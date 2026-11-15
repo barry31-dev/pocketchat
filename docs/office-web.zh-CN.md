@@ -95,3 +95,12 @@ Chrome 的环境运行 `node tests/office_p1_browser.cjs`。该模式只核本�
 改用 `OFFICE_REVERSE_EXPORT_ONLY=1` 可只跑 A01 反向缺口：网页导入两份资料 →
 网页初稿 → CLI 修订 → 网页分别下载旧／新版 Markdown 与 Word，逐版核正文和来源，
 并用 python-docx 读回。两个模式都用新建本地 fixture，不访问真实账号。
+
+
+## 基础接续契约（2026-11-15）
+
+办公入口的项目指令、统一上下文预览／发送与显式 v2 项目记忆只在
+[office-foundations.md](office-foundations.md) 维护；OF01–OF10 是待实施验收，
+不是本轮运行结果。该契约按已批准方向与日常委托制定，本轮不改运行开关、
+工作区 schema 或备份格式。原首包对记忆／上下文的排除描述初始范围，不是永久禁止
+此扩展；旧 CLI 能力也不等于办公端已接通。P1 不重复开发，基础出口收口后衔接 P2。

@@ -16,6 +16,20 @@ not a new ready row, implementation completion or permission to revive coding,
 multi-agent or remote-service work. Existing contracts and history remain intact.
 
 
+## Office foundation continuation (2026-11-15)
+
+After the integrated P1 continuation, the next approved foundation result is
+[project instructions, context and controlled memory](office-foundations.md).
+The maintainer's general-foundation direction and routine §3.1 delegation cover
+this bounded design; its OF01–OF10 cases are not implementation/acceptance results.
+The docs-only task owns only that contract, both office docs, this queue, the
+Chinese office roadmap and its review/handover. It does not lease runtime files.
+Use §8's exact checkpoint scope for a conflict-checked implementation registration;
+do not enable legacy office profile flags or repeat P1 to fill a new queue row.
+Then continue P2 document reading. Formal release and paid/new-credential actions
+remain outside routine development authority.
+
+
 > Scope: the **current** approval state of product slices. A row here says a
 > slice is approved to be worked on; it does not say the work is done, and it
 > is not a publication authorization.
