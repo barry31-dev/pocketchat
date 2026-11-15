@@ -322,3 +322,57 @@ def office_memory_action(store, action, project_id, store_sha256, **fields):
         result = office_memory_view(store)
         result['record'] = record
         return result
+
+
+class PreparedOfficeTurn:
+    """Immutable canonical host plan; public HTTP/CLI never accepts this object."""
+    __slots__ = ('_messages', '_payload', '_manifest', '_digest')
+
+    def __init__(self, messages, payload, manifest):
+        from .office_store import encoded
+        from .request import request_digest
+        self._messages = encoded(messages)
+        self._payload = encoded(payload)
+        self._manifest = encoded(manifest)
+        self._digest = request_digest(dict(messages=messages, payload=payload, manifest=manifest))
+
+    @classmethod
+    def create(cls, messages, payload, manifest):
+        if (not isinstance(messages, list) or not messages or
+                any(not isinstance(m, dict) or set(m) != {'role', 'content'} or
+                    m['role'] not in ('system', 'user', 'assistant') or not isinstance(m['content'], str) for m in messages) or
+                messages[-1]['role'] != 'user' or not isinstance(payload, dict) or
+                payload.get('messages') != messages or not isinstance(manifest, dict)):
+            raise OfficeError('Invalid prepared office turn.')
+        return cls(messages, payload, manifest)
+
+    @property
+    def messages(self):
+        import json
+        return json.loads(self._messages)
+
+    @property
+    def payload(self):
+        import json
+        return json.loads(self._payload)
+
+    @property
+    def manifest(self):
+        import json
+        return json.loads(self._manifest)
+
+    def validate(self, config):
+        from .request import request_digest
+        from .request_admission import admit_for_config, AdmissionError
+        if (any(config.get(k) for k in ('tool_read_enabled', 'tool_write_enabled', 'tool_memory_search_enabled',
+                                        'memory_recall_enabled', 'context_projection_enabled', 'fallback_config', 'fallback_profile')) or
+                config.get('retry_max_attempts', 1) != 1):
+            raise OfficeError('Prepared office requests forbid tools, fallback and reselection.')
+        if request_digest(dict(messages=self.messages, payload=self.payload, manifest=self.manifest)) != self._digest:
+            raise OfficeError('Prepared office turn was changed.')
+        if self.payload.get('messages') != self.messages or self.payload.get('model') != config['model']:
+            raise OfficeError('Prepared office payload does not match its messages or model.')
+        try:
+            admit_for_config(self.payload, config)
+        except AdmissionError as exc:
+            raise OfficeError('Prepared office request exceeds configured limits.') from exc

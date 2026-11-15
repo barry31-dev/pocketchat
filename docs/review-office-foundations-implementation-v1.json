@@ -19,7 +19,9 @@
     "docs/formats.md",
     "docs/formats.zh-CN.md",
     "docs/compatibility.md",
-    "docs/security.md"
+    "docs/security.md",
+    "pocketchat/session.py",
+    "tests/test_session.py"
   ],
   "categories": [
     "python-tools",
@@ -47,7 +49,7 @@
     }
   ],
   "slice_contract": "docs/office-foundations.md",
-  "status": "partial-schema5-explicit-memory-checkpoint",
+  "status": "partial-single-turn-prepared-hook-not-wired",
   "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
   "reviewer": "independent fresh-context agent, initial scoped review and focused correction re-review",
   "scope": "Implemented schema5/project/backup and explicit office memory lifecycle only. Independent review reproduced two lifecycle defects, then re-reviewed corrected graph logic/tests; frozen send, summary controls and browser were expressly excluded.",
@@ -75,7 +77,13 @@
       "status": "verified",
       "command": "independent correction re-review",
       "result": "Both findings closed; correction ready only within implemented partial checkpoint."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest discover -s tests -p test_session.py -v",
+      "result": "11 Session tests passed on macOS Python3.9.6, including no second projection, exact streaming snapshot, unsafe config, tampered object, missing snapshot and changed provider payload no-call refusals."
     }
   ],
-  "unverified_scope": "Frozen preview/send, summary operator controls, browser UI and complete OF01–OF10 user path acceptance not implemented. No paid provider or formal release."
+  "unverified_scope": "Prepared hook is not yet wired into OfficeWorkspace. Project instructions/recall do not yet affect office sending. Summary operator controls, browser UI and complete OF01–OF10 remain incomplete; real HTTP wire equality and prepared-hook independent review not yet done."
 }

@@ -224,3 +224,69 @@ class SessionToolContextTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OfficePreparedTurnTests(unittest.TestCase):
+    def test_host_prepared_turn_bypasses_legacy_projection_and_matches_stream_snapshot(self):
+        from pocketchat.office_context import PreparedOfficeTurn
+        from pocketchat.request import request_digest
+        from unittest.mock import patch
+        config = dict(model='m', base_url='http://example.invalid/v1', api_key_env='OFFICE_TEST_KEY', requires_api_key=False,
+                      max_context_chars=2000, summary_prefix_chars=40, timeout_seconds=5, system_prompt='must not be appended',
+                      tool_read_enabled=False, tool_write_enabled=False, memory_recall_enabled=False,
+                      context_projection_enabled=False, retry_max_attempts=1, fallback_config=None)
+        adapter = FakeContextAdapter([text_response('Done')])
+        config['provider_adapter'] = adapter
+        messages = [dict(role='system', content='Fixed office safety'), dict(role='user', content='Exact pending request')]
+        payload = dict(adapter.build_payload(messages, config), stream=True)
+        plan = PreparedOfficeTurn.create(messages, payload, {'project_id': 'project-' + 'a' * 32})
+        with tempfile.TemporaryDirectory() as tmp:
+            session = Session(config, Path(tmp) / 'prepared.jsonl', 'office-prepared', on_delta=lambda *args: None)
+            with patch.object(session, '_context_with_budget', side_effect=AssertionError('second projection')):
+                self.assertEqual(session.run_prepared(plan), 'completed')
+            self.assertEqual(adapter.calls, [messages])
+            snapshot = json.loads(session.request_snapshots[0].read_text())
+            self.assertEqual(request_digest(snapshot['request']), request_digest(payload))
+            self.assertTrue(snapshot['request']['stream'])
+
+    def test_tampered_plan_or_unsafe_config_refuses_before_provider(self):
+        from pocketchat.office_context import PreparedOfficeTurn
+        config = dict(model='m', base_url='http://example.invalid/v1', api_key_env='OFFICE_TEST_KEY', requires_api_key=False,
+                      max_context_chars=2000, summary_prefix_chars=40, timeout_seconds=5, system_prompt='',
+                      tool_read_enabled=False, tool_write_enabled=False, memory_recall_enabled=False,
+                      context_projection_enabled=False, retry_max_attempts=1, fallback_config=None)
+        adapter = FakeContextAdapter([text_response()])
+        config['provider_adapter'] = adapter
+        messages = [dict(role='user', content='Pending')]
+        plan = PreparedOfficeTurn.create(messages, adapter.build_payload(messages, config), {'project_id': 'project-' + 'a' * 32})
+        with tempfile.TemporaryDirectory() as tmp:
+            for changes in [dict(tool_read_enabled=True), dict(retry_max_attempts=2), dict(fallback_config=config)]:
+                session = Session(dict(config, **changes), Path(tmp) / (str(len(adapter.calls)) + '.jsonl'))
+                with self.assertRaises((ValueError, RuntimeError)):
+                    session.run_prepared(plan)
+            session = Session(config, Path(tmp) / 'tampered.jsonl')
+            with self.assertRaises((ValueError, RuntimeError)):
+                session.run_prepared({'payload': plan.payload})
+            self.assertEqual(adapter.calls, [])
+
+    def test_prepared_snapshot_failure_or_payload_mismatch_never_sends(self):
+        from pocketchat.office_context import PreparedOfficeTurn
+        from unittest.mock import patch
+        config = dict(model='m', base_url='http://example.invalid/v1', api_key_env='OFFICE_TEST_KEY',
+                      requires_api_key=False, max_context_chars=2000, timeout_seconds=5,
+                      summary_prefix_chars=40, system_prompt='', retry_max_attempts=1)
+        adapter = FakeContextAdapter([text_response()])
+        config['provider_adapter'] = adapter
+        messages = [dict(role='user', content='Exact pending request')]
+        payload = adapter.build_payload(messages, config)
+        plan = PreparedOfficeTurn.create(messages, payload, {'project_id': 'project-' + 'a' * 32})
+        with tempfile.TemporaryDirectory() as tmp:
+            session = Session(config, Path(tmp) / 'write-failure.jsonl')
+            with patch.object(session, '_write_request_snapshot', side_effect=OSError('disk full')):
+                self.assertEqual(session.run_prepared(plan), 'failed')
+            self.assertEqual(adapter.calls, [])
+            changed = dict(payload, temperature=0.123)
+            bad = PreparedOfficeTurn.create(messages, changed, {'project_id': 'project-' + 'a' * 32})
+            session = Session(config, Path(tmp) / 'payload-mismatch.jsonl')
+            self.assertEqual(session.run_prepared(bad), 'failed')
+            self.assertEqual(adapter.calls, [])

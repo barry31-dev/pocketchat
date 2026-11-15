@@ -11,7 +11,11 @@ Explicit memory propose/accept/revise/retire/forget and recall now share authent
 service and CLI, with legacy-guidance rejection and atomic predecessor replacement.
 Independent review found and closed two lifecycle-graph defects with red regressions.
 
-Next: summary operator controls and one prepared context used by preview and final
-streaming wire without Session reselection; finally browser controls and full user-path acceptance. No paid provider
+A tested single-turn prepared Session hook now avoids legacy reselection and refuses
+unsafe config/snapshot or payload mismatch before calling the provider. It is not
+yet wired into OfficeWorkspace and does not change current office send content.
+
+Next: build one office-owned context plan and wire preview/admission/execute to it,
+add summary operator controls; finally browser controls and full user-path acceptance. No paid provider
 or formal release. Contract: [foundations](../office-foundations.md).
 Review: [record](../review-office-foundations-implementation-v1.json).
