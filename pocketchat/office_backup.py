@@ -112,10 +112,12 @@ def validate(raw):
         p = _payload(r['payload'])
         required = {'prompt', 'intent', 'source_ids', 'revision_id'}
         _require(isinstance(p, dict) and required <= set(p) <= required | {'wire', 'confirmation', 'model_snapshot'})
-        if 'confirmation' in p or 'model_snapshot' in p:
-            _require({'wire', 'confirmation', 'model_snapshot'} <= set(p))
+        if 'confirmation' in p:
+            _require({'wire', 'model_snapshot'} <= set(p))
             proof = p['confirmation']
             _require(isinstance(proof, str) and len(proof) == 64 and all(c in '0123456789abcdef' for c in proof))
+        if 'model_snapshot' in p:
+            _require('wire' in p)
             model = p['model_snapshot']
             _require(isinstance(model, dict) and set(model) == {'model', 'provider'})
             text_value(model['model'], 512, 'Model')

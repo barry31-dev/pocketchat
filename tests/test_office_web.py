@@ -99,3 +99,15 @@ class CLIAndPackageTests(unittest.TestCase):
         text = Path('pyproject.toml').read_text()
         self.assertIn('office_static/*.html', text)
         self.assertIn('python-docx', text)
+
+
+
+class CLIIsolationTests(unittest.TestCase):
+    setUp=HTTPTests.setUp
+    tearDown=HTTPTests.tearDown
+    login=HTTPTests.login
+    request=HTTPTests.request
+    def test_browser_cookie_cannot_read_or_replace_cli_only_state(self):
+        self.login();state=dict(revision=0,current=None,drafts={},pending=None)
+        self.assertEqual(self.request('GET','/api/cli-state')[0],403)
+        self.assertEqual(self.request('POST','/api/cli-state',state)[0],403)

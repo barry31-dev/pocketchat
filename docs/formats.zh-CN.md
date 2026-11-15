@@ -272,3 +272,19 @@ CLI 回执在两版 payload 中均可附加 `confirmation` 及 `model_snapshot`�
 
 消息 ID 按序分配；若无法再容纳一对用户／助手消息，新请求在发送前拒绝，旧回执、读取和
 备份仍可用。目录同步故障注入不等于验证所有文件系统的真实断电恢复。
+
+
+### Office CLI UI 状态 v1
+
+`office-cli-state.json` 是 0600、最大 3 MiB 的私有 UI 状态，不是办公数据库且不进入备份。
+`schema=pocketchat-office-cli-state.v1`，`workspace` 绑定规范目录／device／inode；
+`state` 含 `revision/current/drafts/pending`。草稿按会话 ID 或 `new` 隔离，字段为
+`prompt/intent/source_ids/revision_id`，不带 consent、不算发送历史；pending 另存已确认
+请求、哈希与可选 run ID。当前独占写入者以版本 CAS、私有 no-follow 临时文件、fsync 和
+原子替换保存。旧版本、越界引用、超限、链接、不同目录与 stale revision 均拒绝；
+复制到新恢复目录不是草稿迁移。目录同步失败只说明保存结果未知，不代表实测真实断电。
+新 run 可单独带 `{model,provider}` 的 `model_snapshot`，但必须有原 `wire`；
+确认请求仍需要 snapshot 与完整 hex confirmation，旧记录保持可读、可恢复。
+
+CLI state HTTP 路由仅允许 native 身份，网页 cookie／CSRF 不授予 CLI 草稿访问。
+`request_not_accepted` 仅来自原请求无回执且在入场前拒绝的陈旧预览；不是通用 4xx 判据。

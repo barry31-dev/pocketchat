@@ -2,3 +2,5 @@
 
 .archive-filter{display:flex;align-items:center;gap:8px;font-size:12px;margin:0 0 14px;color:var(--muted,#72766c)}
 #search-results{max-height:34vh;overflow:auto}.search-result{display:block;text-align:left;width:100%;margin:6px 0;padding:10px;border:1px solid #dadbd3;border-radius:8px;background:#fafaf5}.search-result small{display:block;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px}.search-hit{outline:2px solid #526650;outline-offset:4px;background:#f2f4eb}button:disabled,textarea:disabled{opacity:.6;cursor:not-allowed}.topbar{gap:12px}.topbar>div{min-width:0;flex:1}#archive,#upgrade{font-size:12px;flex-shrink:0}
+
+#model-choice{max-width:220px;border:1px solid var(--line);border-radius:10px;padding:7px;background:var(--paper);color:inherit;font:inherit}

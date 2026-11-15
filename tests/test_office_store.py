@@ -1,5 +1,6 @@
 """Private browser workspace never rewrites completed user work."""
 import tempfile
+import os
 import unittest
 from pathlib import Path
 from pocketchat.office_store import OfficeStore, OfficeError
@@ -207,3 +208,50 @@ class StoreTests(unittest.TestCase):
         self.assertEqual([m['content'] for m in messages], ['First', 'First answer', 'Last', 'Last answer'])
         with self.assertRaises(OfficeError):
             self.store.begin(self.cid, 'overflow-request', p)
+
+
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and os.open in os.supports_dir_fd, 'requires private descriptor I/O')
+    def test_cli_ui_state_is_bounded_private_cas_and_workspace_bound(self):
+        from pocketchat.office_service import dispatch
+        from pocketchat.office import OfficeWorkspace
+        self.store.close()
+        app = OfficeWorkspace(self.root)
+        self.addCleanup(app.close)
+        state = dispatch(app, '/api/cli-state', 'GET')[1]
+        self.assertEqual(state, dict(revision=0, current=None, drafts={}, pending=None))
+        draft = dict(prompt='Unsent private draft', intent='chat', source_ids=[], revision_id=None)
+        saved = dispatch(app, '/api/cli-state', 'POST', dict(state, current=self.cid, drafts={self.cid:draft}))[1]
+        self.assertEqual(saved['revision'], 1)
+        with self.assertRaises(OfficeError):dispatch(app, '/api/cli-state', 'POST', state)
+        self.assertEqual((self.root/'office-cli-state.json').stat().st_mode & 0o777, 0o600)
+        app.close()
+        app = OfficeWorkspace(self.root)
+        self.addCleanup(app.close)
+        self.assertEqual(dispatch(app, '/api/cli-state', 'GET')[1], saved)
+        with self.assertRaises(OfficeError):
+            dispatch(app, '/api/cli-state', 'POST', dict(saved, drafts={self.cid:dict(draft,prompt='x'*12001)}))
+        self.assertIsNone(app.store.receipt(self.cid, 'never-sent', draft))
+
+
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and os.open in os.supports_dir_fd, 'requires private descriptor I/O')
+    def test_cli_state_refuses_symlink_foreign_pending_and_unusable_revision(self):
+        from pocketchat.office_store import encoded
+        state = self.store.cli_state()
+        body = dict(prompt='Hi', intent='chat', source_ids=[], revision_id=None,
+                    request_id='pending-missing', consent=True)
+        with self.assertRaises(OfficeError):
+            self.store.cli_state(dict(state,pending=dict(cid='new',body=body,confirmation='a'*64,run_id=None)))
+        with self.assertRaises(OfficeError):
+            self.store.cli_state(dict(state,revision=2**53-1))
+        target=self.root/'office-cli-state.json'
+        outside=Path(self.tmp.name)/'outside-state.json';outside.write_text(encoded(state))
+        target.symlink_to(outside)
+        with self.assertRaises(OfficeError):self.store.cli_state()
+        self.assertEqual(outside.read_text(),encoded(state))
+
+
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and os.open in os.supports_dir_fd, 'requires private descriptor I/O')
+    def test_cli_state_malformed_unicode_is_content_free_refusal(self):
+        state=self.store.cli_state()
+        with self.assertRaises(OfficeError):
+            self.store.cli_state(dict(state,drafts={'new':dict(prompt='\ud800',intent='chat',source_ids=[],revision_id=None)}))

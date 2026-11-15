@@ -238,3 +238,79 @@ class OfficeTransportAdversarialTests(unittest.TestCase):
             self.assertLess(time.monotonic()-start,2)
         finally:
             stop.set();server.shutdown();server.server_close()
+
+
+class OfficeProfileTests(unittest.TestCase):
+    setUp = OfficeTests.setUp
+    tearDown = OfficeTests.tearDown
+
+    def test_configured_profile_switch_expires_preview_but_recovers_old_receipt(self):
+        other = dict(self.config, model='second-model', tool_write_enabled=True,
+                     fallback_profile='unsafe', retry_max_attempts=9)
+        self.app.close()
+        self.app = OfficeWorkspace(self.root, self.config, profiles={'first': self.config, 'second': other})
+        body = dict(prompt='Hello', intent='chat', source_ids=[], revision_id=None,
+                    request_id='switch-request', consent=True)
+        preview = self.app.preview(self.cid, body)
+        before = self.app.models()
+        self.assertEqual(len(before['items']), 2)
+        self.assertNotIn('api_key_env', str(before))
+        self.assertEqual(self.adapter.calls, [])
+        self.app.select_model('second')
+        self.assertFalse(self.app.config['tool_write_enabled'])
+        self.assertIsNone(self.app.config['fallback_profile'])
+        with self.assertRaises(OfficeError):
+            self.app.submit_confirmed(self.cid, body, preview['confirmation'])
+        fresh = self.app.preview(self.cid, body)
+        run = self.app.submit_confirmed(self.cid, body, fresh['confirmation'])
+        self.app.wait(run['id'], 3)
+        self.app.select_model('first')
+        self.assertEqual(self.app.submit_confirmed(self.cid, body, fresh['confirmation'])['id'], run['id'])
+        self.assertEqual(self.app.status(run['id'])['request']['model_snapshot']['model'], 'second-model')
+        self.assertEqual(len(self.adapter.calls), 1)
+
+    def test_model_selection_rejects_unknown_secret_url_and_running_worker(self):
+        self.app.close()
+        self.app = OfficeWorkspace(self.root, self.config, profiles={'first': self.config})
+        for profile in ('missing', ['first'], None):
+            with self.assertRaises(OfficeError): self.app.select_model(profile)
+        started, release = threading.Event(), threading.Event()
+        original = self.adapter.complete
+        def slow(*args, **kwargs):
+            started.set();release.wait(3);return original(*args, **kwargs)
+        self.adapter.complete = slow
+        run = self.app.submit(self.cid, dict(prompt='Hi', intent='chat', source_ids=[], revision_id=None,
+                                           request_id='switch-running', consent=True))
+        self.assertTrue(started.wait(2))
+        try:
+            with self.assertRaises(OfficeError): self.app.select_model('first')
+        finally: release.set();self.app.wait(run['id'], 3)
+        self.app.close()
+        with self.assertRaises(OfficeError):
+            OfficeWorkspace(self.root, self.config, profiles={'secret': dict(self.config, base_url='https://host.invalid/v1?key=private')})
+
+
+    def test_profile_choice_identity_survives_equal_model_and_endpoint(self):
+        self.app.close()
+        second = dict(self.config, profile='second', system_prompt='Second instruction')
+        self.app = OfficeWorkspace(self.root, second, profiles={'first':self.config,'second':second})
+        self.assertEqual(self.app.models()['selected'], 'second')
+
+
+    def test_switching_equal_config_profiles_always_expires_preview(self):
+        self.app.close()
+        self.app=OfficeWorkspace(self.root,self.config,profiles={'one':self.config,'two':self.config})
+        body=dict(prompt='Hi',intent='chat',source_ids=[],revision_id=None,request_id='alias-preview',consent=True)
+        preview=self.app.preview(self.cid,body)
+        self.app.select_model('two')
+        with self.assertRaises(OfficeError):self.app.submit_confirmed(self.cid,body,preview['confirmation'])
+        self.assertEqual(self.adapter.calls,[])
+
+
+    def test_switch_away_and_back_does_not_revive_old_confirmation(self):
+        self.app.close();self.app=OfficeWorkspace(self.root,self.config,profiles={'one':self.config,'two':self.config})
+        body=dict(prompt='Hi',intent='chat',source_ids=[],revision_id=None,request_id='switch-cycle',consent=True)
+        preview=self.app.preview(self.cid,body)
+        self.app.select_model('two');self.app.select_model('one')
+        with self.assertRaises(OfficeError):self.app.submit_confirmed(self.cid,body,preview['confirmation'])
+        self.assertEqual(self.adapter.calls,[])

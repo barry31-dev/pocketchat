@@ -112,8 +112,8 @@ ownership refuses, never silently starts another writer. `office backup` connect
 to the live owner; restore always targets a new directory. See the explicit
 [data-only backup exclusions](formats.md#office-data-backup-v1).
 
-This is **not completion of P1**. Configured-model switching, non-destructive
-edit/regenerate and the interactive office entrance remain next.
+This is **not completion of P1**. Non-destructive edit/regenerate and full
+package acceptance remain next.
 Existing report creation/revision and browser receipt recovery are reused.
 
 ## Daily conversations
@@ -139,3 +139,15 @@ if that draft changes before dispatch. Legacy unbound tab receipts show **Check
 saved receipt**: this only reads and verifies the saved request in the selected
 workspace, never replays it. A missing/mismatched receipt remains blocked; discarding
 removes only the tab record after an explicit warning, not the server request.
+
+
+## Existing configured model choices
+
+The header selector lists only the configuration profiles loaded by the current
+owner. Listing/selecting performs no model connection test. It changes new
+requests only and refuses until the active worker exits. New requests pin their
+model/endpoint. Changing a profile revokes browser consent; if another client
+changes the displayed model/endpoint before dispatch, the browser refuses and
+asks for fresh confirmation. Content-bound server confirmation also rejects a
+change between preview and send. Existing request receipt recovery remains
+content-bound and never substitutes the new model for the old request.

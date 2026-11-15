@@ -21,9 +21,10 @@ ID = re.compile(r'^[a-zA-Z0-9_-]{3,80}$')
 class OfficeError(ValueError):
     """Public, content-free office refusal."""
 
-    def __init__(self, message, status=400):
+    def __init__(self, message, status=400, request_not_accepted=False):
         super().__init__(message)
         self.status = status
+        self.request_not_accepted = request_not_accepted
 
 
 def identifier(value):
@@ -122,6 +123,96 @@ class OfficeStore:
             if self._lock_fd is not None:
                 os.close(self._lock_fd)
                 self._lock_fd = None
+
+    def cli_state(self, replacement=None):
+        """Private CLI-only drafts, with compare-and-swap under the workspace writer."""
+        from .json_input import decode_json_bytes, JSONInputError
+        from .office_backup import parent_directory, read_file
+        path = self.root / 'office-cli-state.json'
+        binding = hashlib.sha256(encoded([str(self.root), self.root.stat().st_dev,
+                                          self.root.stat().st_ino]).encode()).hexdigest()
+        limit = 3 * 1024 * 1024
+        with self.lock:
+            state = dict(revision=0, current=None, drafts={}, pending=None)
+            if path.exists() or path.is_symlink():
+                try:
+                    document = decode_json_bytes(read_file(path, limit), limit, 12, 20000)
+                except JSONInputError as exc:
+                    raise OfficeError('Saved CLI state is invalid; preserve it before recovery.') from exc
+                if (not isinstance(document, dict) or set(document) != {'schema', 'workspace', 'state'} or
+                        document['schema'] != 'pocketchat-office-cli-state.v1' or document['workspace'] != binding):
+                    raise OfficeError('Saved CLI state belongs to another workspace or version.')
+                state = document['state']
+            self._validate_cli_state(state)
+            if replacement is None:
+                return json.loads(encoded(state))
+            self._validate_cli_state(replacement)
+            if replacement['revision'] != state['revision']:
+                raise OfficeError('CLI state changed in another client. Reopen before editing.', 409)
+            saved = dict(replacement, revision=state['revision'] + 1)
+            raw = encoded(dict(schema='pocketchat-office-cli-state.v1', workspace=binding, state=saved)).encode()
+            if len(raw) > limit:
+                raise OfficeError('CLI draft storage limit reached.')
+            with parent_directory(path) as (parent, name):
+                temporary = 'office-cli-state-' + uuid4().hex + '.tmp'
+                fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
+                try:
+                    with os.fdopen(fd, 'wb') as stream:
+                        stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+                    os.replace(temporary, name, src_dir_fd=parent, dst_dir_fd=parent)
+                    os.fsync(parent)
+                finally:
+                    try: os.unlink(temporary, dir_fd=parent)
+                    except FileNotFoundError: pass
+            return json.loads(encoded(saved))
+
+    def _validate_cli_state(self, state):
+        if (not isinstance(state, dict) or set(state) != {'revision','current','drafts','pending'} or
+                type(state['revision']) is not int or not 0 <= state['revision'] < 2**53 - 1 or
+                not isinstance(state['drafts'], dict) or len(state['drafts']) > 201):
+            raise OfficeError('Invalid CLI state.')
+        if state['current'] is not None:
+            self._row('conversations', state['current'])
+        def draft(cid, value, pending=False):
+            fields = {'prompt','intent','source_ids','revision_id'} | ({'request_id','consent'} if pending else set())
+            if not isinstance(value, dict) or set(value) != fields:
+                raise OfficeError('Invalid CLI draft.')
+            prompt = value['prompt']
+            if not isinstance(prompt, str): raise OfficeError('Invalid CLI draft text.')
+            try: prompt_size=len(prompt.encode('utf-8'))
+            except UnicodeError as exc: raise OfficeError('CLI draft must be valid UTF-8.') from exc
+            if prompt_size > 12000 or any(ord(c)<32 and c not in '\n\r\t' for c in prompt):
+                raise OfficeError('CLI draft exceeds its text limit.')
+            if (value['intent'] not in ('chat','report') or not isinstance(value['source_ids'], list) or
+                    len(value['source_ids']) > 8 or any(not isinstance(s, str) for s in value['source_ids']) or
+                    len(set(value['source_ids'])) != len(value['source_ids'])):
+                raise OfficeError('Invalid CLI draft selection.')
+            if cid == 'new':
+                if value['source_ids'] or value['revision_id'] is not None:
+                    raise OfficeError('New-conversation drafts cannot reference saved material.')
+            else:
+                self._row('conversations', cid)
+                for sid in value['source_ids']: self.source(cid, sid)
+                if value['revision_id'] is not None: self.artifact(cid, value['revision_id'])
+            if value['revision_id'] is not None and value['intent'] != 'report':
+                raise OfficeError('Only report drafts can reference a predecessor.')
+            if pending:
+                identifier(value['request_id'])
+                if value['consent'] is not True: raise OfficeError('Invalid pending confirmation.')
+                text_value(prompt, 12000, 'Message')
+        for cid, value in state['drafts'].items(): draft(cid, value)
+        pending = state['pending']
+        if pending is not None:
+            if not isinstance(pending, dict) or set(pending) != {'cid','body','confirmation','run_id'}:
+                raise OfficeError('Invalid saved request receipt.')
+            if pending['cid'] == 'new': raise OfficeError('A pending request needs a saved conversation.')
+            draft(pending['cid'], pending['body'], True)
+            proof = pending['confirmation']
+            if not isinstance(proof,str) or len(proof)!=64 or any(c not in '0123456789abcdef' for c in proof):
+                raise OfficeError('Invalid saved confirmation.')
+            if pending['run_id'] is not None:
+                if self.run(pending['run_id'])['cid'] != pending['cid']:
+                    raise OfficeError('Saved receipt belongs to another conversation.')
 
     def _row(self, table, key):
         row = self.db.execute('SELECT * FROM ' + table + ' WHERE id=?', (identifier(key),)).fetchone()

@@ -737,3 +737,33 @@ stderr 与退出码 2。输出不含发现令牌；预览与备份仍含用户�
 不是 JSON 数字，避免浏览器整数舍入；备份表中的消息 ID 仍为整数。
 
 办公运行回执另附原始 `request_id`，用于只读核对回执，不修改原请求或调用模型。
+
+
+### 已配置模型与交互办公入口
+
+```sh
+pocketchat office --data-dir PRIVATE_DIR models
+pocketchat office --data-dir PRIVATE_DIR models --select PROFILE
+pocketchat office --data-dir PRIVATE_DIR interactive
+pocketchat office --data-dir PRIVATE_DIR --config config.json --profile PROFILE interactive
+```
+
+只列出／选择显式加载的既有 profile，不探测端点、不调用模型、不添加凭据或工具／fallback。
+选择归当前工作区写入者，只影响新请求；请求或线程仍在飞时拒绝切换。重启仍读取显式配置，
+本选择不是新的全局持久配置；网页版运行时不能用 CLI config/profile 覆盖它。
+
+普通文本行仅追加到当前**未发送草稿**，回车不发送。命令为 `/new TITLE`、`/open CID`、`/list`、
+`/draft`、`/materials`、`/import PATH`、`/sources ID…`、`/chat`、`/report`、`/revise VERSION`、
+`/models`、`/model PROFILE`、`/send`、`/recover`、`/stop`、`/export VERSION md|docx PATH`、`/quit`。
+资料导入与指定版本导出复用既有大小／格式和目标不覆盖门禁，不授予模型任意文件访问。
+
+`/send` 展示实际历史、资料／消息、端点、模型与内容绑定哈希，输入**完整哈希**才发送。
+不匹配、EOF 或确认时 Ctrl+C 都保留草稿不发送。确认后先保存 pending 再请求；重开不重放。
+`/recover` 只 GET 精确 request ID 回执并核对会话和内容；不存在／unknown 仍保留 pending，
+不视作可以再调用。只有当前已鉴权写入者明确返回 `request_not_accepted`（陈旧预览，
+入场前拒绝）才以 CAS 清 pending、保留草稿并要求重新 preview／哈希确认；普通错误不外推。失败／取消保留草稿供新请求明确确认。`/stop` 控制同一服务线程。
+交互入口不接受 `--json`，机器调用继续用非交互命令。
+
+CLI 草稿／待恢复状态是私有工作区 UI 文件，与网页标签草稿分开且不进入数据备份。
+并发客户端状态 CAS 冲突就停止，不覆盖新状态或发送；未落盘的草稿打印给操作者自行复制。
+终端预览和草稿可能含敏感内容，需要保护；切换模型不改写旧请求快照或旧回执。

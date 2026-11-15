@@ -76,7 +76,8 @@ async function raceAcceptance() {
   vm.runInContext(source.slice(0, startup), context, {filename: appPath});
   h.run = code => vm.runInContext(code, context);
   h.read = code => clone(h.run(code));
-  h.run('api=(url,body)=>bridge.request(url,body)');
+  h.run('api=(url,body)=>bridge.request(url,body)')
+  el('model').textContent='fixture';el('provider').textContent='https://provider.invalid';;
   h.init = c => {
    context.fixture = c;
    h.run(`current=fixture;selected=new Set();report=false;revision=null;activeRun=null;lastSubmission=null;opening=false;
@@ -158,7 +159,8 @@ async function raceAcceptance() {
   h.route = call => {
    if (call.path === '/api/conversations' && call.method === 'POST') return response.promise;
    if (call.path === '/api/conversations') return {items: []};
-   if (call.path.endsWith('/runs')) {const e = new Error('Captured send; no provider invoked.'); e.status = 400; throw e;}
+   if (call.path.endsWith('/preview')) return {model:'fixture',provider:'https://provider.invalid',confirmation:'f'.repeat(64)};
+   if (call.path.endsWith('/confirmed')) {const e = new Error('Captured send; no provider invoked.'); e.status = 400; throw e;}
    throw new Error(call.path);
   };
   const sending = h.run("$('composer').onsubmit({preventDefault(){}})"); await settle();
@@ -166,11 +168,44 @@ async function raceAcceptance() {
   if (change === 'new-chat') h.run("$('new-chat').onclick()");
   if (change === 'shortcut') {h.run("$('weekly').onclick()"); h.shortcut.onclick(); h.run("$('report-toggle').onclick()");}
   response.resolve(conversation(C)); await sending;
-  const sends = h.calls.filter(c => c.path.endsWith('/runs') && c.method === 'POST');
+  const sends = h.calls.filter(c => c.path.endsWith('/confirmed') && c.method === 'POST');
   assert.ok(sends.length <= 1, 'A create must not admit multiple sends.');
-  for (const send of sends) assert.deepEqual(send.body, {prompt: original, intent: 'chat', source_ids: [],
-   revision_id: null, request_id: send.body.request_id, consent: true}, 'Never send replaced or unconfirmed content.');
+  for (const send of sends) assert.deepEqual(send.body.message, {prompt: original, intent: 'chat', source_ids: [],
+   revision_id: null, request_id: send.body.message.request_id, consent: true}, 'Never send replaced or unconfirmed content.');
   if (change !== 'edit') assert.equal(sends.length, 1, 'A guarded shortcut must not lose the confirmed submission.');
+ });
+ test('definite unaccepted confirmation revokes old consent without losing draft', async () => {
+  const h=harness(),a=conversation(A);h.init(a);h.edit('Retained draft');h.el('consent').checked=true;
+  h.run("lastSubmission={cid:current.id,body:{prompt:'Retained draft',intent:'chat',source_ids:[],revision_id:null,request_id:'unaccepted-request',consent:true},confirmation:'a'.repeat(64)}");
+  h.route=call=>{const e=new Error('Preview expired');e.status=409;e.requestNotAccepted=true;throw e;};
+  await h.run('dispatchPending()');
+  assert.equal(h.read('lastSubmission'),null);assert.equal(h.el('consent').checked,false);assert.equal(h.el('prompt').value,'Retained draft');
+ });
+ test('draft edit during preview never sends changed or previously confirmed content', async () => {
+  const h=harness(),a=conversation(A),response=deferred();h.init(a);
+  h.edit('Confirmed text');h.el('consent').checked=true;
+  h.route=call=>{
+   if(call.path.endsWith('/preview'))return response.promise;
+   if(call.path.endsWith('/confirmed'))throw new Error('Must not send');
+   throw new Error(call.path);
+  };
+  const action=h.run("$('composer').onsubmit({preventDefault(){}})");await settle();
+  h.edit('Replacement text');response.resolve({model:'fixture',provider:'https://provider.invalid',confirmation:'a'.repeat(64)});await action;
+  assert.equal(h.calls.filter(c=>c.path.endsWith('/confirmed')).length,0);
+  assert.equal(h.el('prompt').value,'Replacement text');assert.equal(h.el('consent').checked,false);
+ });
+ test('same model endpoint profile change cannot reuse browser consent', async () => {
+  const h=harness(),a=conversation(A);h.init(a);h.el('model-choice').value='first';
+  h.edit('Reviewed draft');h.el('consent').checked=true;
+  h.route=call=>{
+   if(call.path.endsWith('/preview'))return {profile:'second',model:'fixture',provider:'https://provider.invalid',confirmation:'a'.repeat(64)};
+   if(call.path==='/api/models')return {selected:'second',items:[{profile:'second',model:'fixture',provider:'https://provider.invalid'}]};
+   if(call.path.endsWith('/confirmed')){const e=new Error('Unexpected send');e.status=400;throw e;}
+   throw new Error(call.path);
+  };
+  await h.run("$('composer').onsubmit({preventDefault(){}})");
+  assert.equal(h.calls.filter(c=>c.path.endsWith('/confirmed')).length,0);
+  assert.equal(h.el('consent').checked,false);assert.equal(h.el('prompt').value,'Reviewed draft');
  });
  test('completed run keeps navigation locked until its conversation refresh finishes', async () => {
   const h = harness(), a = conversation(A), b = conversation(B), response = deferred();
@@ -200,6 +235,7 @@ async function raceAcceptance() {
    status: 'running', preview: '', request: {wire: {...wire, prompt: kind === 'wire' ? 'Different content' : wire.prompt}}};
   h.storage.set(legacyKey, JSON.stringify(saved)); h.storage.set('unrelated-tab-record', 'keep');
   h.route = call => {
+   if(call.path === '/api/models') return {selected:'fixture',items:[{profile:'fixture',model:'fixture',provider:'https://provider.invalid'}]};
    if (call.path === '/api/bootstrap') return {csrf: 'fixture-csrf', workspace_id: workspace,
     database_version: 3, model: 'fixture', provider: 'https://provider.invalid'};
    if (call.path === '/api/conversations') return {items: [a]};
@@ -293,6 +329,23 @@ async function browserAcceptance() {
   await page.getByRole('button', {name: 'CLI to browser', exact: true}).first().waitFor();
   await page.locator('.artifact').waitFor();
   assert.equal(await page.locator('.source').count(), 2);
+  // Existing-profile choices are shared, explicit, and never run a probe model.
+  const choices = cli(['models']);
+  assert.equal(choices.items.length, 2);
+  await page.locator('#model-choice').selectOption('alternate');
+  await page.waitForFunction(() => document.querySelector('#model').textContent === 'offline-alternate');
+  assert.equal(cli(['models']).selected, 'alternate');
+  assert.equal(await page.locator('#consent').isChecked(), false);
+  await page.locator('#prompt').fill('Not sent after remote model change');
+  await page.locator('#consent').check();
+  cli(['models', '--select', 'fixture']);
+  await page.locator('#send').click();
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('Model changed in another client'));
+  assert.equal(await page.locator('#consent').isChecked(), false);
+  assert.equal(await page.locator('#prompt').inputValue(), 'Not sent after remote model change');
+  await page.reload(); await page.locator('.artifact').waitFor();
+  assert.equal(await page.locator('#model-choice').inputValue(), 'fixture');
+
   // Unsent browser drafts survive a switch and refresh without inheriting consent.
   await page.locator('#prompt').fill('Unsent draft for CLI conversation');
   await page.locator('#consent').check();

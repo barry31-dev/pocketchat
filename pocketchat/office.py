@@ -25,30 +25,54 @@ Do not claim to run code, change host files, send messages or use external tools
 A request to fit one page is a content goal, not a measured pagination guarantee.'''
 
 
+def office_config(config):
+    config = config or {}
+    endpoint_text = config.get('base_url')
+    if endpoint_text:
+        if not isinstance(endpoint_text, str):
+            raise OfficeError('Invalid office provider endpoint.')
+        endpoint = urlsplit(endpoint_text)
+        if (endpoint.scheme not in ('http', 'https') or not endpoint.hostname or
+                endpoint.username is not None or endpoint.password is not None or
+                endpoint.query or endpoint.fragment or any(ord(c) < 32 for c in endpoint_text)):
+            raise OfficeError('Office provider URLs must not contain credentials, queries or fragments.')
+        try:
+            endpoint.port
+        except ValueError as exc:
+            raise OfficeError('Invalid office provider endpoint.') from exc
+    result = copy.copy(config)
+    result.update(tool_read_enabled=False, tool_read_allow_paths=[],
+                  tool_write_enabled=False, tool_write_allow_paths=[],
+                  tool_memory_search_enabled=False, memory_recall_enabled=False,
+                  fallback_profile=None, fallback_config=None, retry_max_attempts=1,
+                  fallback_max_attempts=1, context_projection_enabled=False)
+    result['context_projection_max_bytes'] = int(config.get('context_projection_max_bytes') or 256 * 1024)
+    result['system_prompt'] = (config.get('system_prompt') or '') + '\n\n' + INSTRUCTIONS
+    return result
+
+
 class OfficeWorkspace:
-    def __init__(self, root, config=None):
+    def __init__(self, root, config=None, profiles=None):
         config = config or {}
-        if config.get('base_url'):
-            endpoint = urlsplit(config['base_url'])
-            if (endpoint.scheme not in ('http', 'https') or not endpoint.hostname or
-                    endpoint.username is not None or endpoint.password is not None or
-                    endpoint.query or endpoint.fragment or any(ord(c) < 32 for c in config['base_url'])):
-                raise OfficeError('Office provider URLs must not contain credentials, queries or fragments.')
-            try:
-                endpoint.port
-            except ValueError as exc:
-                raise OfficeError('Invalid office provider endpoint.') from exc
+        if profiles is None and config.get('profiles'):
+            from .config import profile_config
+            profiles = {name: profile_config(config, name) for name in config['profiles']}
+            config = profile_config(config)
+        profiles = profiles if profiles is not None else ({config.get('profile') or 'configured': config} if config.get('model') else {})
+        if not isinstance(profiles, dict) or len(profiles) > 100:
+            raise OfficeError('Invalid configured profiles.')
+        self.profile_choices = {}
+        for name, value in profiles.items():
+            text_value(name, 200, 'Profile')
+            if not isinstance(value, dict) or not value.get('model') or not value.get('base_url'):
+                raise OfficeError('A configured office profile needs a model and endpoint.')
+            self.profile_choices[name] = office_config(value)
+        self.selected_profile = config.get('profile') if config.get('profile') in profiles else next((name for name, value in profiles.items()
+                                      if value.get('model') == config.get('model') and value.get('base_url') == config.get('base_url')), None)
+        self.model_revision = 0
+        self.config = office_config(config)
         self.store = OfficeStore(root)
         self.root = self.store.root
-        self.config = copy.copy(config)
-        self.config.update(tool_read_enabled=False, tool_read_allow_paths=[],
-                           tool_write_enabled=False, tool_write_allow_paths=[],
-                           tool_memory_search_enabled=False, memory_recall_enabled=False,
-                           fallback_profile=None, fallback_config=None,
-                           retry_max_attempts=1, fallback_max_attempts=1,
-                           context_projection_enabled=False)
-        self.config['context_projection_max_bytes'] = int(config.get('context_projection_max_bytes') or 256 * 1024)
-        self.config['system_prompt'] = (config.get('system_prompt') or '') + '\n\n' + INSTRUCTIONS
         self.guard = threading.RLock()
         self.workers = {}
         self.cancelled = {}
@@ -65,6 +89,26 @@ class OfficeWorkspace:
         except Exception:
             self.store.close()
             raise
+
+    def models(self):
+        with self.guard:
+            return dict(selected=self.selected_profile, revision=self.model_revision, items=[dict(profile=name, model=config['model'],
+                        provider=config['base_url'], capabilities=dict(chat=True, report=True, tools=False))
+                        for name, config in self.profile_choices.items()])
+
+    def select_model(self, profile):
+        with self.guard:
+            if not isinstance(profile, str) or profile not in self.profile_choices:
+                raise OfficeError('Choose an existing configured profile.')
+            if self.closed or any(worker.is_alive() for worker in self.workers.values()):
+                raise OfficeError('Wait for the current worker to exit before changing models.', 409)
+            with self.store.lock:
+                if self.store.db.execute("SELECT 1 FROM runs WHERE status IN ('running','stopping')").fetchone():
+                    raise OfficeError('Wait for the current request before changing models.', 409)
+            self.config = copy.copy(self.profile_choices[profile])
+            self.selected_profile = profile
+            self.model_revision += 1
+            return self.models()
 
     def submit(self, cid, body):
         # Snapshot-dependent normalization and admission share the same lock as
@@ -127,9 +171,9 @@ class OfficeWorkspace:
             payload, context = self._prepare(cid, body)
             history = self.store.history(cid)
             config = {k: v for k, v in self.config.items() if k != 'provider_adapter'}
-            binding = [cid, body['request_id'], payload, context, history, config]
+            binding = [cid, body['request_id'], payload, context, history, config, self.selected_profile, self.model_revision]
             confirmation = hashlib.sha256(encoded(binding).encode('utf-8')).hexdigest()
-            return dict(confirmation=confirmation, request_id=body['request_id'],
+            return dict(confirmation=confirmation, request_id=body['request_id'], profile=self.selected_profile, model_revision=self.model_revision,
                         model=self.config['model'], provider=self.config['base_url'],
                         history=history, message=context, source_ids=payload['source_ids'])
 
@@ -146,7 +190,7 @@ class OfficeWorkspace:
                 return self.status(old['id'])
             prepared = self.preview(cid, body)
             if not hmac.compare_digest(prepared['confirmation'], confirmation):
-                raise OfficeError('Request, model or context changed. Preview and confirm again.', 409)
+                raise OfficeError('Request, model or context changed. Preview and confirm again.', 409, request_not_accepted=True)
             return self._submit(cid, body, confirmation)
 
     def _submit(self, cid, body, confirmation=None):
@@ -160,7 +204,7 @@ class OfficeWorkspace:
         payload, context = self._prepare(cid, body)
         if confirmation is not None:
             payload['confirmation'] = confirmation
-            payload['model_snapshot'] = dict(model=self.config['model'], provider=self.config['base_url'])
+        payload['model_snapshot'] = dict(model=self.config['model'], provider=self.config['base_url'])
         with self.guard:
             if self.closed:
                 raise OfficeError('Workspace is stopping.', 409)

@@ -81,6 +81,14 @@ def dispatch(app, path, method, body=None):
         return result(dict(model=app.config.get('model'), provider=app.config.get('base_url'),
                            max_source_bytes=12 * 1024, workspace_id=workspace_id(app.root),
                            database_version=app.store.db.execute('PRAGMA user_version').fetchone()[0]))
+    if path == '/api/models':
+        if method == 'GET':
+            return result(app.models())
+        return result(app.select_model(exact(body, ['profile'])['profile']))
+    if path == '/api/cli-state':
+        with app.guard:
+            if method == 'POST': exact(body, ['revision','current','drafts','pending'])
+            return result(app.store.cli_state(body if method == 'POST' else None))
     if path == '/api/upgrade' and method == 'POST':
         exact(body, [])
         with app.guard:
@@ -103,6 +111,13 @@ def dispatch(app, path, method, body=None):
         cid = parts[2]
         if len(parts) == 3 and method == 'GET':
             return result(app.store.get(cid))
+        if len(parts) == 5 and parts[3] == 'requests' and method == 'GET':
+            with app.guard, app.store.lock:
+                app.store._row('conversations', cid)
+                from .office_store import identifier
+                row = app.store.db.execute('SELECT id FROM runs WHERE cid=? AND request_id=?', (cid, identifier(parts[4]))).fetchone()
+                if row is None: raise OfficeError('Request receipt not found. Its outcome remains unknown.', 404)
+                return result(app.status(row['id']))
         if len(parts) == 4 and method == 'POST':
             if parts[3] == 'archive':
                 with app.guard:
@@ -212,7 +227,7 @@ class OfficeConnection:
             else:
                 value = payload
             if response.status >= 300:
-                raise OfficeError(value.get('error', 'Office request refused.') if isinstance(value, dict) else 'Office request refused.', response.status)
+                raise OfficeError(value.get('error', 'Office request refused.') if isinstance(value, dict) else 'Office request refused.', response.status, request_not_accepted=isinstance(value,dict) and value.get('request_not_accepted') is True)
             return value
         except (OSError, http.client.HTTPException, JSONInputError) as exc:
             raise OfficeError('Connection lost. Request outcome is unknown; recover its receipt before sending again.', 409) from exc
