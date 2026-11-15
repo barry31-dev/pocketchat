@@ -25,6 +25,17 @@ def add_parser(subparsers):
     commands.add_parser('interactive', help='private draft REPL; sending requires the exact preview hash')
     models = commands.add_parser('models', help='list configured model profiles without calling a provider')
     models.add_argument('--select', help='select an existing configured profile')
+    project = commands.add_parser('project', help='inspect or explicitly save project preferences')
+    actions = project.add_subparsers(dest='action', required=True)
+    actions.add_parser('show')
+    for name in ('instructions', 'memory'):
+        action = actions.add_parser(name)
+        action.add_argument('--project-id', required=True)
+        action.add_argument('--revision', type=int, required=True)
+        if name == 'instructions':
+            action.add_argument('--text', required=True)
+        else:
+            action.add_argument('--enabled', choices=('true', 'false'), required=True)
     commands.add_parser('upgrade', help='back up and explicitly upgrade an existing office workspace')
     search = commands.add_parser('search', help='find literal text in message bodies')
     search.add_argument('--query', required=True)
@@ -82,6 +93,14 @@ def _operate(args, client):
     prefix = '/api/conversations'
     if getattr(args, 'conversation', None):
         prefix += '/' + identifier(args.conversation)
+    if command == 'project':
+        if args.action == 'show':
+            return client.request('/api/project'), 0
+        if args.action == 'instructions':
+            return client.request('/api/project/instructions', dict(project_id=args.project_id,
+                instruction_revision=args.revision, instructions=args.text)), 0
+        return client.request('/api/project/memory', dict(project_id=args.project_id,
+            memory_revision=args.revision, memory_enabled=args.enabled == 'true')), 0
     if command == 'models':
         return client.request('/api/models', {'profile': args.select}) if args.select else client.request('/api/models'), 0
     if command == 'upgrade':

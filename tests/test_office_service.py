@@ -192,3 +192,19 @@ class SharedOfficeTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(OfficeError):
                 self.connect()
         path.write_text(json.dumps(original))
+
+    def test_native_project_preferences_are_explicit_revisioned_and_offline(self):
+        client = self.connect()
+        project = client.request('/api/project')
+        self.assertFalse(project['memory_enabled'])
+        saved = client.request('/api/project/instructions', dict(
+            project_id=project['project_id'], instruction_revision=1, instructions='Be concise.'))
+        self.assertEqual(saved['instruction_revision'], 2)
+        with self.assertRaises(OfficeError):
+            client.request('/api/project/instructions', dict(
+                project_id=project['project_id'], instruction_revision=1, instructions='Stale.'))
+        enabled = client.request('/api/project/memory', dict(
+            project_id=project['project_id'], memory_revision=1, memory_enabled=True))
+        self.assertTrue(enabled['memory_enabled'])
+        self.assertEqual(client.request('/api/project'), enabled)
+        self.assertEqual(self.adapter.calls, [])

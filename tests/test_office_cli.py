@@ -184,7 +184,7 @@ class OfficeCLITests(unittest.TestCase):
         code, data = self.cli('conversations', 'restore', '--conversation', self.cid)
         self.assertEqual(code, 0, data)
         self.assertFalse(data['result']['archived'])
-        self.assertEqual(self.cli('upgrade')[1]['result'], {'database_version': 4, 'upgraded': False})
+        self.assertEqual(self.cli('upgrade')[1]['result'], {'database_version': 5, 'upgraded': False})
 
 
     @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
@@ -510,3 +510,19 @@ class OfficeCLITests(unittest.TestCase):
         self.assertIn('Original', second.stdout)
         self.assertEqual(len(adapter.calls), 1)
         self.assertEqual(len(app.store.get(self.cid)['messages']), 2)
+
+    @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
+    def test_project_show_save_enable_and_stale_revision_are_process_visible(self):
+        code, response = self.cli('project', 'show')
+        self.assertEqual(code, 0)
+        project = response['result']
+        code, saved = self.cli('project', 'instructions', '--project-id', project['project_id'],
+                               '--revision', '1', '--text', 'Keep reports concise.')
+        self.assertEqual(code, 0)
+        self.assertEqual(saved['result']['instruction_revision'], 2)
+        self.assertEqual(self.cli('project', 'instructions', '--project-id', project['project_id'],
+                                  '--revision', '1', '--text', 'Stale')[0], 2)
+        code, enabled = self.cli('project', 'memory', '--project-id', project['project_id'],
+                                 '--revision', '1', '--enabled', 'true')
+        self.assertEqual(code, 0)
+        self.assertTrue(enabled['result']['memory_enabled'])

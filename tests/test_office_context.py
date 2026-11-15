@@ -99,3 +99,82 @@ class ProjectAdmissionTests(unittest.TestCase):
                 store = SimpleNamespace(db=db, lock=threading.RLock())
                 with self.assertRaises(OfficeError):
                     read_project_metadata(store)
+
+
+class ProjectSchemaTests(unittest.TestCase):
+    def test_new_workspace_creates_schema_five_identity_once(self):
+        from pocketchat.office_store import OfficeStore
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve() / 'project'
+            with_store = OfficeStore(root)
+            try:
+                self.assertEqual(with_store.db.execute('PRAGMA user_version').fetchone()[0], 5)
+                project = read_project_metadata(with_store)
+                self.assertFalse(project['memory_enabled'])
+                self.assertEqual(project['instructions'], '')
+            finally:
+                with_store.close()
+            reopened = OfficeStore(root)
+            try:
+                self.assertEqual(read_project_metadata(reopened), project)
+            finally:
+                reopened.close()
+
+    def test_existing_version_zero_database_does_not_acquire_identity(self):
+        from pocketchat.office_store import OfficeStore
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve() / 'project'
+            root.mkdir(mode=0o700)
+            with sqlite3.connect(root / 'office.sqlite') as db:
+                db.execute('CREATE TABLE unrelated(secret TEXT)')
+            before = (root / 'office.sqlite').read_bytes()
+            with self.assertRaises(OfficeError):
+                OfficeStore(root)
+            self.assertEqual((root / 'office.sqlite').read_bytes(), before)
+
+    def test_schema_five_bad_project_refuses_open_without_database_writes(self):
+        from pocketchat.office_store import OfficeStore
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve() / 'project'
+            store = OfficeStore(root)
+            try:
+                store.db.execute("UPDATE office_project SET project_id='foreign'")
+                store.db.commit()
+            finally:
+                store.close()
+            before = (root / 'office.sqlite').read_bytes()
+            with self.assertRaises(OfficeError):
+                OfficeStore(root)
+            self.assertEqual((root / 'office.sqlite').read_bytes(), before)
+
+
+class ProjectMutationTests(unittest.TestCase):
+    def test_revisioned_instruction_and_memory_preferences_preserve_identity(self):
+        from pocketchat.office_store import OfficeStore
+        from pocketchat.office_context import update_project_metadata
+        with tempfile.TemporaryDirectory() as tmp:
+            store = OfficeStore(Path(tmp).resolve() / 'project')
+            try:
+                original = read_project_metadata(store)
+                changed = update_project_metadata(store, original['project_id'],
+                                                  instruction_revision=1, instructions='Use concise text')
+                self.assertEqual(changed['project_id'], original['project_id'])
+                self.assertEqual(changed['instruction_revision'], 2)
+                self.assertFalse(changed['memory_enabled'])
+                enabled = update_project_metadata(store, original['project_id'], memory_revision=1, memory_enabled=True)
+                self.assertEqual(enabled['memory_revision'], 2)
+                self.assertEqual(enabled['instructions'], changed['instructions'])
+                before = (store.root / 'office.sqlite').read_bytes()
+                for changes in [dict(instruction_revision=1, instructions='stale'),
+                                dict(memory_revision=1, memory_enabled=False),
+                                dict(memory_revision=True, memory_enabled=True),
+                                dict(instruction_revision=2, instructions='x' * 12289),
+                                dict(memory_revision=2, memory_enabled='yes'),
+                                dict(instructions='missing revision'), dict(store_path='/outside')]:
+                    with self.subTest(changes=changes), self.assertRaises(OfficeError):
+                        update_project_metadata(store, original['project_id'], **changes)
+                    self.assertEqual((store.root / 'office.sqlite').read_bytes(), before)
+                with self.assertRaises(OfficeError):
+                    update_project_metadata(store, 'project-' + 'b' * 32, instruction_revision=2, instructions='foreign')
+            finally:
+                store.close()

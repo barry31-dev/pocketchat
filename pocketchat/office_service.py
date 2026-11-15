@@ -81,6 +81,16 @@ def dispatch(app, path, method, body=None):
         return result(dict(model=app.config.get('model'), provider=app.config.get('base_url'),
                            max_source_bytes=12 * 1024, workspace_id=workspace_id(app.root),
                            database_version=app.store.db.execute('PRAGMA user_version').fetchone()[0]))
+    if path == '/api/project' and method == 'GET':
+        from .office_context import read_project_metadata
+        return result(read_project_metadata(app.store))
+    if path in ('/api/project/instructions', '/api/project/memory') and method == 'POST':
+        from .office_context import update_project_metadata
+        fields = ['project_id', 'instruction_revision', 'instructions'] if path.endswith('/instructions') else ['project_id', 'memory_revision', 'memory_enabled']
+        exact(body, fields)
+        with app.guard:
+            changes = {key: value for key, value in body.items() if key != 'project_id'}
+            return result(update_project_metadata(app.store, body['project_id'], **changes))
     if path == '/api/models':
         if method == 'GET':
             return result(app.models())

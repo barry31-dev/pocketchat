@@ -1,7 +1,15 @@
 {
   "paths": [
     "pocketchat/office_context.py",
+    "pocketchat/office_store.py",
+    "pocketchat/office_backup.py",
+    "pocketchat/office_service.py",
+    "pocketchat/office_cli.py",
     "tests/test_office_context.py",
+    "tests/test_office_backup.py",
+    "tests/test_office.py",
+    "tests/test_office_service.py",
+    "tests/test_office_cli.py",
     "docs/review-office-foundations-implementation-v1.json",
     "docs/handovers/2026-11-15-office-foundations-implementation.md"
   ],
@@ -16,17 +24,23 @@
   "round_scope": "full",
   "findings": [],
   "slice_contract": "docs/office-foundations.md",
-  "status": "partial-foundation-admission-checkpoint",
+  "status": "partial-schema5-project-backup-checkpoint",
   "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
   "reviewer": "self (routine delegated technical review)",
-  "scope": "Full new project-admission module/test diff; existing OfficeError/text_value and SQL schema/backup upgrade call points. No runtime callers enabled.",
+  "scope": "Full schema creation/upgrade, project CAS, v1/v2 backup/restore, memory graph/identity and summary source-reference validation; authenticated project routes and CLI subprocess. Prepared context, memory actions, browser controls not yet wired.",
   "verification": [
     {
       "source_type": "local run (V)",
       "status": "verified",
-      "command": "python3 -m unittest discover -s tests -p test_office_context.py -v",
-      "result": "Red: missing office_context module, exit 1; green: 5 tests passed, exit 0 on macOS Python 3.9.6. Closed metadata, byte bounds, project identity, revision types, schema4 zero-write refusal, schema5 corrupt/missing/duplicate rows covered."
+      "command": "targeted schema/project/backup red-green tests",
+      "result": "Observed missing schema/upgrade/route/CLI failures first; schema/project tests, 29 backup tests and targeted shared-client/process tests subsequently passed on macOS Python3.9.6."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest discover -s tests -p 'test_office*.py' -v; ruff check --select E9,F pocketchat/office*.py tests/test_office*.py",
+      "result": "138 office tests passed with 1 skip; Ruff passed. Secure descriptor-I/O tests do not claim unsupported Windows filesystem behavior."
     }
   ],
-  "unverified_scope": "Schema5 creation/upgrade, v2 backup, prepared context, memory lifecycle, summary, Web/CLI controls, wire equality and OF01–OF10 end-to-end acceptance not implemented. No paid provider or formal release."
+  "unverified_scope": "One frozen preview/send context, explicit office memory actions/summary controls, browser controls and OF01–OF10 complete user-path acceptance not implemented; no real provider, paid services, formal release or P2."
 }

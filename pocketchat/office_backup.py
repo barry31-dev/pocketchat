@@ -16,6 +16,7 @@ from .office_store import (MAX_REPLY_BYTES, MAX_SOURCE_BYTES, OfficeError,
 
 MAX_BACKUP_BYTES = 32 * 1024 * 1024
 SCHEMA = 'pocketchat-office-backup.v1'
+FOUNDATION_SCHEMA = 'pocketchat-office-backup.v2'
 TABLES = {
     'conversations': ('id', 'title', 'created'),
     'sources': ('id', 'cid', 'name', 'text', 'sha256'),
@@ -52,11 +53,12 @@ def validate(raw):
     """Check closed record shapes, hashes and same-conversation references."""
     doc = _json(raw)
     _require(isinstance(doc, dict) and set(doc) == {'schema_version', 'sha256', 'data'})
-    if doc['schema_version'] != SCHEMA:
+    if doc['schema_version'] not in (SCHEMA, FOUNDATION_SCHEMA):
         raise OfficeError('Unsupported office backup version.')
     data = doc['data']
-    _require(isinstance(data, dict) and set(data) == {'database_version', 'tables'})
-    if type(data['database_version']) is not int or data['database_version'] not in (2, 3, 4):
+    foundation = doc['schema_version'] == FOUNDATION_SCHEMA
+    _require(isinstance(data, dict) and set(data) == ({'database_version', 'tables', 'project', 'summaries', 'memory'} if foundation else {'database_version', 'tables'}))
+    if type(data['database_version']) is not int or data['database_version'] not in ((5,) if foundation else (2, 3, 4)):
         raise OfficeError('Unsupported office database version.')
     _require(hashlib.sha256(encoded(data).encode('utf-8')).hexdigest() == doc['sha256'])
     tables = data['tables']
@@ -200,6 +202,17 @@ def validate(raw):
             chain.add(current)
             current = maps['artifacts'][current]['predecessor']
         checked.update(chain)
+    if foundation:
+        from .office_context import validate_project_metadata, validate_project_memory, validate_summary
+        validate_project_metadata(data['project'])
+        validate_project_memory(data['memory'], data['project']['project_id'])
+        _require(isinstance(data['summaries'], list) and len(data['summaries']) <= 200)
+        seen = set()
+        for summary in data['summaries']:
+            _require(isinstance(summary, dict) and isinstance(summary.get('cid'), str) and summary['cid'] not in seen and summary['cid'] in maps['conversations'])
+            seen.add(summary['cid'])
+            validate_summary(summary, messages=maps['messages'], runs=maps['runs'],
+                             active_ids=active.get(summary['cid'], []))
     return data
 
 
@@ -217,7 +230,13 @@ def snapshot(store):
             data = dict(database_version=copy.execute('PRAGMA user_version').fetchone()[0],
                         tables={name: [dict(r) for r in copy.execute('SELECT ' + ','.join(columns) + ' FROM ' + name + ' ORDER BY rowid')]
                                 for name, columns in table_columns(copy.execute('PRAGMA user_version').fetchone()[0]).items()})
-    raw = encoded(dict(schema_version=SCHEMA, data=data,
+            if data['database_version'] == 5:
+                from .office_context import read_project_metadata, read_project_memory
+                project = read_project_metadata(store)
+                data.update(project=project,
+                            summaries=[dict(r) for r in copy.execute('SELECT * FROM office_summaries ORDER BY rowid')],
+                            memory=read_project_memory(store, project['project_id']))
+    raw = encoded(dict(schema_version=FOUNDATION_SCHEMA if data['database_version'] == 5 else SCHEMA, data=data,
                        sha256=hashlib.sha256(encoded(data).encode('utf-8')).hexdigest())).encode('utf-8')
     validate(raw)
     return raw
@@ -286,6 +305,13 @@ def restore(raw, destination):
         store = OfficeStore(Path(tmp).resolve() / 'workspace')
         try:
             with store.db:
+                store.db.execute('DROP TABLE office_project')
+                store.db.execute('DROP TABLE office_summaries')
+                if data['database_version'] == 5:
+                    from .office_context import create_project_schema
+                    create_project_schema(store.db, data['project'])
+                    store.db.executemany('INSERT INTO office_summaries VALUES(?,?,?,?)',
+                                         [(r['cid'], r['revision'], r['content'], r['refs']) for r in data['summaries']])
                 if data['database_version'] == 2:
                     store.db.execute('DROP TABLE conversations')
                     store.db.execute('CREATE TABLE conversations(id TEXT PRIMARY KEY,title TEXT,created REAL)')
@@ -301,6 +327,7 @@ def restore(raw, destination):
         os.mkdir(name, 0o700, dir_fd=parent)
         directory = lock_fd = None
         lock_owned = False
+        published = []
         try:
             directory = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
             # Claim before publishing even the first SQLite byte. A competing
@@ -310,9 +337,20 @@ def restore(raw, destination):
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             lock_owned = True
             _write_at(directory, 'office.sqlite', database)
+            published.append('office.sqlite')
+            if data['database_version'] == 5 and data['memory']:
+                from .office_context import MEMORY_FILE
+                from .memory_migration import _store_payload
+                _write_at(directory, MEMORY_FILE, _store_payload(data['memory']))
+                published.append(MEMORY_FILE)
         except BaseException:
             # Do not remove a lock acquired by a competing writer or its data.
             if lock_owned:
+                for owned_name in published:
+                    try:
+                        os.unlink(owned_name, dir_fd=directory)
+                    except FileNotFoundError:
+                        pass
                 os.unlink('office.lock', dir_fd=directory)
             try:
                 os.rmdir(name, dir_fd=parent)
@@ -332,9 +370,11 @@ def upgrade(store):
     """Explicit schema upgrade; preserve a validated durable backup first."""
     with store.lock:
         version = store.db.execute('PRAGMA user_version').fetchone()[0]
-        if version == 4:
-            return dict(database_version=4, upgraded=False)
-        if version not in (2, 3):
+        if version == 5:
+            from .office_context import read_project_metadata
+            read_project_metadata(store)
+            return dict(database_version=5, upgraded=False)
+        if version not in (2, 3, 4):
             raise OfficeError('Unsupported office workspace version.')
         raw = snapshot(store)
         digest = hashlib.sha256(raw).hexdigest()
@@ -356,9 +396,11 @@ def upgrade(store):
         try:
             if version == 2:
                 store.db.execute('ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
-            store.db.execute('PRAGMA user_version=4')
+            from .office_context import create_project_schema
+            create_project_schema(store.db)
+            store.db.execute('PRAGMA user_version=5')
             store.db.commit()
         except BaseException:
             store.db.rollback()
             raise
-        return dict(database_version=4, upgraded=True, backup=name, sha256=digest)
+        return dict(database_version=5, upgraded=True, backup=name, sha256=digest)

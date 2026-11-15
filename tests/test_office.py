@@ -392,7 +392,7 @@ class OfficeBranchTests(unittest.TestCase):
         r = self.app.submit(self.cid, self.branch_body(first))
         self.app.wait(r['id'], 3)
         document = json.loads(snapshot(self.app.store))
-        self.assertEqual(validate(encoded(document).encode())['database_version'], 4)
+        self.assertEqual(validate(encoded(document).encode())['database_version'], 5)
         row = document['data']['tables']['runs'][-1]
         payload = json.loads(row['payload'])
         payload['history_run_ids'] = [r['id']]
@@ -409,11 +409,13 @@ class OfficeBranchTests(unittest.TestCase):
         for row in self.app.store.db.execute('SELECT id,payload FROM runs').fetchall():
             p = json.loads(row['payload']); p.pop('history_run_ids', None)
             self.app.store.db.execute('UPDATE runs SET payload=? WHERE id=?', (json.dumps(p), row['id']))
+        self.app.store.db.execute('DROP TABLE office_project')
+        self.app.store.db.execute('DROP TABLE office_summaries')
         self.app.store.db.execute('PRAGMA user_version=3'); self.app.store.db.commit()
         with self.assertRaisesRegex(OfficeError, 'upgrade|Upgrade'):
             self.app.preview(self.cid, self.branch_body(first))
         result = upgrade(self.app.store)
-        self.assertEqual(result['database_version'], 4)
+        self.assertEqual(result['database_version'], 5)
         self.assertEqual(validate((self.root / result['backup']).read_bytes())['database_version'], 3)
         self.assertEqual(self.app.preview(self.cid, self.branch_body(first))['history'], [])
 
