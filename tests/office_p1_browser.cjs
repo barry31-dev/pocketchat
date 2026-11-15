@@ -95,6 +95,31 @@ async function raceAcceptance() {
  }
  const tests = [];
  const test = (name, action) => tests.push({name, action});
+ test('branch selection saves an isolated unsent draft and excludes later history', async () => {
+  const h=harness(), a=conversation(A);
+  a.active_run_ids=[RID];a.chat_run_ids=[RID];
+  a.messages=[{id:'1',role:'user',content:'Original question',run_id:RID},{id:'2',role:'assistant',content:'Original reply',run_id:RID}];
+  h.init(a);
+  h.route=call=>{assert.equal(call.path,'/api/runs/'+RID);return {id:RID,conversation_id:A,status:'completed',request:{intent:'chat',wire:{prompt:'Original question',intent:'chat',source_ids:[],revision_id:null}}};};
+  await h.run(`startBranch('${RID}')`);
+  assert.equal(h.el('prompt').value,'Original question');
+  assert.equal(h.el('consent').checked,false);
+  assert.equal(h.draft(A).branch_from,RID);
+  h.run('restoreDraft()');assert.equal(h.read('branchFrom'),RID);
+  assert.equal(h.calls.filter(c=>c.method==='POST').length,0);
+  h.run("$('leave-branch').onclick()");assert.equal(h.read('branchFrom'),null);
+ });
+ test('branch send discloses actual prefix before fresh consent and dispatch', async () => {
+  const h=harness(), a=conversation(A);a.chat_run_ids=[RID];h.init(a);
+  h.run(`setBranch('${RID}')`);h.edit('Regenerate older turn');
+  h.route=call=>{if(call.path.endsWith('/preview'))return {confirmation:'f'.repeat(64),model:'fixture',provider:'https://provider.invalid',history:[{role:'user',content:'Old private prefix'}],message:'Regenerate older turn',source_ids:[]};throw new Error('Must not dispatch without reviewed prefix');};
+  await h.el('composer').onsubmit({preventDefault(){}});
+  assert.equal(h.el('branch-preview').hidden,false);
+  assert.match(h.el('branch-history').textContent,/Old private prefix/);
+  assert.equal(h.el('consent').checked,false);
+  assert.equal(h.calls.filter(c=>c.path.endsWith('/confirmed')).length,0);
+  h.edit('Changed draft');assert.equal(h.el('branch-preview').hidden,true);
+ });
  test('removed welcome controls do not crash conversation rendering or busy transitions', async () => {
   const h = harness(), a = conversation(A);
   a.messages = [{id: '1', role: 'user', content: 'Existing conversation', run_id: RID}];
@@ -393,13 +418,51 @@ async function browserAcceptance() {
   const firstReverse = cli(['conversations', 'show', '--conversation', reverse.id]).artifacts[0].id;
   send(['report', 'revise', '--conversation', reverse.id, '--version', firstReverse, '--prompt', 'Shorten it.', '--request-id', 'p1-cli-revision']);
   await page.reload(); await page.waitForFunction(() => document.querySelectorAll('.artifact').length === 2);
+  // Branching preserves original messages and excludes their later tail from new context.
+  const branching=cli(['conversations','create','--title','Branch lab']);
+  const original=send(['chat','--conversation',branching.id,'--prompt','Original planning question','--request-id','branch-original']);
+  send(['chat','--conversation',branching.id,'--prompt','Later confidential detail','--request-id','branch-later']);
+  const savedMessages=cli(['conversations','show','--conversation',branching.id]).messages;
+  const staleArgs=['chat','--conversation',branching.id,'--prompt','Stale edit','--branch-from',original.id,'--request-id','branch-stale'];
+  const stalePreview=cli(staleArgs);
+  assert.deepEqual(stalePreview.history,[]);
+  await page.reload();await page.getByRole('button',{name:'Branch lab',exact:true}).first().click();
+  await page.getByRole('button',{name:'Edit question',exact:true}).first().click();
+  await page.waitForFunction(()=>!document.querySelector('#branch-context').hidden);
+  assert.equal(await page.locator('#prompt').inputValue(),'Original planning question');
+  await page.locator('#prompt').fill('Edited planning question');await page.reload();
+  await page.waitForFunction(()=>!document.querySelector('#branch-context').hidden);
+  assert.equal(await page.locator('#prompt').inputValue(),'Edited planning question');
+  assert.equal(await page.locator('#consent').isChecked(),false);
+  await page.locator('#send').click();await page.locator('#branch-preview').waitFor();
+  assert.match(await page.locator('#branch-history').textContent(),/No earlier history/);
+  await page.locator('#consent').check();await page.locator('#send').click();
+  await page.waitForFunction(()=>document.querySelector('.earlier-branches') && !document.querySelector('#send').disabled);
+  const afterEdit=cli(['conversations','show','--conversation',branching.id]);
+  assert.deepEqual(afterEdit.messages.slice(0,4),savedMessages);assert.equal(afterEdit.active_run_ids.length,1);
+  let refused=false;try {cli([...staleArgs,'--confirm',stalePreview.confirmation]);} catch {refused=true;}assert.equal(refused,true);
+  await page.locator('#search').fill('Later confidential detail');await page.locator('#search-results button').first().click();
+  await page.waitForFunction(()=>document.querySelector('.earlier-branches')?.open===true);
+  assert.match(await page.locator('.search-hit').innerText(),/Later confidential detail/);await page.locator('#search').fill('');
+  await page.locator('#messages > .assistant').getByRole('button',{name:'Regenerate',exact:true}).click();
+  await page.waitForFunction(()=>!document.querySelector('#branch-context').hidden);
+  assert.equal(await page.locator('#prompt').inputValue(),'Edited planning question');
+  await page.locator('#send').click();await page.locator('#branch-preview').waitFor();
+  await page.locator('#consent').check();await page.locator('#send').click();
+  await page.waitForFunction(()=>document.querySelectorAll('#messages .message').length===8 && !document.querySelector('#send').disabled);
+  const afterRegenerate=cli(['conversations','show','--conversation',branching.id]);
+  assert.deepEqual(afterRegenerate.messages.slice(0,6),afterEdit.messages);assert.equal(afterRegenerate.active_run_ids.length,1);
+  const nextPreview=cli(['chat','--conversation',branching.id,'--prompt','Continue new branch','--request-id','branch-next']);
+  assert.equal(nextPreview.history.length,2);assert.equal(nextPreview.history[0].content,'Edited planning question');
+  assert.equal(JSON.stringify(nextPreview.history).includes('Later confidential detail'),false);
+  await page.screenshot({path:path.join(output,'office-branches.png'),fullPage:true});
   const backup = path.join(output, 'backup.json'); cli(['backup', '--out', backup]);
   const restored = path.join(output, 'restored'); cli(['restore', '--from', backup], restored);
   assert.deepEqual(cli(['conversations', 'show', '--conversation', c.id], restored), cli(['conversations', 'show', '--conversation', c.id]));
   await page.screenshot({path: path.join(output, 'p1-desktop.png')});
   assert.deepEqual(errors, []);
   const result = {cli_to_browser_revision: true, browser_to_cli_revision: true, two_materials: true, body_search_location: true, archive_restore: true, isolated_browser_drafts: true,
-   old_and_new_md_docx: true, exact_receipt_recovery: true, live_owner_backup_and_restore: true, page_errors: errors};
+   old_and_new_md_docx: true, exact_receipt_recovery: true, live_owner_backup_and_restore: true, chat_edit_and_regenerate: true, preserved_branch_history: true, branch_draft_reload: true, stale_branch_confirmation_refused: true, page_errors: errors};
   await fs.writeFile(path.join(output, 'p1-browser-result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
  } finally {

@@ -118,7 +118,7 @@ class OfficeWorkspace:
 
     def _prepare(self, cid, body):
         fields = {'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent'}
-        if not isinstance(body, dict) or set(body) != fields:
+        if not isinstance(body, dict) or set(body) not in (fields, fields | {'branch_from'}):
             raise OfficeError('Invalid message fields.')
         if body['consent'] is not True:
             raise OfficeError('Confirm sending this conversation and selected material to the provider.')
@@ -135,6 +135,14 @@ class OfficeWorkspace:
         wire = {k: copy.deepcopy(v) for k, v in body.items() if k not in ('request_id', 'consent')}
         if not self.config.get('model'):
             raise OfficeError('Choose a provider configuration before sending a new request.')
+        branch = body.get('branch_from')
+        if 'branch_from' in body:
+            identifier(branch)
+            if self.store.db.execute('PRAGMA user_version').fetchone()[0] < 4:
+                raise OfficeError('Upgrade this workspace with a verified backup before branching.', 409)
+            if body['intent'] != 'chat' or body['revision_id'] is not None:
+                raise OfficeError('Only ordinary chat turns can be branched.')
+        history_ids = self.store.context_runs(cid, branch)
         previous = None
         if body['revision_id'] is not None:
             if body['intent'] != 'report':
@@ -154,6 +162,10 @@ class OfficeWorkspace:
             raise OfficeError('Selected material exceeds 48 KiB.')
         payload = dict(prompt=prompt, intent=body['intent'], source_ids=ids,
                        revision_id=body['revision_id'], wire=wire)
+        if self.store.db.execute('PRAGMA user_version').fetchone()[0] >= 4:
+            payload['history_run_ids'] = history_ids
+        if branch is not None:
+            payload['branch_from'] = branch
         context = prompt
         if sources or previous or body['intent'] == 'report':
             envelope = dict(request=prompt, kind=body['intent'], sources=[dict(
@@ -169,9 +181,9 @@ class OfficeWorkspace:
     def preview(self, cid, body):
         with self.guard:
             payload, context = self._prepare(cid, body)
-            history = self.store.history(cid)
+            history = self.store.history(cid, payload.get('history_run_ids'))
             config = {k: v for k, v in self.config.items() if k != 'provider_adapter'}
-            binding = [cid, body['request_id'], payload, context, history, config, self.selected_profile, self.model_revision]
+            binding = [cid, body['request_id'], payload, context, history, self.store.context_runs(cid), config, self.selected_profile, self.model_revision]
             confirmation = hashlib.sha256(encoded(binding).encode('utf-8')).hexdigest()
             return dict(confirmation=confirmation, request_id=body['request_id'], profile=self.selected_profile, model_revision=self.model_revision,
                         model=self.config['model'], provider=self.config['base_url'],
@@ -194,7 +206,8 @@ class OfficeWorkspace:
             return self._submit(cid, body, confirmation)
 
     def _submit(self, cid, body, confirmation=None):
-        if (not isinstance(body, dict) or set(body) != {'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent'} or
+        if (not isinstance(body, dict) or set(body) not in ({'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent'},
+                    {'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent', 'branch_from'}) or
                 body['consent'] is not True):
             raise OfficeError('Confirm the exact message and selected material before sending.')
         wire = {k: copy.deepcopy(v) for k, v in body.items() if k not in ('request_id', 'consent')}
@@ -241,7 +254,7 @@ class OfficeWorkspace:
             guard = OfficeTransportGuard(cancel, int(config['timeout_seconds']))
             config['provider_adapter'] = guard.wrap(config.get('provider_adapter') or DEFAULT_PROVIDER_ADAPTER)
             session = Session(config, self.root / 'traces' / (rid + '.jsonl'),
-                              run_id=rid, initial_messages=self.store.history(run['cid']),
+                              run_id=rid, initial_messages=self.store.history(run['cid'], json.loads(run['payload']).get('history_run_ids')),
                               on_delta=delta)
             status = session.run([context])
             reply = session.last_reply() if status == 'completed' else ''

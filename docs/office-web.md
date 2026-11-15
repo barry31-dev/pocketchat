@@ -100,7 +100,7 @@ transport has no new guard unless the host explicitly supplies one.
 
 Browser workspace schema 2 rejects the unreleased schema-1 development workspace.
 Keep the old directory intact and use a fresh directory; no automatic migration
-or citation relabeling is performed. Current schema-2 reopen retains all versions.
+or citation relabeling is performed. Existing schema-2/3 workspaces remain readable; explicit upgrade enables current features.
 
 ## P1 foundation: connect from the CLI
 
@@ -112,8 +112,7 @@ ownership refuses, never silently starts another writer. `office backup` connect
 to the live owner; restore always targets a new directory. See the explicit
 [data-only backup exclusions](formats.md#office-data-backup-v1).
 
-This is **not completion of P1**. Non-destructive edit/regenerate and full
-package acceptance remain next.
+This is **not completion of P1**. Full package acceptance remains separate.
 Existing report creation/revision and browser receipt recovery are reused.
 
 ## Daily conversations
@@ -123,7 +122,7 @@ match to open its conversation and focus the exact saved message. Results are pl
 text, limited to 100; **Archived conversations** changes both list and search scope.
 **Archive** hides without deleting; **Restore** makes it writable again. Read and
 version export remain available while archived. Older workspaces show **Back up &
-upgrade**; its verified backup is kept inside the private workspace before schema 3.
+upgrade**; its verified backup is kept inside the private workspace before upgrading schema 2/3 to schema 4.
 
 Unsent drafts (message, report intent, selected material and predecessor) are saved
 in this browser tab, separately for each workspace and conversation, including a
@@ -151,3 +150,28 @@ changes the displayed model/endpoint before dispatch, the browser refuses and
 asks for fresh confirmation. Content-bound server confirmation also rejects a
 change between preview and send. Existing request receipt recovery remains
 content-bound and never substitutes the new model for the old request.
+
+
+## Non-destructive chat branches
+
+Choose **Edit question** on a saved ordinary-chat question, or **Regenerate** on
+its reply. Both restore that turn as an unsent draft; send unchanged to regenerate
+or change the text first. **Review branch** displays the exact original history
+and message/material to send, without calling the model. Only then can you confirm
+and send. Any changed draft, model or context requires another review. No model call
+happens when choosing the action. **Continue current branch instead** drops the
+branch selection while retaining draft text.
+
+A successful new reply becomes the active branch, starting from the selected
+turn's original context prefix. Its old reply and subsequent messages stay in
+**Saved earlier branches**, excluded from new active context but still searchable
+and copyable. Search opens the saved section at the exact message. A failed,
+cancelled or interrupted attempt does not replace the active path. Reopening
+retains the path; branch drafts remain tab-local and never restore consent.
+
+Reports keep explicit **Revise** and exact-version export, not chat regeneration.
+Sources keep their conversation-scoped labels; old reports remain accessible
+regardless of the active chat branch. [CLI branch controls](cli.md#office-chat-branches)
+use the same service, receipts and confirmation. Branches require schema 4;
+older workspaces must explicitly back up and upgrade. Never downgrade the version
+number: restore a verified pre-upgrade backup to a new directory instead.

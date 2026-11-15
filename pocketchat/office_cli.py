@@ -62,6 +62,8 @@ def add_parser(subparsers):
             target.add_argument('--prompt', required=True)
             target.add_argument('--source', action='append', default=[], help='material ID; repeat for each selection')
             target.add_argument('--request-id', required=True, help='stable ID; reuse only to recover this same request')
+            if name == 'chat':
+                target.add_argument('--branch-from', help='completed chat run ID to edit or regenerate; keeps saved history')
             target.add_argument('--confirm', help='SHA-256 from the preview; no generic --yes')
     runs = commands.add_parser('runs', help='inspect a receipt or stop its running request')
     actions = runs.add_subparsers(dest='action', required=True)
@@ -116,6 +118,8 @@ def _operate(args, client):
     body = dict(prompt=args.prompt, intent='report' if command == 'report' else 'chat',
                 source_ids=args.source, revision_id=getattr(args, 'version', None),
                 request_id=identifier(args.request_id), consent=True)
+    if getattr(args, 'branch_from', None):
+        body['branch_from'] = identifier(args.branch_from)
     if args.confirm is None:
         return dict(client.request(prefix + '/preview', body), sent=False), 0
     run = client.request(prefix + '/confirmed', dict(message=body, confirmation=args.confirm))
@@ -185,6 +189,8 @@ class _InteractiveOffice:
         print('Sources: ' + ', '.join(draft['source_ids']), flush=True)
         if draft['revision_id']:
             print('Revision: ' + draft['revision_id'], flush=True)
+        if draft.get('branch_from'):
+            print('Branch from: ' + draft['branch_from'] + ' (earlier history stays saved)', flush=True)
         print(draft['prompt'] or '(empty)', flush=True)
 
     def show_models(self, models):
@@ -321,6 +327,23 @@ class _InteractiveOffice:
             self.client.request('/api/conversations/' + cid)
             self.change(current=cid)
             self.show_draft()
+        elif name == '/branch':
+            cid = identifier(self.state['current'])
+            run = self.client.request('/api/runs/' + identifier(tail))
+            if (run['conversation_id'] != cid or run['status'] != 'completed' or
+                    run['request']['intent'] != 'chat'):
+                raise OfficeError('Choose a completed chat turn from this conversation.')
+            wire = run['request'].get('wire', run['request'])
+            draft = {k: copy.deepcopy(wire[k]) for k in ('prompt', 'intent', 'source_ids', 'revision_id')}
+            draft['branch_from'] = run['id']
+            self.update_draft(draft)
+            self.show_draft()
+        elif name == '/history':
+            cid = identifier(self.state['current'])
+            c = self.client.request('/api/conversations/' + cid)
+            for message in c['messages']:
+                state = 'active' if message['run_id'] in c['active_run_ids'] else 'saved earlier branch'
+                print('%s | %s | %s: %s' % (message['run_id'], state, message['role'], message['content']), flush=True)
         elif name == '/models':
             self.show_models(self.client.request('/api/models'))
         elif name == '/model':
@@ -359,6 +382,8 @@ class _InteractiveOffice:
                 draft.update(intent='report', revision_id=version)
             else:
                 draft.update(intent=name[1:], revision_id=None)
+            if name in ('/chat', '/report', '/revise'):
+                draft.pop('branch_from', None)
             self.update_draft(draft)
             self.show_draft()
         elif name == '/send':
@@ -386,7 +411,7 @@ class _InteractiveOffice:
             write_new(target, data)
             print('Exported version: ' + version, flush=True)
         else:
-            print('Unknown command. Use /new /open /list /draft /sources /chat /report /revise '
+            print('Unknown command. Use /new /open /list /draft /history /branch /sources /chat /report /revise '
                   '/send /recover /stop /export /materials /import /models /model /quit.', flush=True)
         return True
 

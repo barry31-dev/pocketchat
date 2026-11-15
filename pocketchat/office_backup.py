@@ -26,7 +26,7 @@ TABLES = {
 
 
 def table_columns(version):
-    if version == 3:
+    if version >= 3:
         return dict(TABLES, conversations=TABLES['conversations'] + ('archived',))
     return TABLES
 
@@ -56,7 +56,7 @@ def validate(raw):
         raise OfficeError('Unsupported office backup version.')
     data = doc['data']
     _require(isinstance(data, dict) and set(data) == {'database_version', 'tables'})
-    if type(data['database_version']) is not int or data['database_version'] not in (2, 3):
+    if type(data['database_version']) is not int or data['database_version'] not in (2, 3, 4):
         raise OfficeError('Unsupported office database version.')
     _require(hashlib.sha256(encoded(data).encode('utf-8')).hexdigest() == doc['sha256'])
     tables = data['tables']
@@ -101,6 +101,8 @@ def validate(raw):
 
     request_ids = set()
     payloads = {}
+    paths = {}
+    active = {}
     for r in tables['runs']:
         identifier(r['request_id'])
         _require(r['request_id'] not in request_ids)
@@ -111,7 +113,20 @@ def validate(raw):
             text_value(r['reply'], MAX_REPLY_BYTES, 'Reply')
         p = _payload(r['payload'])
         required = {'prompt', 'intent', 'source_ids', 'revision_id'}
-        _require(isinstance(p, dict) and required <= set(p) <= required | {'wire', 'confirmation', 'model_snapshot'})
+        _require(isinstance(p, dict) and required <= set(p) <= required | {'wire', 'confirmation', 'model_snapshot', 'history_run_ids', 'branch_from'})
+        prefix = active.get(r['cid'], [])
+        if 'branch_from' in p:
+            target = ref('runs', p['branch_from'], r['cid'])
+            _require(data['database_version'] >= 4 and target['id'] in paths and
+                     target['status'] == 'completed' and payloads[target['id']]['intent'] == 'chat' and
+                     p['intent'] == 'chat' and p['revision_id'] is None and
+                     'history_run_ids' in p and 'wire' in p)
+            prefix = paths[target['id']][:-1]
+        if 'history_run_ids' in p:
+            _require(data['database_version'] >= 4 and p['history_run_ids'] == prefix)
+        if r['status'] == 'completed':
+            paths[r['id']] = prefix + [r['id']]
+            active[r['cid']] = paths[r['id']]
         if 'confirmation' in p:
             _require({'wire', 'model_snapshot'} <= set(p))
             proof = p['confirmation']
@@ -132,7 +147,8 @@ def validate(raw):
             ref('artifacts', p['revision_id'], r['cid'])
         if 'wire' in p:
             w = p['wire']
-            _require(isinstance(w, dict) and set(w) == {'prompt', 'intent', 'source_ids', 'revision_id'})
+            _require(isinstance(w, dict) and set(w) == {'prompt', 'intent', 'source_ids', 'revision_id'} | ({'branch_from'} if 'branch_from' in p else set()))
+            _require(w.get('branch_from') == p.get('branch_from'))
             _require(isinstance(w['source_ids'], list) and len(w['source_ids']) <= 8)
             _require(w['prompt'] == p['prompt'] and w['intent'] == p['intent'] and w['revision_id'] == p['revision_id'])
             for sid in w['source_ids']:
@@ -149,6 +165,11 @@ def validate(raw):
         if m['role'] == 'assistant':
             _require(m['context'] == r['reply'])
         messages.setdefault(r['id'], []).append(m['role'])
+    # Completed-run chronology is independently committed by the monotonically
+    # allocated message IDs, not by the untrusted runs array order alone.
+    completed = [r['id'] for r in tables['runs'] if r['status'] == 'completed']
+    message_order = [(m['run_id'], m['role']) for m in tables['messages']]
+    _require(message_order == [(rid, role) for rid in completed for role in ('user', 'assistant')])
     artifact_runs = set()
     for a in tables['artifacts']:
         r = ref('runs', a['run_id'], a['cid'])
@@ -269,6 +290,7 @@ def restore(raw, destination):
                     store.db.execute('DROP TABLE conversations')
                     store.db.execute('CREATE TABLE conversations(id TEXT PRIMARY KEY,title TEXT,created REAL)')
                     store.db.execute('PRAGMA user_version=2')
+                store.db.execute('PRAGMA user_version=%d' % data['database_version'])
                 for name, columns in table_columns(data['database_version']).items():
                     query = 'INSERT INTO ' + name + '(' + ','.join(columns) + ') VALUES (' + ','.join('?' for _ in columns) + ')'
                     store.db.executemany(query, [[row[k] for k in columns] for row in data['tables'][name]])
@@ -307,16 +329,16 @@ def restore(raw, destination):
 
 
 def upgrade(store):
-    """Explicit schema-2 upgrade; preserve a validated durable backup first."""
+    """Explicit schema upgrade; preserve a validated durable backup first."""
     with store.lock:
         version = store.db.execute('PRAGMA user_version').fetchone()[0]
-        if version == 3:
-            return dict(database_version=3, upgraded=False)
-        if version != 2:
+        if version == 4:
+            return dict(database_version=4, upgraded=False)
+        if version not in (2, 3):
             raise OfficeError('Unsupported office workspace version.')
         raw = snapshot(store)
         digest = hashlib.sha256(raw).hexdigest()
-        name = 'office-v2-before-upgrade-' + digest + '.json'
+        name = 'office-v%d-before-upgrade-' % version + digest + '.json'
         target = store.root / name
         if target.exists() or target.is_symlink():
             if read_file(target) != raw:
@@ -332,10 +354,11 @@ def upgrade(store):
         # Explicit BEGIN: sqlite DDL must share the version update transaction.
         store.db.execute('BEGIN IMMEDIATE')
         try:
-            store.db.execute('ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
-            store.db.execute('PRAGMA user_version=3')
+            if version == 2:
+                store.db.execute('ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0')
+            store.db.execute('PRAGMA user_version=4')
             store.db.commit()
         except BaseException:
             store.db.rollback()
             raise
-        return dict(database_version=3, upgraded=True, backup=name, sha256=digest)
+        return dict(database_version=4, upgraded=True, backup=name, sha256=digest)

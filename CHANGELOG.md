@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — non-destructive office chat branches
+
+- Edit or regenerate completed chat turns from their original context prefix,
+  preserving old replies, later messages, receipts and exact report versions.
+- Share branch drafts, previews and receipt semantics across browser and CLI;
+  only successful replies change the active path. Saved history stays searchable.
+- Gate branching with schema 4 and explicit verified-backup-first upgrades for
+  older workspaces; restore preserves the source schema and checks ancestry.
+
 
 ## Unreleased — office configured profiles and interactive drafts
 

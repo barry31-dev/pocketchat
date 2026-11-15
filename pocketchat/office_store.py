@@ -95,7 +95,7 @@ class OfficeStore:
             self.db.row_factory = sqlite3.Row
             os.chmod(self.root / 'office.sqlite', 0o600)
             version = self.db.execute('PRAGMA user_version').fetchone()[0]
-            if version not in (0, 2, 3):
+            if version not in (0, 2, 3, 4):
                 raise OfficeError('Unsupported office workspace version.')
             self.db.executescript('''
                 CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY, title TEXT, created REAL, archived INTEGER NOT NULL DEFAULT 0);
@@ -108,7 +108,7 @@ class OfficeStore:
                     content TEXT, sources TEXT, predecessor TEXT, created REAL);
             ''')
             if version == 0:
-                self.db.execute('PRAGMA user_version=3')
+                self.db.execute('PRAGMA user_version=4')
             with self.db:
                 self.db.execute("UPDATE runs SET status='unknown', error='Interrupted before completion; inspect before retrying.' WHERE status IN ('running','stopping')")
         except Exception:
@@ -175,7 +175,7 @@ class OfficeStore:
             self._row('conversations', state['current'])
         def draft(cid, value, pending=False):
             fields = {'prompt','intent','source_ids','revision_id'} | ({'request_id','consent'} if pending else set())
-            if not isinstance(value, dict) or set(value) != fields:
+            if not isinstance(value, dict) or set(value) not in (fields, fields | {'branch_from'}):
                 raise OfficeError('Invalid CLI draft.')
             prompt = value['prompt']
             if not isinstance(prompt, str): raise OfficeError('Invalid CLI draft text.')
@@ -187,6 +187,11 @@ class OfficeStore:
                     len(value['source_ids']) > 8 or any(not isinstance(s, str) for s in value['source_ids']) or
                     len(set(value['source_ids'])) != len(value['source_ids'])):
                 raise OfficeError('Invalid CLI draft selection.')
+            if 'branch_from' in value:
+                if cid == 'new' or value['intent'] != 'chat' or value['revision_id'] is not None:
+                    raise OfficeError('Invalid chat branch draft.')
+                identifier(value['branch_from'])
+                self.context_runs(cid, value['branch_from'])
             if cid == 'new':
                 if value['source_ids'] or value['revision_id'] is not None:
                     raise OfficeError('New-conversation drafts cannot reference saved material.')
@@ -254,7 +259,7 @@ class OfficeStore:
             raise OfficeError('Archive state must be a boolean.')
         with self.lock, self.db:
             self._row('conversations', cid)
-            if self.db.execute('PRAGMA user_version').fetchone()[0] != 3:
+            if self.db.execute('PRAGMA user_version').fetchone()[0] < 3:
                 raise OfficeError('Upgrade the workspace with a backup before archiving.', 409)
             if self.db.execute("SELECT 1 FROM runs WHERE cid=? AND status IN ('running','stopping')", (cid,)).fetchone():
                 raise OfficeError('Wait for the active request before archiving.', 409)
@@ -296,12 +301,38 @@ class OfficeStore:
             c['messages'] = [dict(r, id=str(r['id'])) for r in self.db.execute('SELECT id,role,content,run_id FROM messages WHERE cid=? ORDER BY id', (cid,))]
             c['artifacts'] = [dict(r) for r in self.db.execute('SELECT id,run_id,predecessor,created FROM artifacts WHERE cid=? ORDER BY rowid DESC', (cid,))]
             c['runs'] = [dict(r) for r in self.db.execute('SELECT id,status,error,created FROM runs WHERE cid=? ORDER BY rowid DESC LIMIT 20', (cid,))]
+            c['active_run_ids'] = self.context_runs(cid)
+            c['chat_run_ids'] = [r['id'] for r in self.db.execute(
+                "SELECT id,payload FROM runs WHERE cid=? AND status='completed' ORDER BY rowid", (cid,))
+                if json.loads(r['payload'])['intent'] == 'chat']
             return c
 
-    def history(self, cid):
+    def context_runs(self, cid, branch_from=None):
+        """Resolve an append-only path; failed attempts never select a new branch."""
         with self.lock:
             self._row('conversations', cid)
-            return [dict(role=r['role'], content=r['context']) for r in self.db.execute('SELECT role,context FROM messages WHERE cid=? ORDER BY id', (cid,))]
+            active = []
+            for row in self.db.execute(
+                    "SELECT id,payload FROM runs WHERE cid=? AND status='completed' ORDER BY rowid", (cid,)):
+                payload = json.loads(row['payload'])
+                prefix = payload.get('history_run_ids', active)
+                if row['id'] == branch_from:
+                    if payload['intent'] != 'chat':
+                        raise OfficeError('Use report revision for a saved report.', 409)
+                    return list(prefix)
+                active = list(prefix) + [row['id']]
+            if branch_from is not None:
+                raise OfficeError('Completed chat turn not found in this conversation.', 404)
+            return active
+
+    def history(self, cid, run_ids=None):
+        with self.lock:
+            self._row('conversations', cid)
+            ids = self.context_runs(cid) if run_ids is None else run_ids
+            rows = {}
+            for row in self.db.execute('SELECT role,context,run_id FROM messages WHERE cid=? ORDER BY id', (cid,)):
+                rows.setdefault(row['run_id'], []).append(dict(role=row['role'], content=row['context']))
+            return [message for rid in ids for message in rows[rid]]
 
     def add_source(self, cid, name, text):
         text_value(name, 200, 'File name')
@@ -327,7 +358,10 @@ class OfficeStore:
     def disclosed_sources(self, cid):
         with self.lock:
             ids = []
-            for row in self.db.execute("SELECT payload FROM runs WHERE cid=? AND status='completed' ORDER BY rowid", (cid,)):
+            active = set(self.context_runs(cid))
+            for row in self.db.execute("SELECT id,payload FROM runs WHERE cid=? AND status='completed' ORDER BY rowid", (cid,)):
+                if row['id'] not in active:
+                    continue
                 for sid in json.loads(row['payload'])['source_ids']:
                     if sid not in ids:
                         ids.append(sid)

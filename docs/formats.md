@@ -364,18 +364,18 @@ are refused; the original workspace is not opened by restore or changed.
 The snapshot preserves request IDs/receipts, source citation ordering, report
 versions and references. Confirmed CLI receipts additionally retain a
 `confirmation` digest and `model_snapshot` (`model`, `provider`) in the existing
-run payload. These payload additions are supported in both database versions.
+run payload. These payload additions are supported in all supported database versions.
 Schema 3 adds an integer `archived` field (only 0 or 1) to each conversation;
 message IDs and the remaining table shapes are unchanged.
 
-New workspaces use schema 3. Existing schema 2 workspaces remain at version 2
+Schema 3 introduced archiving; new workspaces now use schema 4 (below). Existing schema 2/3 workspaces retain their version
 until `office upgrade` or the browser **Back up & upgrade** action. The owner
-first writes a validated, mode-0600 `office-v2-before-upgrade-SHA256.json` in the
-private workspace, reads its exact bytes back and syncs the parent directory, then adds the column and changes
+first writes a validated, mode-0600 `office-vVERSION-before-upgrade-SHA256.json` in the
+private workspace, reads its exact bytes back and syncs the parent directory, then adds the archived column when upgrading version 2 and changes
 the version in one transaction. Failure preserves the old schema or rolls the
 transaction back; it never deletes the backup. A matching backup from an interrupted
 upgrade may be reused; different bytes or unsafe paths are refused. Backups restore into a new directory at their recorded schema version;
-version-2 conversations remain unarchived until an explicit upgrade. Older implementations refuse schema 3 rather than downgrading.
+version-2 conversations remain unarchived until an explicit upgrade. Implementations refuse unknown newer schema versions rather than downgrading.
 
 Excluded: raw traces/request snapshot files, config/credential stores, service
 and browser tokens, browser-local unsent/pending UI state and external exports.
@@ -422,3 +422,28 @@ runs without these additive fields remain readable and restorable.
 Stale confirmed-request previews can return the boolean `request_not_accepted`
 only when the exact request has no receipt and fails before admission. It is not
 a generic 4xx or transport-error interpretation and never authorizes replay.
+
+
+### Office branch context (database schema 4)
+
+New workspaces use schema 4. Schema-2/3 workspaces remain readable/writable for
+existing operations, but branch creation requires explicit backup-first upgrade.
+Data-only backups retain `pocketchat-office-backup.v1` and accept database versions
+2, 3 and 4; restore preserves the source database version, not an implicit upgrade.
+Old writers refuse schema 4 before interpreting branched history.
+
+A schema-4 run payload records `history_run_ids`: the ordered completed runs used
+as its immutable context prefix. Optional `branch_from` names a prior completed
+ordinary-chat run in the same conversation and is also part of the exact `wire`.
+For a branch the prefix equals the target run's original prefix; otherwise it is
+the active path at admission. Legacy runs without a snapshot use the preceding
+active path. Failed/cancelled/unknown attempts never change the path. All original
+messages, runs and artifacts remain stored; current history is the prefix plus
+the most recent successful run, not all rows concatenated. Backup validation rejects
+foreign, future, noncompleted, mismatched or cyclic branch ancestry.
+
+Conversation JSON adds `active_run_ids` and `chat_run_ids`; existing `messages`
+remains the full chronological archive. Office request/draft shapes accept an
+optional `branch_from` only for chat. Branch selection is content, not authority:
+consent, model/context-bound preview and original-request recovery rules still apply.
+No existing legacy CLI session JSONL format changes.

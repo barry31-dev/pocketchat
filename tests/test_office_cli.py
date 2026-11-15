@@ -184,7 +184,7 @@ class OfficeCLITests(unittest.TestCase):
         code, data = self.cli('conversations', 'restore', '--conversation', self.cid)
         self.assertEqual(code, 0, data)
         self.assertFalse(data['result']['archived'])
-        self.assertEqual(self.cli('upgrade')[1]['result'], {'database_version': 3, 'upgraded': False})
+        self.assertEqual(self.cli('upgrade')[1]['result'], {'database_version': 4, 'upgraded': False})
 
 
     @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
@@ -491,3 +491,22 @@ class OfficeCLITests(unittest.TestCase):
         self.assertEqual(process.returncode,0,process.stderr.read())
         self.assertIsNone(app.store.cli_state()['pending'])
         self.assertEqual(adapter.calls,[])
+
+    @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
+    def test_branch_preview_and_interactive_draft_preserve_original_turn(self):
+        app, adapter = self.remote_fixture()
+        body = dict(prompt='Original', intent='chat', source_ids=[], revision_id=None,
+                    request_id='cli-branch-original', consent=True)
+        run = app.submit(self.cid, body); app.wait(run['id'], 3)
+        args = ['chat', '--conversation', self.cid, '--prompt', 'Edited', '--branch-from',
+                run['id'], '--request-id', 'cli-branch-edited']
+        code, result = self.cli(*args)
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result['result']['history'], [])
+        first = self.interactive('/open '+self.cid+'\n/branch '+run['id']+'\n/quit\n')
+        self.assertEqual(first.returncode, 0, first.stderr)
+        second = self.interactive('/draft\n/quit\n')
+        self.assertIn('Branch from: '+run['id'], second.stdout)
+        self.assertIn('Original', second.stdout)
+        self.assertEqual(len(adapter.calls), 1)
+        self.assertEqual(len(app.store.get(self.cid)['messages']), 2)

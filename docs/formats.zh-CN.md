@@ -253,14 +253,14 @@ task-record/policy/plan 身份、时间、执行状态及逐项 bytes/SHA-256。
 每会话原有限额，再新建 0700 目录；发布数据库全过程持有目标工作区写锁。
 只用固定 schema 和 SQL 参数，不执行备份里的 SQL。现有目录／文件、链接、坏摘要及
 未知版本均拒绝，原工作区不改动。来源顺序、版本和 request ID 保留，不重放模型调用。
-CLI 回执在两版 payload 中均可附加 `confirmation` 及 `model_snapshot`。schema 3 仅给会话新增
+CLI 回执在受支持版本 payload 中均可附加 `confirmation` 及 `model_snapshot`。schema 3 仅给会话新增
 `archived` 整数字段（只接受 0 或 1），消息 ID 和其他表形状不变。
 
-新建工作区使用 schema 3；既有 schema 2 不静默升级。显式 `office upgrade` 或网页
-**Back up & upgrade** 会先在私有工作区写入 0600 的 `office-v2-before-upgrade-SHA256.json`，
-校验、回读字节并同步备份父目录后才在一个事务中加列、改版本。失败不删除备份；中断留下的完全相同备份可复用，
+schema 3 引入归档；当前新建工作区使用下节 schema 4。既有 schema 2/3 不静默升级。显式 `office upgrade` 或网页
+**Back up & upgrade** 会先在私有工作区写入 0600 的 `office-vVERSION-before-upgrade-SHA256.json`，
+校验、回读字节并同步备份父目录后才在一个事务中更新版本（版本 2 同时补归档列）。失败不删除备份；中断留下的完全相同备份可复用，
 不同字节或不安全路径拒绝。备份恢复到新目录时保留记录中的 schema 版本；旧版会话在显式升级前仍不启用归档；
-旧实现应拒绝 schema 3，不降级。
+旧实现应拒绝未知的新 schema，不降级。
 
 **排除**原始 trace／请求快照文件、配置／凭据存储、服务与浏览器令牌、浏览器本地草稿和
 待恢复 UI 状态、工作区外导出物。恢复了回执不代表重建了原始 trace；需要原始证据时
@@ -288,3 +288,19 @@ CLI 回执在两版 payload 中均可附加 `confirmation` 及 `model_snapshot`�
 
 CLI state HTTP 路由仅允许 native 身份，网页 cookie／CSRF 不授予 CLI 草稿访问。
 `request_not_accepted` 仅来自原请求无回执且在入场前拒绝的陈旧预览；不是通用 4xx 判据。
+
+
+### Office 分支上下文（数据库 schema 4）
+
+新工作区使用 schema 4；旧 schema 2/3 的已有操作仍可使用，创建聊天分支须先显式备份升级。
+数据备份信封仍为 `pocketchat-office-backup.v1`，支持数据库 2、3、4；恢复保留原数据库版本，
+不暗中升级。旧程序拒绝 schema 4，不会把各分支串接为单一路径。
+
+schema-4 请求的 `history_run_ids` 固定实际使用的已完成轮次前缀。可选 `branch_from` 指向同会话
+更早的已完成普通聊天轮次，并纳入精确 `wire`；其前缀必须等于目标轮次当时的前缀，普通请求使用
+接收时的当前路径。旧请求缺少快照时沿前一当前路径解释。只有成功完成才切换路径，失败/取消/未知
+不切换。原消息、回执、报告版本全部保留。备份拒绝跨会话、未来、未完成、错配或循环祖先。
+
+会话 JSON 新增 `active_run_ids`、`chat_run_ids`；`messages` 仍返回按时间保存的完整消息。
+办公请求及草稿仅在 chat 下接受可选 `branch_from`；它属于内容，不授予新权限。发送同意、
+模型/上下文绑定确认和原请求回执恢复不放宽。旧 CLI 会话 JSONL 不变。

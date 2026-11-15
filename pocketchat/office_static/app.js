@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 let csrf = '', current = null, selected = new Set(), report = false, revision = null, activeRun = null, polling = null;
 let conversations = [], lastSubmission = null, displayedModelRevision = null;
 let receiptKey = '', draftPrefix = '', viewKey = '', draftReady = false, opening = false, searchSequence = 0;
-let searchTimer = null, mutation = false, legacyPending = false;
+let searchTimer = null, mutation = false, legacyPending = false, branchFrom = null, branchReview = null;
 function editingBlocked() { return Boolean(activeRun || lastSubmission || opening || mutation || legacyPending); }
 const node = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
 function notice(message = '') { $('notice').textContent = message; }
@@ -29,14 +29,17 @@ function busy(value) {
   value = value || editingBlocked();
   const readOnly = value || Boolean(current?.archived);
   const choice=$('model-choice');if(choice)choice.disabled=value;
-  for (const id of ['send','upload','prompt','consent','report-toggle']) $(id).disabled = readOnly;
+  for (const id of ['send','upload','prompt','consent','report-toggle','leave-branch']) $(id).disabled = readOnly;
+  $('consent').disabled=readOnly || Boolean(branchFrom && !branchReview);
+  $('send').textContent=branchFrom && !branchReview ? 'Review branch' : 'Send ↑';
   $('stop').hidden = !value || !activeRun; $('new-chat').disabled = value;
   $('archive').disabled = value; $('rename').disabled = readOnly;
+  for (const button of document.querySelectorAll('[data-branch-run]')) button.disabled = readOnly;
   for (const input of $('sources').querySelectorAll('input')) input.disabled = readOnly;
   const weekly = $('weekly'); if(weekly)weekly.disabled = readOnly;
   for (const button of document.querySelectorAll('[data-prompt]')) button.disabled = readOnly;
 }
-function draftValue() { return {prompt:$('prompt').value, report, revision, sources:[...selected]}; }
+function draftValue() { return {prompt:$('prompt').value, report, revision, sources:[...selected], branch_from:branchFrom}; }
 function saveDraft() {
   if (!draftPrefix || !draftReady) return;
   try { sessionStorage.setItem(draftPrefix + (current?.id || 'new'), JSON.stringify(draftValue())); }
@@ -51,10 +54,11 @@ function restoreDraft() {
   $('prompt').value = draft.prompt;
   selected = new Set(draft.sources.filter(id => current?.sources.some(source => source.id === id)));
   setReport(draft.report, current?.artifacts.some(a => a.id === draft.revision) ? draft.revision : null);
+  setBranch(typeof draft.branch_from === 'string' && current?.chat_run_ids?.includes(draft.branch_from) ? draft.branch_from : null);
   $('consent').checked = false; draftReady = true;
   try { sessionStorage.setItem(viewKey, current?.id || 'new'); } catch { /* Draft save reports unavailable storage. */ }
 }
-function changedDraft() { $('consent').checked = false; saveDraft(); }
+function changedDraft() { $('consent').checked = false; branchReview=null; $('branch-preview').hidden=true; saveDraft(); busy(false); }
 async function searchMessages() {
   const sequence = ++searchSequence, query = $('search').value.trim();
   $('search-results').replaceChildren(); renderList();
@@ -71,13 +75,31 @@ async function searchMessages() {
         const message = $('messages').querySelector(`[data-message-id="${hit.message_id}"]`);
         if (!message) throw new Error('The matching message is not available. Search again.');
         for (const old of $('messages').querySelectorAll('.search-hit')) old.classList.remove('search-hit');
+        const earlier=message.closest?.('details');if(earlier)earlier.open=true;
         message.classList.add('search-hit'); message.focus(); message.scrollIntoView({block:'center'});
       } catch(e) { notice(e.message); } };
       $('search-results').append(button);
     }
   } catch(e) { if (sequence === searchSequence) notice(e.message); }
 }
-function setReport(value, old = null) { report = value; revision = old; $('report-toggle').setAttribute('aria-pressed', String(value)); $('revision-label').textContent = old ? 'Revising version ' + ((current?.artifacts.length || 0) - (current?.artifacts.findIndex(a=>a.id===old) ?? 0)) : ''; $('prompt').placeholder = value ? 'What should this report cover?' : 'Ask anything, or tell me what you need…'; }
+function setReport(value, old = null) { if(value)setBranch(null); report = value; revision = old; $('report-toggle').setAttribute('aria-pressed', String(value)); $('revision-label').textContent = old ? 'Revising version ' + ((current?.artifacts.length || 0) - (current?.artifacts.findIndex(a=>a.id===old) ?? 0)) : ''; $('prompt').placeholder = value ? 'What should this report cover?' : 'Ask anything, or tell me what you need…'; }
+function setBranch(rid) {
+  branchFrom=rid;branchReview=null;$('branch-preview').hidden=true;
+  $('branch-context').hidden=!rid;
+  $('branch-label').textContent=rid ? 'New branch from this turn. Review its exact history below before sending; old replies stay saved.' : '';
+}
+async function startBranch(rid) {
+  if(editingBlocked() || !current || current.archived)return;
+  const cid=current.id;mutation=true;busy(true);
+  try {
+    const run=await api('/api/runs/'+rid);
+    if(current?.id!==cid || run.conversation_id!==cid || run.status!=='completed' || run.request.intent!=='chat')throw new Error('Choose a completed chat turn in this conversation.');
+    const wire=run.request.wire || run.request;
+    $('prompt').value=wire.prompt;selected=new Set(wire.source_ids);setReport(false);setBranch(rid);
+    changedDraft();renderConversation(current);notice('Edit the question, or send it unchanged to regenerate. Review and confirm before sending.');$('prompt').focus();
+  } finally {mutation=false;busy(false);}
+}
+$('leave-branch').onclick=()=>{if(editingBlocked())return;setBranch(null);changedDraft();notice('Continuing the current branch. Draft text retained.');};
 async function refreshList() {
   conversations = (await api('/api/conversations' + ($('show-archived').checked ? '/archived' : ''))).items;
   renderList();
@@ -93,12 +115,20 @@ function renderConversation(c) {
   current = c; $('rename').textContent = c.title; $('archive').hidden=false; $('archive').textContent=c.archived?'Restore':'Archive'; renderList();
   if (c.messages.length) {
     $('messages').replaceChildren();
+    const active=new Set(c.active_run_ids || c.messages.map(m=>m.run_id));
+    const earlier=node('details',undefined,'earlier-branches');earlier.append(node('summary',branchFrom ? 'Saved messages · review the pending branch history before sending' : 'Saved earlier branches · not sent as current history'));
     for (const m of c.messages) {
       const section = node('section', undefined, 'message ' + m.role); section.dataset.messageId=String(m.id); section.tabIndex=-1; section.append(node('div', m.role === 'user' ? 'You' : 'PocketChat', 'role'));
       const text = node('div'); markdown(text, m.content); section.append(text);
       const copy = node('button','Copy','copy'); copy.onclick=()=>navigator.clipboard.writeText(m.content).then(()=>notice('Copied.')).catch(()=>notice('Copy unavailable. Select the text instead.'));
-      section.append(copy); $('messages').append(section);
+      section.append(copy);
+      if(c.chat_run_ids?.includes(m.run_id)){
+        const branch=node('button',m.role==='user'?'Edit question':'Regenerate','branch-action');branch.dataset.branchRun=m.run_id;
+        branch.onclick=()=>startBranch(m.run_id).catch(e=>notice(e.message));section.append(branch);
+      }
+      (active.has(m.run_id) ? $('messages') : earlier).append(section);
     }
+    if(c.messages.some(m=>!active.has(m.run_id)))$('messages').append(earlier);
   } else if (!$('messages').querySelector('.welcome')) { $('messages').replaceChildren(node('p','This is a fresh conversation. Start with a question or add some material.','empty-note')); }
   $('sources').replaceChildren();
   if (!c.sources.length) $('sources').append(node('p','Add notes to give your work a starting point.','empty-note'));
@@ -144,7 +174,7 @@ async function ensureConversation() {
 }
 function showFailure(r) {
   notice(r.error || 'The request did not finish.');const retry=node('button','Review & retry');
-  retry.onclick=()=>{ if(editingBlocked())return; $('prompt').value=r.request.prompt;selected=new Set(r.request.source_ids);setReport(r.request.intent==='report',r.request.revision_id);renderConversation(current);changedDraft();notice('Review the request, then send to retry.'); };$('notice').append(' ',retry);
+  retry.onclick=()=>{ if(editingBlocked())return; $('prompt').value=r.request.prompt;selected=new Set(r.request.source_ids);setReport(r.request.intent==='report',r.request.revision_id);setBranch(r.request.branch_from || null);renderConversation(current);changedDraft();notice('Review the request, then send to retry.'); };$('notice').append(' ',retry);
 }
 function watch(rid) {
   activeRun=rid;busy(true);if(polling)clearTimeout(polling);
@@ -168,7 +198,7 @@ async function dispatchPending() {
   try {
     const {cid,body}=lastSubmission;
     const r=lastSubmission.confirmation ? await api('/api/conversations/'+cid+'/confirmed',{message:body,confirmation:lastSubmission.confirmation}) : await api('/api/conversations/'+cid+'/runs',body);
-    if(current?.id===cid && $('prompt').value===body.prompt){$('prompt').value='';saveDraft();}
+    if(current?.id===cid && $('prompt').value===body.prompt){$('prompt').value='';setBranch(null);saveDraft();}
     $('consent').checked=false;notice();watch(r.id);
   }catch(e){
     if(e.requestNotAccepted || [400,403,404,413,415].includes(e.status)){lastSubmission=null;sessionStorage.removeItem(receiptKey);$('consent').checked=false;busy(false);notice(e.message);}
@@ -179,18 +209,28 @@ $('composer').onsubmit=async event=>{event.preventDefault();try{
   if(mutation||opening||legacyPending||activeRun)return;
   notice();
   if(lastSubmission){await dispatchPending();return;}
-  if(!$('consent').checked)throw new Error('Confirm sending this conversation and selected material to the provider.');
+  if(!$('consent').checked && !(branchFrom && !branchReview))throw new Error('Confirm sending this conversation and selected material to the provider.');
   if(current?.archived)throw new Error('Restore this conversation before sending.');
   // Capture every content/consent dependency before creating a conversation.
   const body={prompt:$('prompt').value,intent:report?'report':'chat',source_ids:[...selected],revision_id:revision,request_id:crypto.randomUUID(),consent:true};
+  if(branchFrom)body.branch_from=branchFrom;
   const displayedModel=$('model').textContent, displayedProvider=$('provider').textContent, displayedProfile=$('model-choice').value, modelRevision=displayedModelRevision;
+  const reviewingBranch=Boolean(branchFrom && !branchReview);
   mutation=true;busy(true);
   const cid=await ensureConversation();
-  if(!$('consent').checked || body.prompt!==$('prompt').value || body.intent!==(report?'report':'chat') || body.revision_id!==revision || JSON.stringify(body.source_ids)!==JSON.stringify([...selected]))
+  if((!$('consent').checked && !reviewingBranch) || body.prompt!==$('prompt').value || body.intent!==(report?'report':'chat') || body.revision_id!==revision || (body.branch_from||null)!==branchFrom || JSON.stringify(body.source_ids)!==JSON.stringify([...selected]))
     throw new Error('The draft changed. Review and confirm it again.');
   const preview=await api('/api/conversations/'+cid+'/preview',body);
   if((preview.model_revision!==undefined && modelRevision!==preview.model_revision) || (preview.profile!==undefined && preview.profile!==displayedProfile) || preview.model!==displayedModel || new URL(preview.provider).origin!==displayedProvider){$('consent').checked=false;await refreshModels();throw new Error('Model changed in another client. Review and confirm again.');}
-  if(!$('consent').checked || body.prompt!==$('prompt').value || body.intent!==(report?'report':'chat') || body.revision_id!==revision || JSON.stringify(body.source_ids)!==JSON.stringify([...selected]))throw new Error('The draft changed. Review and confirm it again.');
+  if((!$('consent').checked && !reviewingBranch) || body.prompt!==$('prompt').value || body.intent!==(report?'report':'chat') || body.revision_id!==revision || (body.branch_from||null)!==branchFrom || JSON.stringify(body.source_ids)!==JSON.stringify([...selected]))throw new Error('The draft changed. Review and confirm it again.');
+  if(branchFrom){
+    const key=JSON.stringify([cid,body.prompt,body.intent,body.source_ids,body.revision_id,body.branch_from,preview.history,preview.message,preview.profile,preview.model_revision,preview.model,preview.provider]);
+    if(branchReview!==key){
+      branchReview=key;$('branch-history').textContent=preview.history.map(m=>m.role+': '+m.content).join('\n\n') || '(No earlier history.)';
+      $('branch-message').textContent=preview.message;$('branch-preview').hidden=false;$('consent').checked=false;
+      notice('Review the exact branch history and message below, then confirm sending. Nothing has been sent.');return;
+    }
+  }
   lastSubmission={cid,body,confirmation:preview.confirmation};sessionStorage.setItem(receiptKey,JSON.stringify(lastSubmission));await dispatchPending();
 }catch(e){notice(e.message);}finally{mutation=false;busy(Boolean(activeRun||lastSubmission));}};
 $('stop').onclick=()=>api('/api/runs/'+activeRun+'/stop',{}).catch(e=>notice(e.message));
@@ -259,7 +299,7 @@ async function boot() {
   $('model').textContent=data.model || 'No model selected';
   $('provider').textContent=data.provider ? new URL(data.provider).origin : 'the configured provider';
   await refreshModels();
-  $('upgrade').hidden=data.database_version!==2; $('connect').close(); await refreshList();
+  $('upgrade').hidden=![2,3].includes(data.database_version); $('connect').close(); await refreshList();
   let saved=null, lastView=null;
   try { saved=JSON.parse(sessionStorage.getItem(receiptKey)||'null');lastView=sessionStorage.getItem(viewKey); }
   catch { notice('Saved browser state could not be read. No message was sent.'); }

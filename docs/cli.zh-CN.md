@@ -730,7 +730,7 @@ stderr 与退出码 2。输出不含发现令牌；预览与备份仍含用户�
 允许查看/导出/恢复旧回执；新发送、改名和导入资料前必须先恢复；在飞请求不能归档。
 
 既有 schema 2 使用 `office --data-dir PRIVATE_DIR upgrade` 显式升级后才能归档；当前写入者
-先在私有工作区保存并回读旧版备份，不调用模型，已是 schema 3 则不重复升级。
+先在私有工作区保存并回读旧版备份，不调用模型，已是当前 schema 4 则不重复升级。
 完整参数见[英文日常操作](cli.md#office-daily-conversation-operations)。
 
 消息搜索的 `message_id` 与会话消息 `id` 是不透明十进制字符串，
@@ -767,3 +767,22 @@ pocketchat office --data-dir PRIVATE_DIR --config config.json --profile PROFILE 
 CLI 草稿／待恢复状态是私有工作区 UI 文件，与网页标签草稿分开且不进入数据备份。
 并发客户端状态 CAS 冲突就停止，不覆盖新状态或发送；未落盘的草稿打印给操作者自行复制。
 终端预览和草稿可能含敏感内容，需要保护；切换模型不改写旧请求快照或旧回执。
+
+
+### Office 聊天分支
+
+`office conversations show --conversation ID` 保留全部消息及报告；`active_run_ids` 标出当前
+发送的历史，`chat_run_ids` 标出已完成的普通聊天目标。每条保存消息也带 `run_id`。
+
+```sh
+pocketchat office --data-dir PRIVATE_DIR --json chat --conversation ID --branch-from RUN_ID --prompt "Edited question" --request-id NEW_REQUEST_ID
+```
+
+先检查预览，再用同一命令补 `--confirm HASH`。使用原问题正文即重新生成；`--source` 资料仍显式选择。
+发送上下文是目标轮次原有前缀，不含旧回复及后续消息；仅成功才切换当前路径。同 ID/同确认只恢复原回执，
+再次生成要新 ID。跨会话、未完成轮次和报告目标均拒绝。
+
+`office interactive` 的 `/history` 显示轮次 ID 与当前/旧分支标识；`/branch RUN_ID` 把原问题和资料
+恢复为私有未发送草稿。普通文本追加到草稿，精确替换正文可用上述单次命令。`/send` 仍要求输入完整新确认哈希。
+`/chat`、`/report` 或 `/revise VERSION` 退出分支模式；`/sources` 可调整资料。重开只恢复草稿、不自动发送。
+旧 schema 2/3 工作区先 `office upgrade`，必须先完成备份回读。

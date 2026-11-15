@@ -4,3 +4,13 @@
 #search-results{max-height:34vh;overflow:auto}.search-result{display:block;text-align:left;width:100%;margin:6px 0;padding:10px;border:1px solid #dadbd3;border-radius:8px;background:#fafaf5}.search-result small{display:block;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px}.search-hit{outline:2px solid #526650;outline-offset:4px;background:#f2f4eb}button:disabled,textarea:disabled{opacity:.6;cursor:not-allowed}.topbar{gap:12px}.topbar>div{min-width:0;flex:1}#archive,#upgrade{font-size:12px;flex-shrink:0}
 
 #model-choice{max-width:220px;border:1px solid var(--line);border-radius:10px;padding:7px;background:var(--paper);color:inherit;font:inherit}
+
+/* Branches keep the current reading path distinct from immutable older replies. */
+.earlier-branches { border-top: 1px solid var(--line, #dedbd5); margin-top: 2rem; padding-top: 1rem; }
+.earlier-branches summary { cursor: pointer; color: var(--muted, #676962); font-size: .85rem; }
+.earlier-branches .message { opacity: .85; }
+.branch-action { margin-left: .5rem; font-size: .75rem; }
+#branch-context { padding: .65rem 0; color: var(--muted, #676962); font-size: .8rem; }
+#leave-branch { text-decoration: underline; font-size: inherit; }
+#branch-preview { max-height: 16rem; overflow: auto; padding: .75rem; border: 1px solid var(--line, #dedbd5); border-radius: .5rem; }
+#branch-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: .8rem; }
