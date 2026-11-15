@@ -1,5 +1,6 @@
 """Private browser workspace never rewrites completed user work."""
 import tempfile
+import os
 import unittest
 from pathlib import Path
 from pocketchat.office_store import OfficeStore, OfficeError
@@ -209,6 +210,7 @@ class StoreTests(unittest.TestCase):
             self.store.begin(self.cid, 'overflow-request', p)
 
 
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and os.open in os.supports_dir_fd, 'requires private descriptor I/O')
     def test_cli_ui_state_is_bounded_private_cas_and_workspace_bound(self):
         from pocketchat.office_service import dispatch
         from pocketchat.office import OfficeWorkspace
@@ -231,6 +233,7 @@ class StoreTests(unittest.TestCase):
         self.assertIsNone(app.store.receipt(self.cid, 'never-sent', draft))
 
 
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and os.open in os.supports_dir_fd, 'requires private descriptor I/O')
     def test_cli_state_refuses_symlink_foreign_pending_and_unusable_revision(self):
         from pocketchat.office_store import encoded
         state = self.store.cli_state()
@@ -247,6 +250,7 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(outside.read_text(),encoded(state))
 
 
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and os.open in os.supports_dir_fd, 'requires private descriptor I/O')
     def test_cli_state_malformed_unicode_is_content_free_refusal(self):
         state=self.store.cli_state()
         with self.assertRaises(OfficeError):

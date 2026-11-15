@@ -108,6 +108,6 @@ class CLIIsolationTests(unittest.TestCase):
     login=HTTPTests.login
     request=HTTPTests.request
     def test_browser_cookie_cannot_read_or_replace_cli_only_state(self):
-        self.login();state=self.app.store.cli_state()
+        self.login();state=dict(revision=0,current=None,drafts={},pending=None)
         self.assertEqual(self.request('GET','/api/cli-state')[0],403)
         self.assertEqual(self.request('POST','/api/cli-state',state)[0],403)

@@ -495,7 +495,8 @@
     "Worker18CLI process tests passed15.394s before finalreview. Main added2interactive report/revision/exactMarkdownexport/stop cases passed1.774s; final37affected model/service/interactive tests passed24.893s,49legacyCLI/REPL/skeleton/process-doc passed10.807s. No whole local suite repeated.",
     "Node22.23.4 prior13 delayed-response cases green after new confirmed route fixture adaptation; directed same-model different-profile and preview-edit cases green. Finalconsent directed red true!=false then1case green. No claim allseparate runs form onefinalwhole-suite count.",
     "Chrome156/CPython3.12.14/python-docx1.2.0 finalcross-client fixture nine outcomes true,explicit existing-profile choice and cross-client stale consent refusal observed,zero pageerrors;1440x1000screenshot inspected. Model fixtures only,not providerquality. CLIreport/revision/stop process paths exercised independently.",
-    "Focusedruff E9,F,node syntax,diffwhitespace green;39relative documentationlinks resolve. Exact candidateCI/main remains external readback."
+    "Focusedruff E9,F,node syntax,diffwhitespace green;39relative documentationlinks resolve. Exact candidateCI/main remains external readback.",
+    "Final static platform check added capability skip only to native private-file draft tests; browser denial uses a literal UI state. No insecure Windows fallback. Final exact CI binds the corrected SHA."
   ],
   "unverified_scope": "Real provider quality,arbitraryWordpagination/rendering,physicalpowerloss,allSIGINT/diskfault/multiwindowcombinations,Windowsnative secureI/O. Nondestructiveedit/regenerate and fullP1acceptance remain. No formal tag,Release,packageupload or schedulermodification.",
   "reviewed_files": [
@@ -521,7 +522,7 @@
     },
     {
       "path": "docs/handovers/2026-11-14-office-p1.md",
-      "sha256": "84a5ec2f9e4205eca8af559932ec68fb27bff851d1b3e7c413666e4eb1a36a4d"
+      "sha256": "6cf57ae1ba0aad4be4a102b3a29482cbb1ef13d580ea1361a6273c5fb7ec1d17"
     },
     {
       "path": "docs/office-web.md",
@@ -589,11 +590,11 @@
     },
     {
       "path": "tests/test_office_store.py",
-      "sha256": "a606fffbb7ff31d323f861695d297c61a6b235990b314de6870fbb2d9df19462"
+      "sha256": "6ce26e10a12acaa56dfa80ee0e2f0e152d2d2f4871f4497143e48dfed867ac67"
     },
     {
       "path": "tests/test_office_web.py",
-      "sha256": "7a00b9e114efd31bf40219003ebb5e091b384846ee2ae481a534e87baff0d234"
+      "sha256": "b5e8928d15caf6fd4fa51c2cc8160a935cdc6d8423ada43c9da519165f6c4cd4"
     }
   ]
 }
