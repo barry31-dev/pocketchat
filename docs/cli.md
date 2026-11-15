@@ -917,7 +917,7 @@ the top-level `restore --from` instead creates a new workspace from a backup.
 
 Schema-2 users must explicitly run `upgrade` before archive. It requires no model,
 uses the current writer, keeps a validated pre-upgrade backup inside the private
-workspace and is idempotent on schema 3. See [backup format](formats.md#office-data-backup-v1).
+workspace and is idempotent on the current schema 4. See [backup format](formats.md#office-data-backup-v1).
 
 Message search `message_id` and conversation message `id` are opaque decimal
 strings, not JSON numbers; they identify the exact saved message without
@@ -973,3 +973,29 @@ sending, and displays any uncommitted draft for the operator to copy. Protect
 terminal output containing previews/drafts; local-first does not mean private
 content is never sent after confirmation. Old request snapshots do not change
 when profiles switch, and old confirmed receipts remain recoverable.
+
+
+### Office chat branches
+
+`office conversations show --conversation ID` retains all messages and reports;
+`active_run_ids` identifies the currently sent history and `chat_run_ids` the
+completed ordinary-chat targets. Run IDs also appear on saved messages.
+
+```sh
+pocketchat office --data-dir PRIVATE_DIR --json chat --conversation ID --branch-from RUN_ID --prompt "Edited question" --request-id NEW_REQUEST_ID
+```
+
+Inspect the preview, then repeat the exact command with `--confirm HASH`. Use the
+same original prompt to regenerate; selected `--source` material is still explicit.
+The selected turn's original prefix is sent, never its old reply or later tail.
+The active path changes only on success. Reuse the exact request/confirmation only
+to recover its receipt, not to regenerate again; a new attempt needs a new ID.
+
+In `office interactive`, `/history` shows run IDs and active/saved-earlier labels.
+`/branch RUN_ID` loads the original question and source selection into a private
+unsent branch draft. Ordinary text appends to that draft; use the noninteractive
+command for an exact replacement prompt. `/send` still requires the entire fresh
+confirmation hash. `/chat`, `/report` or `/revise VERSION` leaves branch mode;
+`/sources` can change explicit material. Reopening keeps the branch draft without
+sending. Only completed ordinary-chat turns in this conversation are eligible.
+Run `office upgrade` first for schema-2/3 workspaces; backup readback must succeed.

@@ -1,5 +1,6 @@
 """Office uses the existing single Session, never arbitrary model tools."""
 import json
+import os
 import tempfile
 import threading
 import unittest
@@ -314,3 +315,123 @@ class OfficeProfileTests(unittest.TestCase):
         self.app.select_model('two');self.app.select_model('one')
         with self.assertRaises(OfficeError):self.app.submit_confirmed(self.cid,body,preview['confirmation'])
         self.assertEqual(self.adapter.calls,[])
+
+
+class OfficeBranchTests(unittest.TestCase):
+    setUp = OfficeTests.setUp
+    tearDown = OfficeTests.tearDown
+    send = OfficeTests.send
+    def seed(self):
+        first = self.send('Original question', key='branch-first')
+        later = self.send('Later secret', key='branch-later')
+        self.assertEqual(later['status'], 'completed')
+        return first, later
+
+    def branch_body(self, run, prompt='Edited question', key='branch-edit'):
+        return dict(prompt=prompt, intent='chat', source_ids=[], revision_id=None,
+                    request_id=key, consent=True, branch_from=run['id'])
+
+    def test_edit_uses_original_prefix_and_keeps_all_saved_messages(self):
+        first, later = self.seed()
+        original = self.app.store.get(self.cid)['messages']
+        body = self.branch_body(first)
+        preview = self.app.preview(self.cid, body)
+        self.assertEqual(preview['history'], [])
+        edited = self.app.submit_confirmed(self.cid, body, preview['confirmation'])
+        self.app.wait(edited['id'], 3)
+        self.assertEqual(self.app.status(edited['id'])['status'], 'completed')
+        c = self.app.store.get(self.cid)
+        self.assertEqual(c['messages'][:4], original)
+        self.assertEqual(c['active_run_ids'], [edited['id']])
+        self.assertNotIn('Later secret', str(self.adapter.calls[-1]))
+        self.assertNotIn('Original question', str(self.adapter.calls[-1]))
+        self.assertEqual(self.app.submit_confirmed(self.cid, body, preview['confirmation'])['id'], edited['id'])
+        self.assertEqual(len(self.adapter.calls), 3)
+        with self.assertRaises(OfficeError):
+            self.app.submit(self.cid, dict(body, branch_from=later['id']))
+
+    def test_regenerate_saved_later_turn_uses_its_original_parent(self):
+        first, later = self.seed()
+        body = self.branch_body(later, 'Later secret')
+        preview = self.app.preview(self.cid, body)
+        self.assertEqual([m['content'] for m in preview['history']], ['Original question', 'Hello'])
+        r = self.app.submit(self.cid, body)
+        self.app.wait(r['id'], 3)
+        self.assertEqual(self.app.store.get(self.cid)['active_run_ids'], [first['id'], r['id']])
+        self.assertEqual(len(self.app.store.history(self.cid)), 4)
+
+    def test_failed_branch_does_not_change_active_context(self):
+        first, later = self.seed()
+        before = self.app.store.history(self.cid)
+        # Force failure without a provider call or a successful terminal reply.
+        from unittest.mock import patch
+        with patch('pocketchat.office.Session.run', side_effect=RuntimeError('fixture')):
+            r = self.app.submit(self.cid, self.branch_body(first))
+            self.app.wait(r['id'], 3)
+        self.assertEqual(self.app.status(r['id'])['status'], 'failed')
+        self.assertEqual(self.app.store.history(self.cid), before)
+        self.assertEqual(self.app.store.get(self.cid)['active_run_ids'], [first['id'], later['id']])
+
+    def test_foreign_report_and_noncompleted_targets_refused(self):
+        first, _ = self.seed()
+        other = self.app.store.create('Other')['id']
+        with self.assertRaises(OfficeError):
+            self.app.preview(other, self.branch_body(first))
+        with self.assertRaises(OfficeError):
+            self.app.preview(self.cid, dict(self.branch_body(first), intent='report'))
+        r = self.app.store.begin(self.cid, 'failed-target', dict(prompt='No', intent='chat', source_ids=[], revision_id=None))
+        self.app.store.finish(r['id'], 'failed', '', 'fixture')
+        with self.assertRaises(OfficeError):
+            self.app.preview(self.cid, self.branch_body(r))
+
+    def test_branch_backup_roundtrip_and_invalid_ancestry_refused(self):
+        from pocketchat.office_backup import snapshot, validate
+        from pocketchat.office_store import encoded
+        import hashlib
+        first, _ = self.seed()
+        r = self.app.submit(self.cid, self.branch_body(first))
+        self.app.wait(r['id'], 3)
+        document = json.loads(snapshot(self.app.store))
+        self.assertEqual(validate(encoded(document).encode())['database_version'], 4)
+        row = document['data']['tables']['runs'][-1]
+        payload = json.loads(row['payload'])
+        payload['history_run_ids'] = [r['id']]
+        row['payload'] = encoded(payload)
+        document['sha256'] = hashlib.sha256(encoded(document['data']).encode()).hexdigest()
+        with self.assertRaises(OfficeError):
+            validate(encoded(document).encode())
+
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and os.open in os.supports_dir_fd, 'requires private descriptor I/O')
+    def test_legacy_workspace_requires_explicit_backup_upgrade_for_branches(self):
+        from pocketchat.office_backup import upgrade, validate
+        first, _ = self.seed()
+        # Fixture represents a v3 database; remove newly introduced payload keys.
+        for row in self.app.store.db.execute('SELECT id,payload FROM runs').fetchall():
+            p = json.loads(row['payload']); p.pop('history_run_ids', None)
+            self.app.store.db.execute('UPDATE runs SET payload=? WHERE id=?', (json.dumps(p), row['id']))
+        self.app.store.db.execute('PRAGMA user_version=3'); self.app.store.db.commit()
+        with self.assertRaisesRegex(OfficeError, 'upgrade|Upgrade'):
+            self.app.preview(self.cid, self.branch_body(first))
+        result = upgrade(self.app.store)
+        self.assertEqual(result['database_version'], 4)
+        self.assertEqual(validate((self.root / result['backup']).read_bytes())['database_version'], 3)
+        self.assertEqual(self.app.preview(self.cid, self.branch_body(first))['history'], [])
+
+    def test_abandoned_source_context_stays_out_of_new_report_and_saved_branch_prefix(self):
+        self.adapter.responses.extend([text_response('New report')])
+        first = self.send('Original', key='source-first')
+        source = self.app.store.add_source(self.cid, 'old.txt', 'Abandoned private material')
+        later = self.send('Later', sources=[source['id']], key='source-later')
+        changed = self.app.submit(self.cid, self.branch_body(first))
+        self.app.wait(changed['id'], 3)
+        # The older branch remains addressable with its own original prefix.
+        old_preview = self.app.preview(self.cid, self.branch_body(later, key='source-old-preview'))
+        self.assertEqual(old_preview['history'][0]['content'], 'Original')
+        self.assertNotIn('Edited question', str(old_preview['history']))
+        report = self.send('Report on this branch', intent='report', key='source-report')
+        self.assertEqual(report['status'], 'completed')
+        self.assertNotIn('Abandoned private material', str(self.adapter.calls[-1]))
+        self.assertNotIn('Original', str(self.adapter.calls[-1]))
+        self.assertEqual(report['request']['source_ids'], [])
+        self.assertEqual(report['request']['history_run_ids'], [changed['id']])
+        self.assertEqual(len(self.app.store.get(self.cid)['messages']), 8)

@@ -10,22 +10,17 @@
     "docs/office-web.md",
     "docs/office-web.zh-CN.md",
     "docs/review-office-p1-v1.json",
-    "examples/office-demo.py",
     "pocketchat/office.py",
     "pocketchat/office_backup.py",
     "pocketchat/office_cli.py",
-    "pocketchat/office_service.py",
     "pocketchat/office_static/app.js",
     "pocketchat/office_static/index.html",
     "pocketchat/office_static/style.css",
     "pocketchat/office_store.py",
-    "pocketchat/office_web.py",
     "tests/office_p1_browser.cjs",
     "tests/test_office.py",
-    "tests/test_office_cli.py",
-    "tests/test_office_service.py",
-    "tests/test_office_store.py",
-    "tests/test_office_web.py"
+    "tests/test_office_backup.py",
+    "tests/test_office_cli.py"
   ],
   "categories": [
     "docs",
@@ -33,9 +28,9 @@
   ],
   "tier": "medium",
   "review_depth": "standard",
-  "rounds": 7,
-  "round_decision": "reconsider",
-  "round_scope": "new-diff-only",
+  "rounds": 9,
+  "round_decision": "pass",
+  "round_scope": "non-destructive-chat-branches-new-diff-only",
   "findings": [
     {
       "id": "PROFILE-EPOCH",
@@ -85,516 +80,128 @@
       "status": "deferred",
       "fingerprint": "empty-draft-leading-line",
       "reason": "An intentionally empty saved template may start the next text with a leading linebreak; nondestructive and not a send/auth defect."
+    },
+    {
+      "id": "BRANCH-BACKUP-CHRONOLOGY",
+      "severity": "major",
+      "status": "closed",
+      "fingerprint": "completed-run-order-versus-saved-message-order",
+      "reason": "Independent review reproduced reordered runs silently inverting old message chronology. Red regression observed; completed runs must now match monotonic saved user-message order.18backup cases green; independent bounded closure review passed."
+    },
+    {
+      "id": "BRANCH-HISTORY-DISCLOSURE",
+      "severity": "major",
+      "status": "closed",
+      "fingerprint": "pending-old-branch-prefix-hidden",
+      "reason": "Independent review observed old branch history under not-sent label. New explicit Review branch displays actual history and message/material before fresh consent; content/model/context changes re-review. Red regression then18Node cases green; independent bounded closure review passed."
     }
   ],
-  "previous_checkpoint": {
-    "schema": "pocketchat-review-record.v1",
-    "paths": [
-      "CHANGELOG.md",
-      "docs/cli.md",
-      "docs/cli.zh-CN.md",
-      "docs/formats.md",
-      "docs/formats.zh-CN.md",
-      "docs/handovers/2026-11-14-office-p1.md",
-      "docs/office-web.md",
-      "docs/office-web.zh-CN.md",
-      "docs/review-office-p1-v1.json",
-      "pocketchat/office.py",
-      "pocketchat/office_backup.py",
-      "pocketchat/office_cli.py",
-      "pocketchat/office_service.py",
-      "pocketchat/office_static/app.js",
-      "pocketchat/office_static/index.html",
-      "pocketchat/office_static/style.css",
-      "pocketchat/office_store.py",
-      "tests/office_p1_browser.cjs",
-      "tests/test_office_backup.py",
-      "tests/test_office_cli.py",
-      "tests/test_office_store.py"
-    ],
-    "categories": [
-      "docs",
-      "python-tools"
-    ],
-    "tier": "medium",
-    "review_depth": "standard",
-    "rounds": 5,
-    "round_decision": "reconsider",
-    "round_scope": "new-diff-only",
-    "findings": [
-      {
-        "id": "RESTORE-VERSION",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "restore-version",
-        "reason": "Red regression showed schema2 silently became3; restore now retains exact table/version and snapshot."
-      },
-      {
-        "id": "SEARCH-UNICODE",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "search-unicode",
-        "reason": "Red expanded-casefold prefix excluded the hit; offsets now map back to saved text."
-      },
-      {
-        "id": "MESSAGE-ID-JSON",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "message-id-json",
-        "reason": "Red large IDs were JSON numbers; API locations now use exact decimal strings."
-      },
-      {
-        "id": "UPLOAD-DRAFT",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "upload-draft",
-        "reason": "Delayed upload mixed draft ownership; action lock and guarded shortcuts close it."
-      },
-      {
-        "id": "ARCHIVE-DRAFT",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "archive-draft",
-        "reason": "Delayed archive replaced another conversation; navigation lock spans mutation and refresh."
-      },
-      {
-        "id": "SEND-CONSENT",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "send-consent",
-        "reason": "Delayed creation sent content changed after consent; pre-await snapshot plus revalidation closes it."
-      },
-      {
-        "id": "LEGACY-RECEIPT",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "legacy-receipt",
-        "reason": "Legacy unbound tab receipt was ignored; explicit GET-only ID/cid/wire verification blocks replay."
-      },
-      {
-        "id": "BACKUP-DIRECTORY",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "backup-directory",
-        "reason": "Before-DDL directory fsync on new/reused backup; injected failure retains schema2 and backup, then retries."
-      },
-      {
-        "id": "MESSAGE-ID-EXHAUSTION",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "message-id-exhaustion",
-        "reason": "Ordered explicit ID pair allocation; new begin and finish refuse atomically, old receipt remains readable."
-      },
-      {
-        "id": "OPTIONAL-WELCOME-NODE",
-        "severity": "major",
-        "status": "fixed",
-        "fingerprint": "optional-welcome-node",
-        "reason": "Browser rerun revealed removed welcome node access; optional guard and directed red/green case close it."
-      }
-    ],
-    "candidate_base": "438682f83b8e77bdcf79c91fcc011f7e313709a8",
-    "slice_contract": "docs/handovers/2026-11-14-office-p1.md",
-    "status": "approved",
-    "actual_risk": "high: draft/consent isolation and explicit storage upgrade",
-    "actual_review_depth": "deep",
-    "authority": "agent technical review under maintainer routine-development delegation; no formal release authority",
-    "scope": "P1 daily conversation delta only; P1 remains incomplete.",
-    "previous_checkpoint": {
-      "schema": "pocketchat-review-record.v1",
-      "paths": [
-        "CHANGELOG.md",
-        "docs/cli.md",
-        "docs/cli.zh-CN.md",
-        "docs/formats.md",
-        "docs/formats.zh-CN.md",
-        "docs/handovers/2026-11-14-office-p1.md",
-        "docs/office-web.md",
-        "docs/office-web.zh-CN.md",
-        "docs/review-office-p1-v1.json",
-        "docs/security.md",
-        "pocketchat/cli.py",
-        "pocketchat/office.py",
-        "pocketchat/office_backup.py",
-        "pocketchat/office_cli.py",
-        "pocketchat/office_service.py",
-        "pocketchat/office_web.py",
-        "tests/office_p1_browser.cjs",
-        "tests/test_office.py",
-        "tests/test_office_backup.py",
-        "tests/test_office_cli.py",
-        "tests/test_office_service.py",
-        "tests/test_skeleton.py"
-      ],
-      "categories": [
-        "docs",
-        "python-tools"
-      ],
-      "tier": "medium",
-      "review_depth": "standard",
-      "rounds": 3,
-      "round_decision": "reconsider",
-      "round_scope": "new-diff-only",
-      "findings": [
-        {
-          "id": "RESTORE-LOCK",
-          "severity": "major",
-          "status": "fixed",
-          "fingerprint": "restore-lock",
-          "reason": "Destination publication did not hold the workspace writer lock; exclusive-create and flock now cover SQLite publication; rival writer red regression and independent contention probe close it."
-        },
-        {
-          "id": "RESTORE-CYCLE",
-          "severity": "major",
-          "status": "fixed",
-          "fingerprint": "restore-cycle",
-          "reason": "Rehashed predecessor cycles were accepted; explicit acyclic traversal rejects them before destination creation."
-        },
-        {
-          "id": "RESTORE-QUOTA",
-          "severity": "major",
-          "status": "fixed",
-          "fingerprint": "restore-quota",
-          "reason": "Per-conversation quotas were omitted on restore; source64/run250 bounds now validated."
-        },
-        {
-          "id": "NATIVE-PROOF",
-          "severity": "major",
-          "status": "fixed",
-          "fingerprint": "native-proof",
-          "reason": "Stale port could echo workspace identity and receive a bearer/body; every connection now proves a fresh nonce HMAC before any secret/content and the same socket has automatic reconnect disabled."
-        },
-        {
-          "id": "CONFIRM-TYPE",
-          "severity": "major",
-          "status": "fixed",
-          "fingerprint": "confirm-type",
-          "reason": "Non-ASCII confirmation caused uncaught TypeError; exact64lowercasehex validation now yields JSON refusal before compare_digest."
-        },
-        {
-          "id": "DISCOVERY-TYPE",
-          "severity": "major",
-          "status": "fixed",
-          "fingerprint": "discovery-type",
-          "reason": "Numeric origin caused uncaught AttributeError; all closed discovery fields must be strings before URL parsing."
-        },
-        {
-          "id": "PROVIDER-URL",
-          "severity": "major",
-          "status": "fixed",
-          "fingerprint": "provider-url-secret-carriers",
-          "reason": "Office preview could expose provider URL userinfo/query/fragment; office-only preflight now refuses before opening workspace.Three red URL cases,then two focused tests passed;independent new-diff review closed."
-        }
-      ],
-      "candidate_base": "ab6a035d0493db4786955532d5b5d5eda1efdcdd",
-      "slice_contract": "docs/handovers/2026-11-14-office-p1.md",
-      "status": "approved",
-      "actual_risk": "high: authentication, backup/restore and additive CLI boundary",
-      "actual_review_depth": "deep",
-      "authority": "agent technical review under maintainer routine-development delegation; no formal publication authority",
-      "scope": "P1 foundation checkpoint only; remaining daily UX and full package acceptance are explicitly not complete.",
-      "reviewed_evidence": [
-        "Two independent fresh-context reviewers covered disjoint full changes: backup/data/restore and controller/native auth/CLI/docs/browser fixture, then new-diff closure only. Six concrete findings fixed; new worker-exit regression also fixed an existing slot-release gap. Final extra command-inventory line reviewed.",
-        "CPython3.9.6/macOS27.0:93 focused office,legacyCLI,REPL,process-documentation tests passed21.453s before auth hardening; after handshake/input fixes20 affected service/CLI/web tests passed10.700s. Added offline-process test passed and then was included in affected rerun.16 skeleton/command-inventory checks passed2.354s.",
-        "Observed red failures for missing features and concrete review defects, then green focused regressions. Initial worker-test selector error was not counted as a product failure.",
-        "CPython3.12.14/python-docx1.2.0/Chrome156.0.8078.80:real bidirectionalCLI/browser report and revision flow;two material snapshots;exact old/newMDandDOCX export;original receipt recovery;live-owner backup/new-directory restore. Reran after auth handshake change;all seven fixture assertions true,no page errors. Desktop screenshot inspected;DOCX readback distinguishes versions;four real fixture-provider calls,no tools.",
-        "Targeted ruff E9,F passed;git diff --check passed;39 relative documentation links resolved. No full local suite repetition. Exact PR CI and remote main integration remain later readbacks.",
-        "Final third round was new-diff only: provider URL credential carriers rejected;two focused offlineCLI tests passed2.106s. No fourth full review. Initial PR70 CI on1161996 is not final candidate evidence."
-      ],
-      "unverified_scope": "Not fullP1:body search,archive/drafts,model switching,interactive entry and edit/regenerate remain. No real-provider content quality,Windows native secureI/O fallback,power-loss/disk-full,arbitraryWordlayout/rendering,tag,Release,package upload or scheduler changes.",
-      "reviewed_files": [
-        {
-          "path": "CHANGELOG.md",
-          "sha256": "5c8160da5eb13a906c4f326a11115cf17df48bb80b6ea18c3f6d9db3ec6adabc"
-        },
-        {
-          "path": "docs/cli.md",
-          "sha256": "f889cf7aa56ff28dd621a31846d7f12084e8f8b1b2cce2eb87ba895cb6440f1e"
-        },
-        {
-          "path": "docs/cli.zh-CN.md",
-          "sha256": "93954cd8adf98b1d622303a839fd21467d10e5c1fa3a83b83b6e5e1915cf8f57"
-        },
-        {
-          "path": "docs/formats.md",
-          "sha256": "3d347676ca6e99105281398c639fb4bd9854ca7c973ff7c31efc5858ebf1c4aa"
-        },
-        {
-          "path": "docs/formats.zh-CN.md",
-          "sha256": "d57d2353617036f1a6447ccd25167d65f96f57693fdb3fc7c58351795b5feebf"
-        },
-        {
-          "path": "docs/handovers/2026-11-14-office-p1.md",
-          "sha256": "ef5d7af70dee2a799f5c70ed20f415cb723b22028f8c6cff97090e6b476dbd0c"
-        },
-        {
-          "path": "docs/office-web.md",
-          "sha256": "50f8f2446217482cb46eb630d411a68676f30147f99cf4ad8c19968faf7f00ee"
-        },
-        {
-          "path": "docs/office-web.zh-CN.md",
-          "sha256": "ecd09dbbc6c4ec0e09b8900c5eca8367b3a5624dde0722d9492878f6c3fbc6d4"
-        },
-        {
-          "path": "docs/security.md",
-          "sha256": "256f7656f998fa0199f238b1fa997e79f6e181e3ccf414a21e192d69283e19e2"
-        },
-        {
-          "path": "pocketchat/cli.py",
-          "sha256": "5c160fc84a8b598dea29b4f2f249dc779c25dfe4d486e8deda0120879f956a18"
-        },
-        {
-          "path": "pocketchat/office.py",
-          "sha256": "e6d6631a883085fb5c4b497697472883cfeb0e3fff916e019eac2c778c2c3e22"
-        },
-        {
-          "path": "pocketchat/office_backup.py",
-          "sha256": "f804b2b508a51a8baf8270d12554a8495a3707833ac0dc418556b1f10d171167"
-        },
-        {
-          "path": "pocketchat/office_cli.py",
-          "sha256": "3a9d26fc930d311adac10cd8274906903b91f29456f651f75a1b7732cbaa60f3"
-        },
-        {
-          "path": "pocketchat/office_service.py",
-          "sha256": "618c1bea92fd0312c20d64a9aed2467ac9871b754565f6b9ff710bd2cd5c5f3e"
-        },
-        {
-          "path": "pocketchat/office_web.py",
-          "sha256": "0357c0d9ede79ac3e67261bec3c141d35b1e7b33d4972093416df046af8c42d7"
-        },
-        {
-          "path": "tests/office_p1_browser.cjs",
-          "sha256": "f40dfdc179cfe2102e9bb711012a9aa07c712d84ec0e1b9b3608e117e329907a"
-        },
-        {
-          "path": "tests/test_office.py",
-          "sha256": "a7618995f3858058d5b071b582f952fac106b0076a29c0962fb0605c5e27706c"
-        },
-        {
-          "path": "tests/test_office_backup.py",
-          "sha256": "db8ecb4f57ae8b911dc3765d228046ff3b9cc08ea4e9773145ebc12bd3f21d72"
-        },
-        {
-          "path": "tests/test_office_cli.py",
-          "sha256": "7111b94ce937f7ff9fd277e3f7a1588062a55bec127ca83028a9e0102919e1ce"
-        },
-        {
-          "path": "tests/test_office_service.py",
-          "sha256": "150b6fdfeebc3e1cc9f0760bb81b3cefb675fe67864bff01987609daa5a85b1e"
-        },
-        {
-          "path": "tests/test_skeleton.py",
-          "sha256": "6418639297db602946e64e3560cfb8969dca16cc9bc480818f6e0d935e57faf9"
-        }
-      ]
-    },
-    "round_history": "Foundation retained three rounds; this update adds only the latest-main daily-conversation delta and bounded closure. No fourth full review of the old P1 foundation.",
-    "reviewed_evidence": [
-      "Wegener independently covered full daily UI/CLI/service delta and delayed-response probes, then bounded new-diff closure. Pascal independently covered full daily store/backup delta and completed two bounded fixes; main agent reviewed those patches and transaction/ID boundaries.",
-      "CPython3.9.6/macOS27.0:3 data assertions red before fixes;90 focused tests passed19.421s on earlier tree. Six directory-sync/ID regressions red, then31 store/backup passed0.302s. After UI/request-id changes65 affected office/service/CLI/web/process-doc tests passed18.318s.",
-      "Node22.23.4:controlled delayed-response regressions and legacy boot stdin negative contrast;12 cases green before optional-node fix,one new case green after. No claim of one final13-case full run. Legacy recovery is GET-only;missing/ID/cid/wire mismatches block.",
-      "Chrome156/CPython3.12.14/python-docx1.2.0:final real bidirectional CLI/browser fixture nine results passed,zero page errors,1440x1000 screenshot inspected. This rerun followed action-lock changes;an initial removed-shortcut error was fixed before the green rerun.",
-      "Focused ruff E9,F and whitespace passed;39 relative documentation links resolved. Exact candidate CI/main remains an external readback,not inherited from PR70."
-    ],
-    "unverified_scope": "Real provider quality,physical power loss,arbitrary Word pagination/rendering,Windows native secureI/O,all DOM/multiwindow combinations. Model switching,interactive office entry,non-destructive edit/regenerate and full P1 acceptance remain. No tag,Release,package upload or scheduler changes.",
-    "reviewed_files": [
-      {
-        "path": "CHANGELOG.md",
-        "sha256": "d865927db338cff6cb41a8b936a6a56ef5d7b454efc762831eac38b7e722eb47"
-      },
-      {
-        "path": "docs/cli.md",
-        "sha256": "aa7aa43543a2b2e5f31b7619ab79009690e6cfb28089c72eba5a17ca16c1f687"
-      },
-      {
-        "path": "docs/cli.zh-CN.md",
-        "sha256": "f22cb3d505528431ed7d1f9e8591f62b5064d69038b2e4c5ec99e86be1ff572e"
-      },
-      {
-        "path": "docs/formats.md",
-        "sha256": "9eb04ddbf088e0d33f1f23ecf5c2eed193a037cd29b1e5d2070c2b8aa35108e1"
-      },
-      {
-        "path": "docs/formats.zh-CN.md",
-        "sha256": "08860f4826b4c852bb30b366e5b87a7417e706b266c659568dd8299b4712f56b"
-      },
-      {
-        "path": "docs/handovers/2026-11-14-office-p1.md",
-        "sha256": "7f11023f0c84304f5f3b75a4ee77effcaad2c9775d37c4991c973c018ef8e759"
-      },
-      {
-        "path": "docs/office-web.md",
-        "sha256": "323aac65592cf53a5556214c23adcc9e6e994706b658c31248241296c4fad2c1"
-      },
-      {
-        "path": "docs/office-web.zh-CN.md",
-        "sha256": "50a076a32bc4caf09e84c09f01ad242a656c41365bab37325ed4fa2f04316f9f"
-      },
-      {
-        "path": "pocketchat/office.py",
-        "sha256": "150defbf9524a916b328ea1e7a1ed336487e1dbfe4d52c18283891a893a89c4a"
-      },
-      {
-        "path": "pocketchat/office_backup.py",
-        "sha256": "41b57116ee9a531de538c0103fc43f30384205377a84e87b538102a9839d91c4"
-      },
-      {
-        "path": "pocketchat/office_cli.py",
-        "sha256": "26131dce12edefcc39d997a26ca9a48ef1fadf92874cdd370625e96f752b7a80"
-      },
-      {
-        "path": "pocketchat/office_service.py",
-        "sha256": "0eb8e0352f562848114cde7ff6cfcec275833d7da47b84010773d1ef4d55f758"
-      },
-      {
-        "path": "pocketchat/office_static/app.js",
-        "sha256": "d23e02a334b97f2ae85d55b03545619db7b22e1e0298c1e503412619a8f8375a"
-      },
-      {
-        "path": "pocketchat/office_static/index.html",
-        "sha256": "993688c61fa083974780f7a37df68f42a1e690a0031a06fe4adb93fd404e3e6a"
-      },
-      {
-        "path": "pocketchat/office_static/style.css",
-        "sha256": "d073387deb1b52f13ca17bffd2261f2652177e068fa4f9b271a8ba862ff58503"
-      },
-      {
-        "path": "pocketchat/office_store.py",
-        "sha256": "7c1aaa8850c779068ba177ea991970a0b33ea55364411c7b5dfdf96d21bc6a30"
-      },
-      {
-        "path": "tests/office_p1_browser.cjs",
-        "sha256": "e219492c6fe573f27eb834c899f7448c4e1495df18d964b26d75bece1980fe03"
-      },
-      {
-        "path": "tests/test_office_backup.py",
-        "sha256": "7c510b271fa919b94070612a9d5cc2ab0f1c7f98c698b497846c79857165824a"
-      },
-      {
-        "path": "tests/test_office_cli.py",
-        "sha256": "6357b67ec5a758e1f3cc167bd39ec50f52a7b0da90b3d19b8a7407f7feb5beb6"
-      },
-      {
-        "path": "tests/test_office_store.py",
-        "sha256": "56fc3d133ca263eac2f4d80a9486caaef61b031c85c47311a33897f960c080c1"
-      }
-    ]
-  },
-  "candidate_base": "646d7713dfc37e711f073aa5a2247e747d92b881",
+  "previous_checkpoint": "6083efa09cdfbdde3b75c5230d878a0bc537c8df",
+  "candidate_base": "6083efa09cdfbdde3b75c5230d878a0bc537c8df",
   "slice_contract": "docs/handovers/2026-11-14-office-p1.md",
-  "status": "approved",
-  "actual_risk": "high: model/confirmation switching and durable private draft/receipt state",
-  "actual_review_depth": "deep",
-  "authority": "agent technical review under maintainer routine-development delegation; no formal release authority",
+  "status": "chat-branch-checkpoint-reviewed",
+  "actual_risk": "high: persisted context ancestry, backup restore and cross-client send consent",
+  "actual_review_depth": "independent changed-path review plus branch-specific negative tests; earlier checkpoint scope not re-reviewed",
+  "authority": "Agent technical review under maintainer standing routine-development delegation; independent reviewer, not a human signature.",
   "scope": "Latest-main configured-profile and interactive entrance delta only; prior checkpoints retained, fullP1 incomplete.",
-  "round_history": "Previous five rounds preserved; current latest-main delta and bounded finding closure only. No re-review of old foundation or closed findings.",
-  "reviewed_evidence": [
-    "Independent Raman reviewed complete core/store/HTTP/backup delta and complete interactiveCLI diff/tests; bounded closure confirms native-only state, before-admission marker and empty-line fixes. Independent Bohr implemented boundedCLI worker and later reviewed UI-only delta; final consent finding fixed with directed red-green.",
-    "CPython3.9.6:initial model selectors were wrong-class discovery and not behavioral red; corrected baseline had missing profile support. State CAS/Unicode/pending-new/profile alias/epoch and native body limit defects reproduced before fixes. Initial backup incompatibility test failed;17 affected backup/shared tests then green.",
-    "Worker18CLI process tests passed15.394s before finalreview. Main added2interactive report/revision/exactMarkdownexport/stop cases passed1.774s; final37affected model/service/interactive tests passed24.893s,49legacyCLI/REPL/skeleton/process-doc passed10.807s. No whole local suite repeated.",
-    "Node22.23.4 prior13 delayed-response cases green after new confirmed route fixture adaptation; directed same-model different-profile and preview-edit cases green. Finalconsent directed red true!=false then1case green. No claim allseparate runs form onefinalwhole-suite count.",
-    "Chrome156/CPython3.12.14/python-docx1.2.0 finalcross-client fixture nine outcomes true,explicit existing-profile choice and cross-client stale consent refusal observed,zero pageerrors;1440x1000screenshot inspected. Model fixtures only,not providerquality. CLIreport/revision/stop process paths exercised independently.",
-    "Focusedruff E9,F,node syntax,diffwhitespace green;39relative documentationlinks resolve. Exact candidateCI/main remains external readback.",
-    "Final static platform check added capability skip only to native private-file draft tests; browser denial uses a literal UI state. No insecure Windows fallback. Final exact CI binds the corrected SHA."
+  "round_history": [
+    "Previous five rounds preserved; current latest-main delta and bounded finding closure only. No re-review of old foundation or closed findings.",
+    {
+      "checkpoint": "office-chat-branches",
+      "base": "6083efa09cdfbdde3b75c5230d878a0bc537c8df",
+      "rounds": 2,
+      "outcome": "pass after two findings closed; final bounded pair-sequence hardening independently checked",
+      "scope": "new branch diff plus exact closure; prior checkpoint reviews retained"
+    }
   ],
-  "unverified_scope": "Real provider quality,arbitraryWordpagination/rendering,physicalpowerloss,allSIGINT/diskfault/multiwindowcombinations,Windowsnative secureI/O. Nondestructiveedit/regenerate and fullP1acceptance remain. No formal tag,Release,packageupload or schedulermodification.",
+  "reviewed_evidence": [
+    "CPython3.14.10 red branch test rejected Invalid message fields; after implementation six branch/controller cases passed0.143s. CLI red rejected --branch-from, then exposed missing forwarding; corrected case passed0.851s. Node22.23.4 red startBranch undefined, then onecase green.",
+    "111 focused office/controller/store/backup/service/CLI/HTTP cases ran22.580s:107passed and4archive-v4 predicate failures. Corrected archive predicate;36 affected store/backup/CLI cases passed0.973s. A new v3 restore test reproduced4!=3 before preserving sourceversion.",
+    "33 new active-source/history exclusion, documentation and legacy skeleton cases passed0.824s. Prior green cases were not rerun without a code/failure reason.",
+    "Node22.23.4 seventeen asynchronous UI cases passed; real Chrome loopback journey with bundledCPython3.12.14 and python-docx1.2.0 passed all assertions: two-way report/revision, model choice/consent, search/archive/drafts, chat edit/regenerate, branchdraftreload, oldbranchsearch, staleconfirmationrefusal, immutablemessages, schema4backuprestore. No pageerrors.1440x1000 screenshot inspected; fixtureprovider only.",
+    "Focused Ruff0.17.3 E9,F, node syntax and diff whitespace passed;41 relative Markdown links resolve. MissingbundledRuff was handled withexisting Ruff,notinstalled; initial/tmpfixture path rejected symlink, rerunused resolved/private/tmp path. No application-security relaxation.",
+    "Exact candidateCI/main integration still pending at this record; read back PR and main externally after commit.",
+    "Independent first review found two issues; corrected both with red regressions.18backup cases and18Node races passed after fixes. Final real Chrome journey rerun after disclosure change: all13 assertions flags true and page_errors empty. Provider fixture persisted8real HTTP requests; edited/regenerated requests each contain only the new user prompt plus system, not old tail. All fixture server/browser processes closed.",
+    "Final chronology hardening: interleaved userA,userB,assistantA,assistantB red regression accepted invalid input; compare entire run/role pair sequence now. Negative plus unchanged positive restore cases2passed0.028s; no repeated whole suite.",
+    "Independent final closure passed: Python3.9.6 in-memory normal v3/v4 pairs accepted; reordered runs, crossed/nested pairs refused. Final office_backup SHA25694e0c59d1ca2178dc1eed2d69a767b9517c2dc2f93fe5c088f58137792cf1ad6; app.js6b8d270def66b8dc0c43558f4d33b34a6eafcb567044272eeedb46868b13f642. No remaining known blocking findings in reviewed scope. Main separately reviewed all changed docs/relative links."
+  ],
+  "unverified_scope": "Real provider quality, arbitrary Word pagination/rendering, physical power loss, all multiwindow/signal/disk-fault combinations, native Windows secure I/O and full P1 end-to-end acceptance consolidation. No tag, Release, package upload or scheduler changes.",
   "reviewed_files": [
     {
       "path": "CHANGELOG.md",
-      "sha256": "a494f0c6e4ba9d3026c8ee18361d7ec1f20cbf876163b9f31c021ac080d0493d"
+      "sha256": "63ebb1ed9782c1732eba21ed794a6cfd1d88d85e17a48cb8a66215d5340a6475"
     },
     {
       "path": "docs/cli.md",
-      "sha256": "89cf4e953dc79fb2a35104581ceb39746ac423397884c206207fb07629f992ac"
+      "sha256": "34586f5c251a0ade2294b8d0d0d7c5bad2e010690c4e46de8d33ce72e42662fd"
     },
     {
       "path": "docs/cli.zh-CN.md",
-      "sha256": "4e3a677e16233d47b849aae6d3d87188599ad8e0fee4416cceeb87ddf7a913b2"
+      "sha256": "d5d6eada43bae8cbf2cfb5cecedb3a4d978e9b164a9eea1cc396ddbd5e930d17"
     },
     {
       "path": "docs/formats.md",
-      "sha256": "53dd251c019ec873ff579a146492725a9ddd4fb58c89ee4e589b536d54e6778b"
+      "sha256": "426b944ea03ae9c5f3170a0c573c463c289fa6070be5c580596632499f68197a"
     },
     {
       "path": "docs/formats.zh-CN.md",
-      "sha256": "56502da4d6d767e1b19bdcaeb5bb5d64ed1e877958d22e6f79e6791428c323c5"
+      "sha256": "18bdb048534519a9139129f333446be4c8b6f2291bbe76415aad397735547a91"
     },
     {
       "path": "docs/handovers/2026-11-14-office-p1.md",
-      "sha256": "6cf57ae1ba0aad4be4a102b3a29482cbb1ef13d580ea1361a6273c5fb7ec1d17"
+      "sha256": "05271749949678a85de118b852c7b986d95551eac0f446cf3bd106d184290c09"
     },
     {
       "path": "docs/office-web.md",
-      "sha256": "baf0a6a75128c05b1befab878cd10db61069248df614c3b3c2dd4f36c89d9d3f"
+      "sha256": "89b1d6b56918f61ecc47f0d6a6914257c3db22cba41f52f007ce371af2a570c5"
     },
     {
       "path": "docs/office-web.zh-CN.md",
-      "sha256": "46ba1919640c6ea64c82c95fe09d9737cba9ce648f16ceecf16ae12338c7f958"
-    },
-    {
-      "path": "examples/office-demo.py",
-      "sha256": "e08ee262b23c1d8f48718aae1aeaa62a5547bf055c115061c51f65780e9a0105"
+      "sha256": "2ed2aa4213e6f1def66888f83bed710bd8e0901a252c29fc3a8effd5c15d2cc0"
     },
     {
       "path": "pocketchat/office.py",
-      "sha256": "e733c9ef9dc068fda05f5e55c7dc1892c6d5daff068e26ba2be82e3c50688b27"
+      "sha256": "0936024ac045df1a0ecbf674f4a4e3bd106cfa0799367dfc2f297f62aef98b70"
     },
     {
       "path": "pocketchat/office_backup.py",
-      "sha256": "8bd8e4c097a31ca2b4451992f65420fb14352f0298fc392fa5f7e2bcdea9b0e1"
+      "sha256": "94e0c59d1ca2178dc1eed2d69a767b9517c2dc2f93fe5c088f58137792cf1ad6"
     },
     {
       "path": "pocketchat/office_cli.py",
-      "sha256": "a65d6a570de29caf9ace472a63ad7f8178acb78a90bca1c5c3b2fa16bbd3ee81"
-    },
-    {
-      "path": "pocketchat/office_service.py",
-      "sha256": "7062b6c68d312c9a4c6dae38a7159238f709b7ca03568aa146feb613006c4da9"
+      "sha256": "711b9a7a57cc35de2b2d3df545a78a37fac8018bf77db81a99b5ba8cde6b295a"
     },
     {
       "path": "pocketchat/office_static/app.js",
-      "sha256": "038ec0ed615e6b61cd741e8072280e03d69916a8a43ed74f9262118f2ff0d486"
+      "sha256": "6b8d270def66b8dc0c43558f4d33b34a6eafcb567044272eeedb46868b13f642"
     },
     {
       "path": "pocketchat/office_static/index.html",
-      "sha256": "1d19c1a9ae5d5a014beecdb0d63378c4f6860cc55941f317f11e932bdb879c1f"
+      "sha256": "1402acd069af3333cf1e8911e61c477fcd9cf8191edd2b18dcd40cfc93e10fdc"
     },
     {
       "path": "pocketchat/office_static/style.css",
-      "sha256": "10b7d7f361f71398647a5ccd06739a642b78ef5057f916a42a4d0afa76a7956a"
+      "sha256": "cb73293b1788123d67362739c71ec3ef75d8ff72a421b1e04040605194373ded"
     },
     {
       "path": "pocketchat/office_store.py",
-      "sha256": "271f4c453a37e57f094e44fc2a1ad43c71a059dee96b3ff01928d9f5a7d43e64"
-    },
-    {
-      "path": "pocketchat/office_web.py",
-      "sha256": "b950ab90fc4eeadc60153490efc933139a8ea941b6b08af61e76985b52ae2180"
+      "sha256": "4352fe95f114ec589581e3bc4bb9e8fb01a252fe18ec5cd964d6fb9d5f6a0585"
     },
     {
       "path": "tests/office_p1_browser.cjs",
-      "sha256": "1399cc96c89e492a84a5cad07979aa1a6c31a134419a2601a3f0a47a7747b419"
+      "sha256": "3c6ab947b3c65e5b480f0cc58d06b208915994a0f01179d1d71a8b47a4cf722d"
     },
     {
       "path": "tests/test_office.py",
-      "sha256": "afe2352fb128b879c2247008457f1389d23b9d6a14eaa1153bca5dd0daca3efb"
+      "sha256": "45156872e570ce7419234e7136bb63dd0c13d63753f1592f56feeefaa30455fa"
+    },
+    {
+      "path": "tests/test_office_backup.py",
+      "sha256": "7894b39587cc97481989013d97f91e7738f833be3e819bccbfc7e0105fcbd796"
     },
     {
       "path": "tests/test_office_cli.py",
-      "sha256": "65c663337d0b7c87c9bdbd78e88fe121c8b3d93e49900fd239b97294f6b2629f"
-    },
-    {
-      "path": "tests/test_office_service.py",
-      "sha256": "2c300b5536188b7aa5c3ee96062ce4ea75a56db72b90dac2d4e5c9c9a493d687"
-    },
-    {
-      "path": "tests/test_office_store.py",
-      "sha256": "6ce26e10a12acaa56dfa80ee0e2f0e152d2d2f4871f4497143e48dfed867ac67"
-    },
-    {
-      "path": "tests/test_office_web.py",
-      "sha256": "b5e8928d15caf6fd4fa51c2cc8160a935cdc6d8423ada43c9da519165f6c4cd4"
+      "sha256": "bdefc9de33c794681428523e5ea55e082db34c47e373f463d61cabd87cbd0ac0"
     }
   ]
 }

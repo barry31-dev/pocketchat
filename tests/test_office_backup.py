@@ -216,7 +216,7 @@ class BackupTests(unittest.TestCase):
             self.store.archive(self.cid, True)
         before = office_backup.snapshot(self.store)
         result = office_backup.upgrade(self.store)
-        self.assertEqual(result['database_version'], 3)
+        self.assertEqual(result['database_version'], 4)
         self.assertEqual((self.store.root / result['backup']).read_bytes(), before)
         self.assertEqual(office_backup.validate(before)['database_version'], 2)
         self.assertEqual((self.store.root / result['backup']).stat().st_mode & 0o777, 0o600)
@@ -227,7 +227,7 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(restored.db.execute('PRAGMA user_version').fetchone()[0], 2)
         self.assertNotIn('archived', [r[1] for r in restored.db.execute('PRAGMA table_info(conversations)')])
         self.assertEqual(office_backup.snapshot(restored), before)
-        self.assertEqual(office_backup.upgrade(self.store), {'database_version': 3, 'upgraded': False})
+        self.assertEqual(office_backup.upgrade(self.store), {'database_version': 4, 'upgraded': False})
 
     @unittest.skipUnless(SECURE_IO, "requires no-follow descriptor I/O")
     def test_failed_upgrade_backup_preserves_legacy_schema_and_contents(self):
@@ -298,7 +298,7 @@ class BackupTests(unittest.TestCase):
             result = office_backup.upgrade(self.store)
         self.assertEqual(len(synced), 1)
         self.assertTrue(result['upgraded'])
-        self.assertEqual(result['database_version'], 3)
+        self.assertEqual(result['database_version'], 4)
         self.assertEqual(target.read_bytes(), before)
 
     @unittest.skipUnless(SECURE_IO, 'requires no-follow descriptor I/O')
@@ -327,3 +327,31 @@ class BackupTests(unittest.TestCase):
         with self.assertRaises(OfficeError):
             restored.begin(self.cid, 'overflow-request', self.body)
         self.assertEqual(office_backup.snapshot(restored), raw)
+
+
+    @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
+    def test_restore_v3_preserves_version_until_explicit_upgrade(self):
+        self.store.db.execute('PRAGMA user_version=3')
+        self.store.db.commit()
+        self.restore(self.backup(), 'v3-restored')
+        restored = OfficeStore(self.base / 'v3-restored')
+        self.addCleanup(restored.close)
+        self.assertEqual(restored.db.execute('PRAGMA user_version').fetchone()[0], 3)
+
+    def test_reordered_completed_runs_cannot_invert_saved_message_chronology(self):
+        document = json.loads(self.backup())
+        document['data']['tables']['runs'].reverse()
+        document['sha256'] = hashlib.sha256(encoded(document['data']).encode()).hexdigest()
+        from pocketchat.office_backup import validate
+        with self.assertRaises(OfficeError):
+            validate(encoded(document).encode())
+
+    def test_interleaved_turn_messages_cannot_make_an_answer_a_future_prefix(self):
+        document = json.loads(self.backup())
+        rows = document['data']['tables']['messages']
+        rows[1]['id'], rows[2]['id'] = rows[2]['id'], rows[1]['id']
+        rows.sort(key=lambda row: row['id'])
+        document['sha256'] = hashlib.sha256(encoded(document['data']).encode()).hexdigest()
+        from pocketchat.office_backup import validate
+        with self.assertRaises(OfficeError):
+            validate(encoded(document).encode())
