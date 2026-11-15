@@ -72,3 +72,27 @@ Expiry/sensitivity/corruption negative coverage additionally passed with a contr
 Fresh-context substitute correction review read the exact b657dbb dispatch/readback changes and closed both original findings. This is static evidence for those fixes only; candidate-bound necessary CI and actual main readback are still pending. The interrupted original reviewer supplied no approval.
 
 Final added-test/docs review identified an over-limit evidence gap: unchanged messages and zero calls alone did not prove zero failed receipts. Read-only actual run/request/status snapshots now compare equal before/after the oversized preview; static correction review closed that precise gap and the expanded real Chrome journey passed again. All scoped findings are closed; exact final-head CI and remote-main integration remain pending.
+
+
+## Windows CI portability correction — 2026-11-16
+
+The original exact-head CI failed on Windows Python 3.9 and 3.13: six positive
+memory fixtures require no-follow directory support unavailable there. Those
+cases now declare the same descriptor prerequisites as the existing safe-write
+implementation. An unskipped office-layer regression forces unsupported
+directory capabilities and checks named refusal, no memory file, unchanged
+project/recall and request receipts, and zero provider calls. This is not proof
+of successful Windows memory mutation and does not weaken production safety.
+
+The version-zero database fixture used SQLite's transaction context manager as
+if it closed the connection. It does not: the fixture retained its own handle
+until Windows temporary-directory cleanup. `contextlib.closing` now releases
+that fixture connection before refusal/readback; runtime constructor cleanup is
+unchanged. Both Windows logs identify the same seven failures.
+
+Local focused checks: 17 cases passed on macOS Python 3.9.6; with directory
+support deliberately unavailable, the same 17 cases passed with exactly six
+positive cases skipped and the refusal regression still executed. Ruff E9/F
+passed for both changed test files. Production/browser code has not changed,
+so prior scoped acceptance and review are retained, not re-run or upgraded.
+Necessary exact-head CI and remote-main integration/readback remain pending.

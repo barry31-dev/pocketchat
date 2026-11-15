@@ -440,6 +440,25 @@ class OfficeBranchTests(unittest.TestCase):
 
 
 class OfficeFoundationSendTests(OfficeTests):
+    def test_memory_write_without_no_follow_directories_refuses_without_side_effects(self):
+        from unittest import mock
+        from pocketchat.office_context import office_memory_action, office_memory_view
+        view = office_memory_view(self.app.store)
+        before = self.app.store.db.execute('SELECT id, request_id, status FROM runs ORDER BY id').fetchall()
+        project_before = self.app.store.db.execute('SELECT * FROM office_project').fetchall()
+        with mock.patch('pocketchat.memory_migration.os.supports_dir_fd', set()):
+            with self.assertRaisesRegex(OfficeError, 'could not be saved safely'):
+                office_memory_action(self.app.store, 'propose', view['project_id'], view['store_sha256'],
+                    content='Prefer concise replies', category='user_preference', personal_guidance=True)
+        self.assertFalse((self.root / 'office-memory.v2.jsonl').exists())
+        self.assertEqual(office_memory_view(self.app.store), view)
+        self.assertEqual(self.app.store.db.execute('SELECT * FROM office_project').fetchall(), project_before)
+        self.assertEqual(self.app.store.db.execute('SELECT id, request_id, status FROM runs ORDER BY id').fetchall(), before)
+        self.assertEqual(self.adapter.calls, [])
+
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and hasattr(os, 'O_DIRECTORY')
+                         and os.open in os.supports_dir_fd,
+                         'requires no-follow directory descriptors for memory writes')
     def test_project_memory_plan_matches_sent_snapshot_and_stale_confirmation_refuses(self):
         from pocketchat.office_context import office_memory_action, office_memory_view, read_project_metadata, update_project_metadata
         project = read_project_metadata(self.app.store)
@@ -524,6 +543,9 @@ class OfficeFoundationSendTests(OfficeTests):
         self.app.store.finish(newer['id'], 'completed', 'Changed history.', None)
         refused(preview)
 
+    @unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and hasattr(os, 'O_DIRECTORY')
+                         and os.open in os.supports_dir_fd,
+                         'requires no-follow directory descriptors for memory writes')
     def test_expiring_sensitive_and_corrupt_office_memory_never_silently_enters_a_request(self):
         from datetime import datetime, timedelta, timezone
         from unittest.mock import patch

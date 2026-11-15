@@ -1,5 +1,7 @@
 """Project metadata is admitted before office context can acquire authority."""
 import copy
+import os
+from contextlib import closing
 import sqlite3
 import tempfile
 import threading
@@ -125,8 +127,9 @@ class ProjectSchemaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve() / 'project'
             root.mkdir(mode=0o700)
-            with sqlite3.connect(root / 'office.sqlite') as db:
-                db.execute('CREATE TABLE unrelated(secret TEXT)')
+            with closing(sqlite3.connect(root / 'office.sqlite')) as db:
+                with db:
+                    db.execute('CREATE TABLE unrelated(secret TEXT)')
             before = (root / 'office.sqlite').read_bytes()
             with self.assertRaises(OfficeError):
                 OfficeStore(root)
@@ -180,6 +183,9 @@ class ProjectMutationTests(unittest.TestCase):
                 store.close()
 
 
+@unittest.skipUnless(hasattr(os, 'O_NOFOLLOW') and hasattr(os, 'O_DIRECTORY')
+                     and os.open in os.supports_dir_fd,
+                     'requires no-follow directory descriptors for memory writes')
 class OfficeMemoryLifecycleTests(unittest.TestCase):
     def test_propose_accept_replace_forget_and_recall_are_project_bound(self):
         from pocketchat.office_context import office_memory_action, office_memory_view, update_project_metadata

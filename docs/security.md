@@ -165,3 +165,8 @@ Forgotten historical IDs confer no recall and never recreate text. Forget does
 not promise to remove earlier traces, sent payloads, exports or backups. At this
 checkpoint revisions and selected guidance are bound to the prepared send path; browser
 controls and complete user-path acceptance remain pending.
+
+Office memory mutations likewise require no-follow directory descriptors. A
+platform without them refuses an explicit proposal instead of silently falling
+back to path-based writes. Windows CI can verify that refusal, but does not
+prove successful office memory writes or Windows browser journeys.

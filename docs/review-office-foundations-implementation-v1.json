@@ -190,9 +190,15 @@
       "status": "verified",
       "command": "node tests/office_foundations_browser.cjs after OF-ACCEPTANCE-RECEIPT assertion correction",
       "result": "Expanded actual Chrome156.0.8078.80/CLI journey passed again because the receipt assertion changed: exact oversized-preview ordered run/request/status snapshots equal before and after; provider request count exactly1 and frozen displayed JSON equals HTTP. Existing production, Python and other checks unchanged, not rerun."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -B -m unittest tests.test_office_context and three affected OfficeFoundationSendTests; same selection with os.supports_dir_fd cleared; ruff check --select E9,F tests/test_office.py tests/test_office_context.py",
+      "result": "macOS Python3.9.6:17 tests passed0skip. Simulated unsupported directory APIs:17 discovered11 executed passed6 prerequisite skips; unskipped refusal test checks no memory file, unchanged project/recall/receipts and zero provider calls. Ruff E9/F passed. Original Windows3.9/3.13 logs show same7 failures; corrected WindowsCI pending."
     }
   ],
-  "unverified_scope": "Required CI for the exact final candidate and actual main integration/readback pending. Static reviewers did not run tests; real provider/model obedience, Windows browser, full accessibility, Word pagination, formal release and P2 excluded.",
+  "unverified_scope": "Required CI for this precise portability candidate and actual main integration/readback pending. Unsupported-platform negative coverage does not verify successful Windows memory mutation, existing-store read/recall, every refusal path or browser journeys. Real-provider/model obedience, full accessibility, Word pagination, formal release and P2 excluded.",
   "schema": "pocketchat-review-record.v1",
   "ready_for_integration": true,
   "review_history": [
@@ -222,6 +228,13 @@
       "candidate": "292a7c051c0dbc6f36b5704e63b2b9876eaa5bbf",
       "status": "closed-with-scoped-correction",
       "coverage": "Read OF01-10 contract, office English/Chinese guides, CHANGELOG, added dependency/expiry tests and expanded browser script. Evidence overclaim found in oversized-preview result; exact actual run/receipt snapshot equality added and statically closed. No backend re-review or tests run by reviewer."
+    },
+    {
+      "phase": "windows-ci-portability-correction",
+      "base": "71e73d6a47c5cadfd37fe023b8475f888cf87e68",
+      "reviewer_id": "01a1e0cd-cc10-7d41-b12b-2cad8bfc7e91",
+      "status": "accepted-no-blocking-findings",
+      "coverage": "Read only two test diffs and added security/handover paragraphs plus memory descriptor admission, office memory action and constructor cleanup. Six exact capability prerequisites match production; unsupported regression remains unskipped. SQLite fixture closing root cause accepted; no production changes. Static only; not Windows execution or re-review of prior backend/browser."
     }
   ]
 }
