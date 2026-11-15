@@ -201,3 +201,15 @@ Use `OFFICE_REVERSE_EXPORT_ONLY=1` instead for the narrow A01 reverse path:
 two browser-imported materials → browser report → CLI revision → browser downloads
 of each old/new Markdown and Word version, with exact content/source checks and
 python-docx readback. These modes use fresh fixtures and never a real account.
+
+
+## Foundation continuation contract (2026-11-15)
+
+The bounded extension is owned by [office-foundations.md](office-foundations.md):
+project instructions, one context preview/send plan and explicit v2 project memory,
+with OF01–OF10 acceptance and staged write scope. It is approved design only;
+this commit changes no runtime flags, workspace schema or backup format.
+The original slice's memory/context exclusions describe its initial scope, not a
+permanent ban on this reviewed extension. P1 remains the existing integrated
+result; foundations must close before P2 document-reading integration. Existing
+CLI memory/context features are not evidence of office-entry availability.

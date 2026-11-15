@@ -1,0 +1,73 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "docs/office-foundations.md",
+    "docs/office-web.md",
+    "docs/office-web.zh-CN.md",
+    "docs/chat-office-roadmap.zh-CN.md",
+    "docs/slice-queue.md",
+    "docs/review-office-foundations-v1.json",
+    "docs/handovers/2026-11-15-office-foundations.md"
+  ],
+  "categories": [
+    "docs"
+  ],
+  "tier": "low",
+  "review_depth": "quick",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "OF-DESIGN-1",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "frozen-plan-session-hook-scope",
+      "reason": "Specified additive single-turn Session hook, exact session/test scope and final streaming HTTP payload equality without legacy reselection."
+    },
+    {
+      "id": "OF-DESIGN-2",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "not-required-fact-admission-matrix",
+      "reason": "First extension accepts/recalls only explicit personal user_preference/project_decision guidance with declared non-factual intent; source_note and fact verification/import are excluded and tested."
+    },
+    {
+      "id": "OF-DESIGN-3",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "forget-backup-historical-lifecycle-links",
+      "reason": "Separate mandatory summary source resolution from historical v2 lifecycle IDs; forget never resurrects predecessors and missing historical IDs do not invalidate backup; add predecessor/successor forget/restore checks."
+    },
+    {
+      "id": "OF-DESIGN-4",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "normalized-supersession-cycle-check",
+      "reason": "Normalize supersedes/superseded_by to predecessor-to-successor DAG edges; matching reciprocal bookkeeping is not a cycle and conflict_with is excluded."
+    }
+  ],
+  "candidate_base": "a25e77b4de021a9fe61879894e828363f0624466",
+  "slice_contract": "docs/office-foundations.md",
+  "status": "design-approved-runtime-not-implemented",
+  "verification": [
+    {
+      "source_type": "current code/tests/schema (C)",
+      "status": "verified",
+      "result": "Read office_config, prepare/preview/submit/execute, native workspace identity, v2 lifecycle/retrieval and layered projection plus product contracts at candidate base; design distinguishes existing code and future acceptance."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python 3.9.6 scoped Markdown local-file link check; review_record.build/validate with declared seven-path diff; git diff --check (Git 2.54.0)",
+      "result": "46 scoped local-file links resolved; generated low/quick record matched exact scope; whitespace check exit 0. Link file existence does not establish remote URL/original-page verification."
+    },
+    {
+      "source_type": "project interpretation",
+      "status": "verified",
+      "result": "Fresh-context round1 full seven-file design review identified three issues; round2 new-diff closed all three and identified normalized lifecycle-edge ambiguity; round3 read only corrected lifecycle edges/record and closed OF-DESIGN-4. Final design approved; runtime not exercised."
+    }
+  ],
+  "unverified_scope": "No runtime implementation, schema migration, provider call, model-quality or browser acceptance; no paid model, formal release or new tools.",
+  "reviewer": "independent agent, fresh context"
+}
