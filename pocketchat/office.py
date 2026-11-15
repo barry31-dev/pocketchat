@@ -180,14 +180,25 @@ class OfficeWorkspace:
 
     def preview(self, cid, body):
         with self.guard:
+            return self._preview_plan(cid, body)[0]
+
+    def _preview_plan(self, cid, body):
+        with self.guard:
             payload, context = self._prepare(cid, body)
             history = self.store.history(cid, payload.get('history_run_ids'))
             config = {k: v for k, v in self.config.items() if k != 'provider_adapter'}
-            binding = [cid, body['request_id'], payload, context, history, self.store.context_runs(cid), config, self.selected_profile, self.model_revision]
+            prepared = None
+            if self.store.db.execute('PRAGMA user_version').fetchone()[0] == 5:
+                from .office_context import prepare_office_turn
+                prepared = prepare_office_turn(self.store, cid, context, payload['history_run_ids'], self.config, query=payload['prompt'])
+            binding = [cid, body['request_id'], payload, context, history, prepared.manifest if prepared else None, prepared.payload if prepared else None, self.store.context_runs(cid), config, self.selected_profile, self.model_revision]
             confirmation = hashlib.sha256(encoded(binding).encode('utf-8')).hexdigest()
-            return dict(confirmation=confirmation, request_id=body['request_id'], profile=self.selected_profile, model_revision=self.model_revision,
+            result = dict(confirmation=confirmation, request_id=body['request_id'], profile=self.selected_profile, model_revision=self.model_revision,
                         model=self.config['model'], provider=self.config['base_url'],
                         history=history, message=context, source_ids=payload['source_ids'])
+            if prepared is not None:
+                result.update(project_id=prepared.manifest['project_id'], prepared_payload=prepared.payload, context_manifest=prepared.manifest)
+            return result, (payload, context, prepared)
 
     def submit_confirmed(self, cid, body, confirmation):
         with self.guard:
@@ -200,12 +211,12 @@ class OfficeWorkspace:
                 if not hmac.compare_digest(json.loads(old['payload']).get('confirmation', ''), confirmation):
                     raise OfficeError('Confirmation does not match the original request.', 409)
                 return self.status(old['id'])
-            prepared = self.preview(cid, body)
+            prepared, bundle = self._preview_plan(cid, body)
             if not hmac.compare_digest(prepared['confirmation'], confirmation):
                 raise OfficeError('Request, model or context changed. Preview and confirm again.', 409, request_not_accepted=True)
-            return self._submit(cid, body, confirmation)
+            return self._submit(cid, body, confirmation, prepared_bundle=bundle)
 
-    def _submit(self, cid, body, confirmation=None):
+    def _submit(self, cid, body, confirmation=None, prepared_bundle=None):
         if (not isinstance(body, dict) or set(body) not in ({'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent'},
                     {'prompt', 'intent', 'source_ids', 'revision_id', 'request_id', 'consent', 'branch_from'}) or
                 body['consent'] is not True):
@@ -214,7 +225,16 @@ class OfficeWorkspace:
         receipt = self.store.receipt(cid, body['request_id'], wire)
         if receipt is not None:
             return self.status(receipt['id'])
-        payload, context = self._prepare(cid, body)
+        if prepared_bundle is not None:
+            payload, context, prepared = prepared_bundle
+        else:
+            payload, context = self._prepare(cid, body)
+            prepared = None
+            if self.store.db.execute('PRAGMA user_version').fetchone()[0] == 5:
+                from .office_context import prepare_office_turn
+                prepared = prepare_office_turn(self.store, cid, context, payload['history_run_ids'], self.config, query=payload['prompt'])
+        if prepared is not None:
+            payload['prepared_context'] = dict(messages=prepared.messages, payload=prepared.payload, manifest=prepared.manifest)
         if confirmation is not None:
             payload['confirmation'] = confirmation
         payload['model_snapshot'] = dict(model=self.config['model'], provider=self.config['base_url'])
@@ -256,7 +276,12 @@ class OfficeWorkspace:
             session = Session(config, self.root / 'traces' / (rid + '.jsonl'),
                               run_id=rid, initial_messages=self.store.history(run['cid'], json.loads(run['payload']).get('history_run_ids')),
                               on_delta=delta)
-            status = session.run([context])
+            stored = json.loads(run['payload']).get('prepared_context')
+            if stored is not None:
+                from .office_context import PreparedOfficeTurn
+                status = session.run_prepared(PreparedOfficeTurn.create(stored['messages'], stored['payload'], stored['manifest']))
+            else:
+                status = session.run([context])
             reply = session.last_reply() if status == 'completed' else ''
             if status == 'completed' and guard.finish_reason not in ('stop',):
                 status = 'failed'

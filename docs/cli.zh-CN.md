@@ -811,3 +811,13 @@ traces, exports and backups are not erased. These actions never call a provider.
 Recall is disabled until explicitly enabled; this checkpoint's recall preview
 does not yet integrate remembered text or project instructions into sent requests.
 Old schemas require explicit verified-backup upgrade for these controls.
+
+
+### 显式办公接续摘要
+
+`office summary show --conversation ID` 回读已接受摘要与当前分支原消息。
+`office summary save --conversation ID --project-id ID --revision REVISION --text TEXT --refs-json JSON --accept`
+显式保存人工撰写摘要。引用字段为 `message_id`、`run_id`、`start`、`end`、`sha256`；范围按 Unicode
+码点，摘要按选中原文 UTF-8。首次 revision 0。缺失、跨会话、过期或原文变化都拒绝，不调用模型、不改原消息。
+schema 5 请求预览返回 `prepared_payload` 与 `context_manifest`，确认绑定项目 revision、整体记忆摘要、
+已接受接续摘要与最终 payload。选中输入变化使旧确认失效；准入后单轮 Session 不重新选择上下文。

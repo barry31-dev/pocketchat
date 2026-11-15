@@ -25,6 +25,17 @@ def add_parser(subparsers):
     commands.add_parser('interactive', help='private draft REPL; sending requires the exact preview hash')
     models = commands.add_parser('models', help='list configured model profiles without calling a provider')
     models.add_argument('--select', help='select an existing configured profile')
+    summary = commands.add_parser('summary', help='inspect originals or explicitly accept a continuity summary')
+    summary_actions = summary.add_subparsers(dest='action', required=True)
+    show = summary_actions.add_parser('show')
+    show.add_argument('--conversation', required=True)
+    save = summary_actions.add_parser('save')
+    save.add_argument('--conversation', required=True)
+    save.add_argument('--project-id', required=True)
+    save.add_argument('--revision', type=int, required=True)
+    save.add_argument('--text', required=True)
+    save.add_argument('--refs-json', required=True, help='JSON original message/run/range/SHA-256 references')
+    save.add_argument('--accept', action='store_true', required=True)
     memory = commands.add_parser('memory', help='manage explicit project guidance; never verify external facts')
     actions = memory.add_subparsers(dest='action', required=True)
     actions.add_parser('list')
@@ -115,6 +126,16 @@ def _operate(args, client):
     prefix = '/api/conversations'
     if getattr(args, 'conversation', None):
         prefix += '/' + identifier(args.conversation)
+    if command == 'summary':
+        if args.action == 'show':
+            return client.request(prefix + '/summary'), 0
+        from .json_input import decode_json_bytes, JSONInputError
+        try:
+            refs = decode_json_bytes(args.refs_json.encode('utf-8'), 48 * 1024, 8, 4096)
+        except JSONInputError as exc:
+            raise OfficeError('Invalid summary reference JSON.') from exc
+        return client.request(prefix + '/summary', dict(project_id=args.project_id,
+            revision=args.revision, content=args.text, refs=refs, accept=args.accept)), 0
     if command == 'memory':
         if args.action == 'list':
             return client.request('/api/memory'), 0

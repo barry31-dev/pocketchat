@@ -222,3 +222,28 @@ class SharedOfficeTests(unittest.TestCase):
             memory_id=record['memory_id'], revision=accepted['record']['revision'], acknowledge_history=True))
         self.assertEqual(forgotten['records'], [])
         self.assertEqual(self.adapter.calls, [])
+
+    def test_summary_original_readback_and_explicit_acceptance_share_service(self):
+        import hashlib
+        client = self.connect()
+        project = client.request('/api/project')
+        cid = self.app.store.create('Summary service')['id']
+        run = self.app.store.begin(cid, 'summary-service-run', dict(prompt='Keep it small', intent='chat', source_ids=[], revision_id=None))
+        self.app.store.finish(run['id'], 'completed', 'Small first', None)
+        prefix = '/api/conversations/' + cid + '/summary'
+        view = client.request(prefix)
+        message = view['original_messages'][0]
+        refs = [dict(message_id=message['id'], run_id=message['run_id'], start=0, end=len(message['content']),
+                     sha256=hashlib.sha256(message['content'].encode()).hexdigest())]
+        saved = client.request(prefix, dict(project_id=project['project_id'], revision=0,
+                                content='Small first delivery', refs=refs, accept=True))
+        self.assertEqual(saved['summary']['revision'], 1)
+        self.assertEqual(client.request(prefix)['summary'], saved['summary'])
+        self.assertEqual(self.adapter.calls, [])
+
+    def test_run_summary_is_unknown_route_not_internal_error(self):
+        from pocketchat.office_service import dispatch
+        for method, body in [('GET', None), ('POST', {})]:
+            with self.subTest(method=method), self.assertRaises(OfficeError) as caught:
+                dispatch(self.app, '/api/runs/unknown-run/summary', method, body)
+            self.assertEqual(caught.exception.status, 404)

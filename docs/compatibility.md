@@ -162,5 +162,5 @@ explicit durable-backup admission. V1 backups retain their original versions;
 v2 data-only backups preserve logical identity, summaries and v2 memory without
 restoring transport credentials. Older writers must refuse schema 5. Project and
 memory CLI operations are additive; legacy memory commands are unchanged. This
-checkpoint does not yet change office request context or claim complete foundation
+checkpoint uses a frozen prepared office context but does not claim complete foundation
 acceptance. Secure filesystem operations still refuse unsupported runtimes.

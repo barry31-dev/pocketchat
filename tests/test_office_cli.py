@@ -544,3 +544,23 @@ class OfficeCLITests(unittest.TestCase):
                                    '--memory-id', accepted['record']['memory_id'], '--revision', str(accepted['record']['revision']), '--acknowledge-history')
         self.assertEqual(code, 0)
         self.assertEqual(forgotten['result']['records'], [])
+
+    @unittest.skipUnless(SECURE_IO, 'requires private descriptor I/O')
+    def test_summary_readback_and_save_are_explicit_subprocess_actions(self):
+        import hashlib
+        with self.open_store() as store:
+            run = store.begin(self.cid, 'summary-process-run', dict(prompt='Keep it small', intent='chat', source_ids=[], revision_id=None))
+            store.finish(run['id'], 'completed', 'Small first', None)
+        code, project = self.cli('project', 'show')
+        self.assertEqual(code, 0)
+        code, view = self.cli('summary', 'show', '--conversation', self.cid)
+        self.assertEqual(code, 0)
+        message = view['result']['original_messages'][0]
+        refs = [dict(message_id=message['id'], run_id=message['run_id'], start=0, end=len(message['content']),
+                     sha256=hashlib.sha256(message['content'].encode()).hexdigest())]
+        code, saved = self.cli('summary', 'save', '--conversation', self.cid, '--project-id', project['result']['project_id'],
+                              '--revision', '0', '--text', 'Small first delivery', '--refs-json', json.dumps(refs), '--accept')
+        self.assertEqual(code, 0)
+        self.assertEqual(saved['result']['summary']['revision'], 1)
+        self.assertEqual(self.cli('summary', 'save', '--conversation', self.cid, '--project-id', project['result']['project_id'],
+                              '--revision', '0', '--text', 'Stale', '--refs-json', json.dumps(refs), '--accept')[0], 2)

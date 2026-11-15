@@ -163,4 +163,5 @@ never grant authority. Replacement acceptance retires its predecessor in one loc
 publication; backups validate normalized lifecycle edges even after rehashing.
 Forgotten historical IDs confer no recall and never recreate text. Forget does
 not promise to remove earlier traces, sent payloads, exports or backups. At this
-checkpoint these controls are independent of the not-yet-wired prepared send path.
+checkpoint revisions and selected guidance are bound to the prepared send path; browser
+controls and complete user-path acceptance remain pending.

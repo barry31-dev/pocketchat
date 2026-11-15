@@ -21,7 +21,8 @@
     "docs/compatibility.md",
     "docs/security.md",
     "pocketchat/session.py",
-    "tests/test_session.py"
+    "tests/test_session.py",
+    "pocketchat/office.py"
   ],
   "categories": [
     "python-tools",
@@ -46,13 +47,48 @@
       "status": "fixed",
       "fingerprint": "accepted-successor-without-retired-predecessor",
       "reason": "Present predecessor of accepted/retired successor must be retired with exact backlink; rehashed corrupt backup regression now refuses dual accepted replacement."
+    },
+    {
+      "id": "OF-PREP-REPLAY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "failed-prepared-session-replay",
+      "reason": "Prepared execution marks consumption before attempt and rejects finished or consumed sessions; failure/cancellation red regression remains one provider call."
+    },
+    {
+      "id": "OF-WIRE-HISTORY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "oldest-history-retained-without-disclosure",
+      "reason": "Recent complete contiguous history window selected newest-first; selected/omitted exact run IDs disclosed; tight-budget red regression passed."
+    },
+    {
+      "id": "OF-WIRE-BACKUP",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "prepared-backup-owning-run-lineage",
+      "reason": "Backup validates query/model/history partition, original history messages and reconstructed source/report/pending envelope against owning run."
+    },
+    {
+      "id": "OF-SUMMARY-HISTORY",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "historical-summary-reference-not-validated",
+      "reason": "Historical prepared summaries require owning run conversation and original references on admitted branch; rehashed foreign-summary red regression passed."
+    },
+    {
+      "id": "OF-SUMMARY-ROUTE",
+      "severity": "minor",
+      "status": "fixed",
+      "fingerprint": "duplicate-run-summary-route-unbound-cid",
+      "reason": "Removed accidental run-summary route; GET/POST return 404 with regression."
     }
   ],
   "slice_contract": "docs/office-foundations.md",
-  "status": "partial-single-turn-prepared-hook-not-wired",
+  "status": "partial-frozen-send-summary-checkpoint-browser-pending",
   "candidate_base": "1b10cbcae86fb30933586c5cc2f827a0c78ade81",
-  "reviewer": "independent fresh-context agent, initial scoped review and focused correction re-review",
-  "scope": "Implemented schema5/project/backup and explicit office memory lifecycle only. Independent review reproduced two lifecycle defects, then re-reviewed corrected graph logic/tests; frozen send, summary controls and browser were expressly excluded.",
+  "reviewer": "independent fresh-context agent; focused correction reviews",
+  "scope": "Independent scoped review of prepared hook, office preview/admission/execution and summary controls; each new area has a separate initial review and focused correction re-review, not a full repeated review. All concrete findings closed.",
   "verification": [
     {
       "source_type": "local run (V)",
@@ -83,7 +119,19 @@
       "status": "verified",
       "command": "python3 -m unittest discover -s tests -p test_session.py -v",
       "result": "11 Session tests passed on macOS Python3.9.6, including no second projection, exact streaming snapshot, unsafe config, tampered object, missing snapshot and changed provider payload no-call refusals."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "recording loopback SSE office send; prepared/frozen/summary focused red-green and office/session regression",
+      "result": "Actual request body equals preview payload, saved plan and immutable snapshot; preview zero-call and stale confirmation/replay refuse. 166 office tests (1 skip) plus12 Session tests passed before final summary corrections; final corrected office count recorded in handover. macOS Python3.9.6."
+    },
+    {
+      "source_type": "current code/tests/schema (C)",
+      "status": "verified",
+      "command": "independent scoped correction re-reviews",
+      "result": "Prepared replay, history window, backup lineage, historical summary and duplicate route findings closed. Browser UI and complete acceptance excluded."
     }
   ],
-  "unverified_scope": "Prepared hook is not yet wired into OfficeWorkspace. Project instructions/recall do not yet affect office sending. Summary operator controls, browser UI and complete OF01–OF10 remain incomplete; real HTTP wire equality and prepared-hook independent review not yet done."
+  "unverified_scope": "Browser project/context/memory/summary controls and OF01–OF10 complete cross-client acceptance remain incomplete. This checkpoint not independently verified on Windows. No paid provider, formal release or P2."
 }

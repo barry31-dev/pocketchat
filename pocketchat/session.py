@@ -344,11 +344,13 @@ class Session:
     def run_prepared(self, plan) -> str:
         """Execute one office-host turn without legacy selection or prompt append."""
         from .office_context import PreparedOfficeTurn
-        if type(plan) is not PreparedOfficeTurn or self.turn_count or self.session_file is not None or self.file_work is not None:
+        if (type(plan) is not PreparedOfficeTurn or self.turn_count or self.finished or
+                getattr(self, '_office_prepared_consumed', False) or self.session_file is not None or self.file_work is not None):
             raise ValueError('A fresh office-host prepared turn is required')
         plan.validate(self.config)
         if bool(plan.payload.get('stream', False)) != (self.on_delta is not None):
             raise ValueError('Prepared streaming options do not match execution')
+        self._office_prepared_consumed = True
         self._office_prepared_turn = plan
         try:
             return self.run([plan.messages[-1]['content']])

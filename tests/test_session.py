@@ -290,3 +290,24 @@ class OfficePreparedTurnTests(unittest.TestCase):
             session = Session(config, Path(tmp) / 'payload-mismatch.jsonl')
             self.assertEqual(session.run_prepared(bad), 'failed')
             self.assertEqual(adapter.calls, [])
+
+    def test_failed_or_cancelled_prepared_session_is_consumed_and_cannot_replay(self):
+        from pocketchat.office_context import PreparedOfficeTurn
+        from pocketchat.provider import ProviderError
+        from unittest.mock import patch
+        config = dict(model='m', base_url='http://example.invalid/v1', api_key_env='OFFICE_TEST_KEY',
+                      requires_api_key=False, max_context_chars=2000, timeout_seconds=5,
+                      summary_prefix_chars=40, system_prompt='', retry_max_attempts=1)
+        with tempfile.TemporaryDirectory() as tmp:
+            for index, effect in enumerate([ProviderError('timeout', 'ambiguous'), KeyboardInterrupt()]):
+                adapter = FakeContextAdapter([text_response()])
+                config['provider_adapter'] = adapter
+                messages = [dict(role='user', content='Exact pending request')]
+                plan = PreparedOfficeTurn.create(messages, adapter.build_payload(messages, config), {'project_id': 'project-' + 'a' * 32})
+                session = Session(config, Path(tmp) / ('consumed-%d.jsonl' % index))
+                with patch.object(adapter, 'complete', side_effect=effect) as complete:
+                    self.assertIn(session.run_prepared(plan), ('failed', 'cancelled'))
+                    self.assertEqual(complete.call_count, 1)
+                    with self.assertRaises(ValueError):
+                        session.run_prepared(plan)
+                    self.assertEqual(complete.call_count, 1)

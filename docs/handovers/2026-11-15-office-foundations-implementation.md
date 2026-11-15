@@ -1,21 +1,19 @@
 # Office foundation implementation checkpoint — 2026-11-15
 
-Schema 5 now creates a stable logical project identity only in a genuinely new
-workspace or an explicit verified-backup upgrade. Revision-bound instructions and
-memory preferences share authenticated service and CLI routes. V2 data-only backups
-retain project metadata, validated v2 memory and digest-bound original summaries;
-v1 restores stay legacy until explicit upgrade. Failure and unowned-file guards
-preserve original data. This is not the complete OF01–OF10 result.
+Schema-5 project identity/preferences and explicit memory lifecycle are implemented.
+Office preview and admitted send now share one canonical prepared turn with project,
+recall, summary and recent-history provenance; Session never reselects the frozen
+payload. Recording loopback SSE proves preview = saved plan = snapshot = HTTP body.
+Summary CLI/service controls require explicit acceptance and original branch/range
+SHA-256 bindings. Independent bounded reviews identified and closed lifecycle,
+replay, history-window, backup-lineage and summary-route/reference defects.
 
-Explicit memory propose/accept/revise/retire/forget and recall now share authenticated
-service and CLI, with legacy-guidance rejection and atomic predecessor replacement.
-Independent review found and closed two lifecycle-graph defects with red regressions.
+Verified at this checkpoint: 168 office tests (1 skip), 12 Session tests and
+Ruff E9/F passed on macOS Python 3.9.6; real loopback SSE payload equality passed.
 
-A tested single-turn prepared Session hook now avoids legacy reselection and refuses
-unsafe config/snapshot or payload mismatch before calling the provider. It is not
-yet wired into OfficeWorkspace and does not change current office send content.
-
-Next: build one office-owned context plan and wire preview/admission/execute to it,
-add summary operator controls; finally browser controls and full user-path acceptance. No paid provider
-or formal release. Contract: [foundations](../office-foundations.md).
+Next: implement browser project/context/memory/summary controls, run targeted real
+browser plus CLI journeys for OF01–OF10, then exact final-candidate CI and main
+integration. This checkpoint does not certify full foundation acceptance, Windows,
+model quality or release. No paid provider or formal release.
+Contract: [foundations](../office-foundations.md).
 Review: [record](../review-office-foundations-implementation-v1.json).

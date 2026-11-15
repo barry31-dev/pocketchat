@@ -475,4 +475,4 @@ acceptance and recall. Replacement acceptance and predecessor retirement publish
 in one locked v2 write. Store digest and record revisions guard mutations. Forget
 removes an active record but does not erase historical traces, exports or backups.
 Project controls and memory actions exist at shared service/CLI boundaries;
-frozen request context and browser controls are still pending this checkpoint.
+frozen request context is now wired; browser controls remain pending this checkpoint.

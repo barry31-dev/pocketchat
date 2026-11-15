@@ -133,6 +133,14 @@ def dispatch(app, path, method, body=None):
     parts = path.strip('/').split('/')
     if len(parts) >= 3 and parts[:2] == ['api', 'conversations']:
         cid = parts[2]
+        if len(parts) == 4 and parts[3] == 'summary':
+            from .office_context import office_summary_view, save_office_summary
+            if method == 'GET':
+                return result(office_summary_view(app.store, cid))
+            if method == 'POST':
+                exact(body, ['project_id', 'revision', 'content', 'refs', 'accept'])
+                with app.guard:
+                    return result(save_office_summary(app.store, cid, **body))
         if len(parts) == 3 and method == 'GET':
             return result(app.store.get(cid))
         if len(parts) == 5 and parts[3] == 'requests' and method == 'GET':

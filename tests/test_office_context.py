@@ -288,3 +288,37 @@ class OfficeMemoryLifecycleTests(unittest.TestCase):
                     office_memory_action(store, 'accept', pid, saved['store_sha256'], memory_id=competing['memory_id'], revision=1, personal_guidance=True)
             finally:
                 store.close()
+
+
+class SummaryOperatorTests(unittest.TestCase):
+    def test_explicit_summary_original_readback_revision_and_branch_refusals(self):
+        import hashlib
+        from pocketchat.office_context import office_summary_view, save_office_summary
+        from pocketchat.office_store import OfficeStore
+        with tempfile.TemporaryDirectory() as tmp:
+            store = OfficeStore(Path(tmp).resolve() / 'project')
+            try:
+                pid = read_project_metadata(store)['project_id']
+                cid = store.create('Long conversation')['id']
+                run = store.begin(cid, 'summary-operator-request', dict(prompt='Decision: small first release', intent='chat', source_ids=[], revision_id=None))
+                store.finish(run['id'], 'completed', 'Keep it small.', None)
+                view = office_summary_view(store, cid)
+                self.assertIsNone(view['summary'])
+                original = view['original_messages'][0]
+                refs = [dict(message_id=original['id'], run_id=run['id'], start=0, end=len(original['content']),
+                             sha256=hashlib.sha256(original['content'].encode()).hexdigest())]
+                saved = save_office_summary(store, cid, pid, revision=0, content='Decision: release the small result.', refs=refs, accept=True)
+                self.assertEqual(saved['summary']['revision'], 1)
+                self.assertEqual(office_summary_view(store, cid)['summary'], saved['summary'])
+                for changes in [dict(revision=0), dict(accept=False), dict(refs=[dict(refs[0], sha256='0' * 64)]),
+                                dict(refs=[dict(refs[0], start=-1)]), dict(content='x' * 12289)]:
+                    values = dict(revision=1, content='Decision: small result.', refs=refs, accept=True)
+                    values.update(changes)
+                    with self.subTest(changes=changes), self.assertRaises(OfficeError):
+                        save_office_summary(store, cid, pid, **values)
+                self.assertEqual(office_summary_view(store, cid)['summary']['revision'], 1)
+                foreign = store.create('Other conversation')['id']
+                with self.assertRaises(OfficeError):
+                    save_office_summary(store, foreign, pid, revision=0, content='Foreign summary', refs=refs, accept=True)
+            finally:
+                store.close()

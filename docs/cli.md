@@ -1024,3 +1024,18 @@ traces, exports and backups are not erased. These actions never call a provider.
 Recall is disabled until explicitly enabled; this checkpoint's recall preview
 does not yet integrate remembered text or project instructions into sent requests.
 Old schemas require explicit verified-backup upgrade for these controls.
+
+
+### Explicit office continuity summary
+
+`office summary show --conversation ID` returns the accepted summary and original
+active-branch messages. `office summary save --conversation ID --project-id ID
+--revision REVISION --text TEXT --refs-json JSON --accept` explicitly saves a
+user-authored summary. References contain `message_id`, `run_id`, `start`, `end`,
+`sha256`; ranges use Unicode code points, digests use selected UTF-8 original text.
+Zero is the initial revision. Missing, foreign, stale or changed text references
+refuse. These operations never call a model or overwrite original messages.
+Schema-5 request previews now expose `prepared_payload` and `context_manifest`;
+project revisions, whole-memory digest, accepted summary and final payload are
+bound to confirmation. Old confirmation refuses after any selected input changes.
+The admitted single-turn Session sends the frozen payload without reselecting.
