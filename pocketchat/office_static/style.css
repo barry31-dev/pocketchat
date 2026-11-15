@@ -14,3 +14,6 @@
 #leave-branch { text-decoration: underline; font-size: inherit; }
 #branch-preview { max-height: 16rem; overflow: auto; padding: .75rem; border: 1px solid var(--line, #dedbd5); border-radius: .5rem; }
 #branch-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: .8rem; }
+
+/* Keep the native, visually hidden file control visible to keyboard users. */
+.file-button:focus-within { outline: 3px solid #91ae9b; outline-offset: 3px; }

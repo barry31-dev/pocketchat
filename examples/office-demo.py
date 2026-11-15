@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -23,6 +24,13 @@ class FixtureProvider(BaseHTTPRequestHandler):
         data = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         self.server.requests.append(data)
         prompt = data['messages'][-1]['content']
+        if self.server.acceptance_root and prompt in ('hold-cli', 'hold-browser'):
+            # Owned acceptance fixture only: allow a deterministic stopping window.
+            gate = self.server.acceptance_root / prompt
+            gate.with_suffix('.started').touch()
+            deadline = time.monotonic() + 15
+            while not gate.with_suffix('.release').exists() and time.monotonic() < deadline:
+                time.sleep(.05)
         if 'Office request' in prompt:
             envelope = json.loads(prompt.split('\n', 1)[1])
             if 'previous_report' in envelope:
@@ -37,23 +45,35 @@ class FixtureProvider(BaseHTTPRequestHandler):
         self.send_header('Content-Type','application/json')
         self.send_header('Content-Length',str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # A stopped fixture request may close its transport.
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--acceptance', action='store_true', help='Seed a long chat and enable owned request gates.')
     args = parser.parse_args()
     root = args.output
     root.mkdir(mode=0o700)  # An existing workspace is never silently reused.
     provider = ThreadingHTTPServer(('127.0.0.1',0),FixtureProvider)
     provider.requests = []
+    provider.acceptance_root = root if args.acceptance else None
     threading.Thread(target=provider.serve_forever,daemon=True).start()
     config_file = root / 'fixture-config.json'
     config_file.write_text(json.dumps(dict(schema_version='2',name='offline-office-fixture',default_profile='fixture',profiles={'fixture':dict(base_url='http://127.0.0.1:%d/v1'%provider.server_port,model='offline-fixture',api_key_env='OFFICE_UNUSED',requires_api_key=False,timeout_seconds=10,max_context_chars=60000)})))
     loaded = load_config(config_file)
     first = profile_config(loaded)
     app = OfficeWorkspace(root/'workspace',first,profiles={'fixture':first,'alternate':dict(first,model='offline-alternate')})
+    if args.acceptance:
+        conversation = app.store.create('Long conversation fixture')
+        for index in range(200):
+            prompt = 'Saved question %03d: %s' % (index, 'Local fixture context. ' * 12)
+            payload = dict(prompt=prompt, intent='chat', source_ids=[], revision_id=None)
+            run = app.store.begin(conversation['id'], 'seed-%03d' % index, payload)
+            app.store.finish(run['id'], 'completed', 'Saved reply %03d: %s' % (index, 'Retained answer. ' * 18), None)
     server = create_server(app)
     print(json.dumps(dict(origin=server.origin,token=server.bootstrap_token,fixture=True)),flush=True)
     try:
