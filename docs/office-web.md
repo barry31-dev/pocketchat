@@ -250,3 +250,12 @@ The [bounded document-reading contract](office-document-reading.md) records the
 next approved P2 preparation, synthetic measurements and exact acceptance scope.
 It does not enable PDF/DOCX import; current TXT/Markdown/CSV admission remains
 unchanged until the versioned shared-service implementation is accepted.
+
+### Inspect an existing text copy
+
+Each material row has a separate View button. A keyboard-closeable dialog shows
+full immutable text, its S label, bytes and complete SHA-256. Enter opens and
+Escape/Close returns. Text is not HTML; viewing does not select it or send a
+request. Conversation switches/newer View discard pending old results. Matching
+CLI: `materials show`; see [the CLI contract](cli.md#read-a-saved-material-copy).
+This does not enable PDF/DOCX reading or turn S labels into verified citations.

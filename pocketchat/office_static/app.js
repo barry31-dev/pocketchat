@@ -3,6 +3,7 @@ const $ = id => document.getElementById(id);
 let csrf = '', current = null, selected = new Set(), report = false, revision = null, activeRun = null, polling = null;
 let conversations = [], lastSubmission = null, displayedModelRevision = null;
 let receiptKey = '', draftPrefix = '', viewKey = '', draftReady = false, opening = false, searchSequence = 0;
+let materialSequence = 0;
 let projectState = null, memoryState = null, summaryState = null, contextReview = null;
 let searchTimer = null, mutation = false, legacyPending = false, branchFrom = null, branchReview = null;
 function editingBlocked() { return Boolean(activeRun || lastSubmission || opening || mutation || legacyPending); }
@@ -39,6 +40,7 @@ function busy(value) {
   $('archive').disabled = value; $('rename').disabled = readOnly;
   for (const button of document.querySelectorAll('[data-branch-run]')) button.disabled = readOnly;
   for (const input of $('sources').querySelectorAll('input')) input.disabled = readOnly;
+  for (const button of $('sources').querySelectorAll('.source-view')) button.disabled = opening;
   const weekly = $('weekly'); if(weekly)weekly.disabled = readOnly;
   for (const button of document.querySelectorAll('[data-prompt]')) button.disabled = readOnly;
 }
@@ -49,6 +51,7 @@ function saveDraft() {
   catch { notice('Draft could not be saved in this browser. Copy it before leaving.'); }
 }
 function restoreDraft() {
+  closeMaterial();
   contextReview=null;summaryState=null;
   if($('summary-originals'))$('summary-originals').replaceChildren();
   if($('summary-content'))$('summary-content').value='';
@@ -142,7 +145,10 @@ function renderConversation(c) {
   for (const s of c.sources) {
     const label = node('label',undefined,'source'), checkbox = document.createElement('input'); checkbox.type='checkbox'; checkbox.checked=selected.has(s.id);
     checkbox.onchange=()=>{if(checkbox.checked)selected.add(s.id);else selected.delete(s.id);changedDraft();};
-    const detail=node('span',s.name); detail.append(node('small',`${s.bytes} bytes · ${s.sha256.slice(0,10)}`)); label.append(checkbox,detail); $('sources').append(label);
+    const detail=node('span',s.name); detail.append(node('small',`${s.bytes} bytes · ${s.sha256.slice(0,10)}`)); label.append(checkbox,detail);
+    const row=node('div',undefined,'source-row'), view=node('button','View','source-view');view.type='button';
+    view.setAttribute('aria-label','View saved material '+s.name);view.onclick=()=>viewMaterial(c.id,s.id);
+    row.append(label,view);$('sources').append(row);
   }
   $('artifacts').replaceChildren();
   if (!c.artifacts.length) $('artifacts').append(node('p','Finished reports appear here. Earlier versions stay yours.','empty-note'));
@@ -160,7 +166,37 @@ async function download(cid,aid,format) {
   if(!response.ok)throw new Error((await response.json()).error);
   const url=URL.createObjectURL(await response.blob()),a=node('a');a.href=url;a.download=`report-${aid.slice(0,8)}.${format}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+function closeMaterial() {
+  materialSequence++;
+  const dialog=$('material-preview');
+  if(dialog?.open)dialog.close();
+  if($('material-text'))$('material-text').textContent='';
+  if($('material-meta'))$('material-meta').textContent='';
+  if($('material-status'))$('material-status').textContent='';
+}
+async function viewMaterial(cid, sid) {
+  if(opening || current?.id!==cid)return;
+  closeMaterial();
+  const sequence=materialSequence;
+  const dialog=$('material-preview');
+  $('material-title').textContent='Saved material';
+  $('material-status').textContent='Loading local copy…';
+  dialog.showModal();
+  try {
+    const source=await api(`/api/conversations/${cid}/sources/${sid}`);
+    if(opening || sequence!==materialSequence || current?.id!==cid || !dialog.open)return;
+    if(source.conversation_id!==cid || source.id!==sid)throw new Error('Material identity mismatch.');
+    $('material-title').textContent=source.name;
+    $('material-meta').textContent=`${source.citation} · ${source.bytes} bytes · SHA-256 ${source.sha256}`;
+    $('material-text').textContent=source.text;
+    $('material-status').textContent='Saved local copy. Viewing does not select it or send a request.';
+  } catch(e) {
+    if(opening || sequence!==materialSequence || current?.id!==cid || !dialog.open)return;
+    $('material-status').textContent='Material could not be read: '+e.message;
+  }
+}
 async function openConversation(cid) {
+  closeMaterial();
   if(opening||mutation||legacyPending)throw new Error('Wait for the current action or resolve the saved receipt before switching.');
   if((activeRun||lastSubmission) && current?.id!==cid)throw new Error('Wait for this request to finish before switching conversations.');
   saveDraft(); opening=true; busy(true);
@@ -382,6 +418,8 @@ $('search').oninput=()=>{++searchSequence;clearTimeout(searchTimer);searchTimer=
 $('weekly').onclick=()=>{if(editingBlocked()||current?.archived)return;setReport(true);$('prompt').value='Create a concise weekly report from the selected material. Include progress, risks and next steps, with source references.';changedDraft();$('prompt').focus();};
 for(const b of document.querySelectorAll('[data-prompt]'))b.onclick=()=>{if(editingBlocked()||current?.archived)return;$('prompt').value=b.dataset.prompt;changedDraft();$('prompt').focus();};
 $('upload').onchange=async()=>{if(editingBlocked()||current?.archived)return;const files=Array.from($('upload').files);changedDraft();mutation=true;busy(true);try{const cid=await ensureConversation();for(const file of files){if(file.size>12*1024)throw new Error('Each source must be at most 12 KiB.');const text=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());const source=await api('/api/conversations/'+cid+'/sources',{name:file.name,text});selected.add(source.id);}changedDraft();renderConversation(await api('/api/conversations/'+cid));}catch(e){notice(e.message);}finally{$('upload').value='';changedDraft();mutation=false;busy(false);}};
+$('close-material').onclick=closeMaterial;
+$('material-preview').addEventListener('cancel',closeMaterial);
 $('close-preview').onclick=()=>$('report-preview').close();
 function showLegacyReceipt() {
   busy(true);notice('An older unbound request record is saved in this tab. Check its receipt before sending anything else. It will not be replayed.');

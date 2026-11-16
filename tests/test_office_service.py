@@ -44,6 +44,31 @@ class SharedOfficeTests(unittest.TestCase):
         self.addCleanup(client.close)
         return client
 
+    def test_material_snapshot_readback_is_owned_immutable_and_no_provider(self):
+        client = self.connect()
+        cid = self.app.store.create('Read sources')['id']
+        sid = self.app.store.add_source(cid, 'notes.md', '原始 <script>not executed</script>')['id']
+        prefix = '/api/conversations/' + cid + '/sources/'
+        old = client.request(prefix + sid)
+        self.assertEqual(old['conversation_id'], cid)
+        self.assertEqual(old['id'], sid)
+        self.assertEqual(old['citation'], 'S1')
+        self.assertEqual(old['text'], '原始 <script>not executed</script>')
+        self.assertEqual(old['bytes'], len(old['text'].encode()))
+        import hashlib
+        self.assertEqual(old['sha256'], hashlib.sha256(old['text'].encode()).hexdigest())
+        self.app.store.add_source(cid, 'notes.md', 'Changed copy')
+        self.assertEqual(client.request(prefix + sid), old)
+        self.app.store.archive(cid, True)
+        self.assertEqual(client.request(prefix + sid), old)
+        foreign = self.app.store.create('Other')['id']
+        for path in ('/api/conversations/' + foreign + '/sources/' + sid,
+                     prefix + 'f'*32, prefix + 'bad'):
+            with self.assertRaises(OfficeError):
+                client.request(path)
+        self.assertEqual(self.adapter.calls, [])
+        self.assertEqual(self.app.store.get(cid)['runs'], [])
+
     def test_shared_conversation_report_old_version_and_backup(self):
         client = self.connect()
         self.assertTrue(client.remote)

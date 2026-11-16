@@ -126,3 +126,11 @@ message/run、Unicode 范围及 UTF-8 摘要。摘要／记忆不是已核验事
 下一步按[受限文档阅读契约](office-document-reading.md)推进；已完成自建样本测量与边界设计，
 尚未实现 Web/CLI PDF/DOCX 导入。现有 TXT/Markdown/CSV 来源输入保持不变；
 生产资源限制、备份迁移及 A07–A09 完整两端路径须在实施切片另行验证。
+
+### 查看已有文本副本
+
+材料旁新增独立 View 按钮，弹窗显示完整不可变文本、会话 S 编号、字节数和
+完整 SHA-256。Enter 打开，Escape/Close 返回，纯文本不执行 HTML。查看不会
+选择材料或发送请求；切换会话或新查看请求丢弃旧异步结果。CLI 对应
+`materials show`，见 [CLI 契约](cli.zh-CN.md#回读已保存的材料副本)。不启用
+PDF/DOCX 阅读，也不把 S 编号当作引用真实性已核验。

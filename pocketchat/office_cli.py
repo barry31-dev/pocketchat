@@ -97,6 +97,9 @@ def add_parser(subparsers):
     add = actions.add_parser('add')
     add.add_argument('--conversation', required=True)
     add.add_argument('--file', type=Path, required=True)
+    show = actions.add_parser('show', help='read an immutable owned material snapshot')
+    show.add_argument('--conversation', required=True)
+    show.add_argument('--source', required=True, help='saved material ID, not a host path')
     for name in ('chat', 'report'):
         command = commands.add_parser(name, help='preview a request, then send with its exact confirmation hash')
         if name == 'report':
@@ -184,6 +187,8 @@ def _operate(args, client):
             return client.request(prefix, {'title': args.title}), 0
         return client.request(prefix + '/rename', {'title': args.title}), 0
     if command == 'materials':
+        if args.action == 'show':
+            return client.request(prefix + '/sources/' + identifier(args.source)), 0
         try:
             text = read_file(args.file, MAX_SOURCE_BYTES).decode('utf-8')
         except UnicodeError as exc:

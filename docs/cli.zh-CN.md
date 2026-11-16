@@ -832,3 +832,12 @@ schema 5 请求预览返回 `prepared_payload` 与 `context_manifest`，确认�
 仍使用 `pocketchat-office-cli.v1` envelope；成功退出 0，拒绝退出 2，JSON 模式 stderr 为空。
 有界 ZIP/XML、内容类型和关系检查拒绝危险或不支持的内容；no-follow 目录描述符不支持时明确拒绝。
 通过不等于抽取成功、格式完整支持或任意文件安全；[范围和限制](office-document-reading.md#8-implemented-docx-package-check-not-p2-extraction)。
+
+### 回读已保存的材料副本
+
+`pocketchat office --data-dir PRIVATE_DIR --json materials show --conversation CID --source SID`
+与网页 View 返回同一份归属明确的快照：`id`、`conversation_id`、`name`、
+会话内 `citation`（S 编号）、完整 `text`、`sha256` 与 UTF-8 `bytes`。SID 不是
+主机路径；删除或改变原文件、重新导入都不替换旧副本，归档副本也可读。未知或
+其他会话来源拒绝且不回传正文；查看不会选择来源、调用模型、创建运行或核验
+模型引用真实性。原鉴权、归属、JSON、退出码约定不变，仅 TXT/MD/CSV 副本回读。
