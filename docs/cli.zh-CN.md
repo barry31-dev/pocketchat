@@ -822,3 +822,13 @@ Old schemas require explicit verified-backup upgrade for these controls.
 码点，摘要按选中原文 UTF-8。首次 revision 0。缺失、跨会话、过期或原文变化都拒绝，不调用模型、不改原消息。
 schema 5 请求预览返回 `prepared_payload` 与 `context_manifest`，确认绑定项目 revision、整体记忆摘要、
 已接受接续摘要与最终 payload。选中输入变化使旧确认失效；准入后单轮 Session 不重新选择上下文。
+
+
+## DOCX 包结构检查（不是文档导入）
+
+`pocketchat office --data-dir PRIVATE_DIR --json documents check --file small.docx`
+只读检查显式选择的本地 DOCX 包，输出原始 SHA-256、字节/成员/展开字节、正文段落/单元格数量及
+`status=package_checked`、`text_extracted=false`。不打开/创建工作区、不读取 provider 配置、不联网、不保存来源。
+仍使用 `pocketchat-office-cli.v1` envelope；成功退出 0，拒绝退出 2，JSON 模式 stderr 为空。
+有界 ZIP/XML、内容类型和关系检查拒绝危险或不支持的内容；no-follow 目录描述符不支持时明确拒绝。
+通过不等于抽取成功、格式完整支持或任意文件安全；[范围和限制](office-document-reading.md#8-implemented-docx-package-check-not-p2-extraction)。

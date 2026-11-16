@@ -1,0 +1,115 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/office_document_admission.py",
+    "pocketchat/office_cli.py",
+    "tests/test_office_document_admission.py",
+    "tests/test_office_cli.py",
+    "docs/office-document-reading.md",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/review-office-document-admission-v1.json",
+    "docs/handovers/2026-11-16-office-document-admission.md",
+    "CHANGELOG.md"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 3,
+  "round_decision": "reconsider",
+  "round_scope": "new-diff-only",
+  "findings": [
+    {
+      "id": "DOCX-DEFLATE-LENGTH",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "zip-ext-file-trusts-declared-length",
+      "reason": "Consistently forged local/central length+CRC accepted oversized suffix and unfinishedstream. Scopedreview2 originalvariants and3newtests actualpassed; reviewer explicitlyclosed."
+    },
+    {
+      "id": "DOCX-ZIP-END",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "zip64-and-eocd-count-tolerance",
+      "reason": "PackageZIP64 and invalidEOCDcounts/disks accepted byzipfile. Scopedreview2 originalvariants and3newtests actualpassed; reviewer explicitlyclosed."
+    },
+    {
+      "id": "DOCX-HYPERLINK",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "hyperlink-element-not-refused",
+      "reason": "Anchor/missingrelationship hyperlink elements passed despiteclosedprofile. Scopedreview2 originalvariants and3newtests actualpassed; reviewer explicitlyclosed."
+    },
+    {
+      "id": "DOCX-XMLNS-LIMIT",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "namespace-not-counted-as-attribute",
+      "reason": "SAXattrs excludes xmlns declarations;65namespaces bypasslimit. Scopedreview2 originalvariants and3newtests actualpassed; reviewer explicitlyclosed."
+    },
+    {
+      "id": "DOCX-LOCAL-NAME",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "raw-local-name-not-compared-to-central",
+      "reason": "Thirdscopedreview actual1test/4matching/12mismatch variants passed; explicitclosed, no newblocker."
+    }
+  ],
+  "open_findings": 0,
+  "approval": "approved-package-check-only",
+  "ready_for_integration": true,
+  "scope": "Read-only bounded DOCX package admission only, not text extraction or P2 completion.",
+  "base": "4f51772c71a61e17c994a1d86c148e8a48f37719",
+  "review_history": [
+    {
+      "reviewer_id": "01a1e28e-c322-7ea0-9c2d-d4bc9ffdda3c",
+      "status": "four-corrections-required",
+      "coverage": "Allscopedworkingdiff/newfiles/callingpaths/contract/logs plus in-memoryZIP/CLI probes onmacOSCPython3.9.6; nofullsuite; foundfourrealpass-leaks."
+    },
+    {
+      "reviewer_id": "01a1e28e-c322-7ea0-9c2d-d4bc9ffdda3c",
+      "phase": "four-finding-correction-review",
+      "status": "original-four-closed-new-regression",
+      "coverage": "Readonly originalfourprobes+3newtestsgreen; newlocalheadername mismatchfound afterrawdecompress pathremovedZipFile.open."
+    },
+    {
+      "reviewer_id": "01a1e28e-c322-7ea0-9c2d-d4bc9ffdda3c",
+      "phase": "local-name-correction",
+      "status": "approved-new-diff-only",
+      "coverage": "Localencodednamecheck/newtest/readredlog; actual1test +4matchedZIPencoding/compressionpositives +12traversal/case/NULnegativeprobes; nofilesedited/otherchecksrepeated."
+    }
+  ],
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest tests.test_office_document_admission -v; python3 -m unittest tests.test_office_cli -v; ruff check --select E9,F scoped Python files",
+      "result": "15 package tests and29 officeCLI tests passed; CPython3.9.6/macOS27arm64. Original missingmodule/CLI red and corruptdeflate exception red recorded; finalcorruptdeflate namedrefusal. CJKgenerated XML metadata only; ordinary17part DOCX/256bodyparagraph source accepted forpackagecheck, external/ratio packagesrefused. No fullsuite yet; no repeated unchangedchecks. Final four CLI newcases rerun once after named-capability assertion changed; exit0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest tests.test_acceptance_contracts -v; python3 -m unittest tests.test_doctor.DoctorTests.test_docs_name_the_doctor_json_envelope_fields -v",
+      "result": "5 existing public contract/bilingual documentation guards passed on CPython3.9.6/macOS27arm64. No new mirror test. One existing CLI doc guard also passed; exit0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest three review finding repros; python3 -m unittest tests.test_office_document_admission -v; ruff E9,F",
+      "result": "Three reprotestclasses redRC1 beforefix; corrected18admissioncases greenRC0, CPython3.9.6/macOS27. Covers consistentlyforgedlocalcentral declaration andunfinishedDEFLATE, EOCDdisk/count/packageZIP64, hyperlinkelements/XMLnamespace limits. Rerun justified bysecurityimplementationfix."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest local-header-name repro; python3 -m unittest tests.test_office_document_admission -v; ruff E9,F",
+      "result": "Localheadername mismatchredRC1 beforefix\u219219admissiongreenRC0 afterencodedlocalcentralname comparison; CPython3.9.6/macOS27. Rerun necessary due newsecurityfix. FourCLInewcases rerun after implementationnamefix;greenRC0."
+    }
+  ],
+  "unverified_scope": "ArbitraryPDF/DOCX parserenablement, hardwall/memory/network isolation, textfidelity/layout, Web/sourceacceptance/storeupgrade/backup, modelquality/fullP2/formalrelease; Windowsfunctionality not locallyrun.",
+  "security_review_depth": "deep",
+  "tier_note": "Mechanical path/category classifier returns medium/standard; this security boundary additionally receives deep independent review and explicit rollback/process evidence.",
+  "rounds_note": "At thirdround reconsider/new-diff-only: selected raw-stream validation remains bounded; only newlocalnamecorrection reviewed, originalfourclosed not rerun/fullreview. No unresolved blocker."
+}
