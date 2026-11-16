@@ -22,6 +22,10 @@ def add_parser(subparsers):
     office.add_argument('--config', type=Path, help='provider configuration for an offline writer')
     office.add_argument('--profile', help='existing provider profile for an offline writer')
     commands = office.add_subparsers(dest='office_command', required=True)
+    documents = commands.add_parser('documents', help='check a local DOCX package without extraction or saving')
+    document_actions = documents.add_subparsers(dest='action', required=True)
+    check = document_actions.add_parser('check', help='bounded data-only DOCX package check; not text extraction')
+    check.add_argument('--file', type=Path, required=True, help='explicit local DOCX file')
     commands.add_parser('interactive', help='private draft REPL; sending requires the exact preview hash')
     models = commands.add_parser('models', help='list configured model profiles without calling a provider')
     models.add_argument('--select', help='select an existing configured profile')
@@ -526,7 +530,10 @@ def run_office(args):
     try:
         if args.office_command == 'interactive' and args.as_json:
             raise OfficeError('--json is not available for interactive office sessions.')
-        if args.office_command == 'restore':
+        if args.office_command == 'documents':
+            from .office_document_admission import MAX_RAW_BYTES, check_docx_package
+            result, code = check_docx_package(read_file(args.file, maximum=MAX_RAW_BYTES)), 0
+        elif args.office_command == 'restore':
             result, code = restore(read_file(args.source), args.data_dir), 0
         else:
             if (not args.data_dir.is_dir() and args.office_command != 'interactive' and

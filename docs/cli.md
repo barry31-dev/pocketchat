@@ -1040,3 +1040,17 @@ Schema-5 request previews now expose `prepared_payload` and `context_manifest`;
 project revisions, whole-memory digest, accepted summary and final payload are
 bound to confirmation. Old confirmation refuses after any selected input changes.
 The admitted single-turn Session sends the frozen payload without reselecting.
+
+
+## DOCX package check (not source import)
+
+`pocketchat office --data-dir PRIVATE_DIR --json documents check --file small.docx`
+checks the explicitly selected local DOCX package and returns raw SHA-256, bytes,
+members/expanded bytes, body-paragraph/table-cell counts, `status=package_checked`
+and `text_extracted=false`. It never opens/creates a workspace, reads provider
+configuration, calls a provider or saves a source. JSON retains the
+`pocketchat-office-cli.v1` envelope: exit 0 success / 2 refusal, empty stderr.
+Bounded ZIP/XML, content-type and relationship checks refuse unsafe/unsupported
+content; missing no-follow directory-descriptor support is a named refusal.
+Success is not text extraction, complete DOCX support or arbitrary-file safety.
+See [the closed profile and limits](office-document-reading.md#8-implemented-docx-package-check-not-p2-extraction).

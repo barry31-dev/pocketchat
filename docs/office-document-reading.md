@@ -2,7 +2,9 @@
 
 2026-11-16 · Approved preparation within the existing P2 direction. This page
 is the product-owned implementation contract, not a claim that PDF/DOCX import
-exists. Current source admission still accepts TXT/Markdown/CSV only. P1 and
+exists. Current source admission still accepts TXT/Markdown/CSV only. The additive
+`office documents check --file` command checks a bounded DOCX package but does
+not extract text, accept a source or open an office workspace. P1 and
 project foundations are integrated; reuse their workspace, owner guard, prepared
 context, consent, request receipt and historical versions.
 
@@ -217,3 +219,42 @@ actual Web/CLI ingestion, production backup migration, Python 3.9/3.13 parser
 compatibility, Windows parsing, model citations/quality, formal release or full P2.
 Before runtime enablement, add representative dense/CJK and adversarial cases;
 a guard unsupported on the actual platform remains a named capability refusal.
+
+
+## 8. Implemented DOCX package check (not P2 extraction)
+
+`pocketchat office --data-dir PRIVATE_DIR --json documents check --file small.docx`
+returns raw SHA-256/bytes, member/expanded-byte counts, body-paragraph/table-cell
+counts, `status=package_checked` and `text_extracted=false`. It ignores provider
+configuration and does not open/create the data directory, save sources, call a
+provider or produce a file. No extracted text, path or XML/ZIP exception content
+is included in the result/refusal. Missing no-follow directory-descriptor I/O
+returns a capability refusal, including on unsupported Windows installations.
+
+Before XML inspection it checks the 4 MiB raw / 512-member / 2 MiB member /
+8 MiB total / 100:1 declarations, names, regular entries, CRC/size/header agreement
+and supported stored/deflated compression. Duplicate/traversal/linked/encrypted
+entries, data descriptors, ZIP64 and unknown parts are refused. Raw DEFLATE streams
+are independently expanded with bounded output, actual length/CRC, end-of-stream
+and trailing-data checks (not the ZIP library's declaration-truncated reader).
+End records, disk/count fields and central-directory bounds are checked, with no
+extraction to disk.
+
+The initial closed profile contains the main document, styles/settings/font
+and numbering XML, themes, package/document relationships, core/app metadata,
+data-only custom XML/properties and an opaque JPEG thumbnail. Unknown or active
+parts, macros, embeddings, hyperlinks/external relationships, missing targets,
+incompatible content types and active/field/drawing document elements are refused.
+This is deliberately narrower than all valid DOCX files; refusal is not evidence
+that a file is malicious. Nested tables count every cell; only direct body
+paragraphs contribute to the 256 limit (not a pagination estimate).
+
+All XML is read using namespace-aware SAX, DTD/entity declarations rejected even
+for UTF-16, external entity resolution disabled, with 64-level/100,000-node and
+64-attribute limits (namespace declarations included). A cooperative 10-second check is **not** a hard wall-time or
+256 MiB platform resource guard. The bounded inventory/SAX step is not an isolated
+optional document parser or a sandbox. Arbitrary PDF/DOCX extraction therefore
+remains disabled pending actual platform resource/network/termination evidence.
+No claim is made about extraction fidelity, CJK layout, completeness or model
+citations. A successful check cannot be reused as source acceptance or parser
+permission; future extraction must validate the exact bytes again.

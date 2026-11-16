@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — DOCX package check
+
+- Add read-only bounded DOCX package checks to the office CLI, with explicit
+  ZIP/XML/relationship refusals and content-free metadata. This does not enable
+  text extraction, source import or complete P2 document reading.
+
 ## Unreleased — explicit office project context
 
 - Share revisioned project instructions and default-off accepted guidance across

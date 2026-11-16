@@ -564,3 +564,89 @@ class OfficeCLITests(unittest.TestCase):
         self.assertEqual(saved['result']['summary']['revision'], 1)
         self.assertEqual(self.cli('summary', 'save', '--conversation', self.cid, '--project-id', project['result']['project_id'],
                               '--revision', '0', '--text', 'Stale', '--refs-json', json.dumps(refs), '--accept')[0], 2)
+
+
+class DocumentPackageCLITests(unittest.TestCase):
+    """The check is local and never opens the requested office workspace."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name).resolve()
+        self.workspace = self.base / 'absent-workspace'
+        self.file = self.base / 'ordinary.docx'
+        from tests.test_office_document_admission import package
+        self.file.write_bytes(package())
+
+    def test_process_package_check_never_opens_workspace_or_config(self):
+        command = [sys.executable, '-m', 'pocketchat', 'office', '--data-dir',
+                   str(self.workspace), '--json', '--config', str(self.base / 'missing-secret-config'),
+                   'documents', 'check', '--file', str(self.file)]
+        p = subprocess.run(command, cwd=self.base, capture_output=True, text=True,
+                           env=subprocess_environment({'PYTHONPATH': str(ROOT)}), timeout=10)
+        self.assertEqual(p.stderr, '')
+        data = json.loads(p.stdout)
+        self.assertEqual(data['schema_version'], 'pocketchat-office-cli.v1')
+        if SECURE_IO:
+            self.assertEqual(p.returncode, 0, data)
+            self.assertFalse(data['result']['text_extracted'])
+            self.assertEqual(data['result']['status'], 'package_checked')
+        else:
+            self.assertEqual(p.returncode, 2)
+            self.assertFalse(data['ok'])
+        self.assertFalse(self.workspace.exists())
+        self.assertNotIn('Hello', p.stdout)
+        self.assertNotIn(str(self.base), p.stdout)
+
+    def test_malformed_refuses_without_opening_store_or_provider(self):
+        from unittest.mock import patch
+        from tests._helpers import run_cli
+        self.file.write_bytes(b'PK\x03\x04PRIVATE-CONTENT')
+        with patch('pocketchat.office_cli.OfficeConnection', side_effect=AssertionError('store opened')), \
+             patch('pocketchat.office_cli.load_config', side_effect=AssertionError('config read')):
+            result = run_cli(['office', '--data-dir', str(self.workspace), '--json',
+                          'documents', 'check', '--file', str(self.file)], cwd=self.base)
+        self.assertEqual(result.returncode, 2)
+        # Process stdout/stderr is checked below. In-process capture can receive
+        # delayed ResourceWarnings from unrelated earlier suite fixtures.
+        data = json.loads(result.stdout)
+        self.assertFalse(data['ok'])
+        self.assertNotIn('PRIVATE-CONTENT', result.stdout)
+        self.assertNotIn(str(self.base), result.stdout)
+        self.assertFalse(self.workspace.exists())
+
+    def test_unsupported_descriptor_io_is_named_refusal_no_source_read(self):
+        from unittest.mock import patch
+        from tests._helpers import run_cli
+        with patch('os.supports_dir_fd', set()), \
+             patch('pocketchat.office_cli.OfficeConnection', side_effect=AssertionError('store opened')):
+            result = run_cli(['office', '--data-dir', str(self.workspace), '--json',
+                          'documents', 'check', '--file', str(self.file)], cwd=self.base)
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(json.loads(result.stdout)['ok'])
+        self.assertIn('no-follow directory-descriptor', json.loads(result.stdout)['error'])
+        self.assertFalse(self.workspace.exists())
+
+    @unittest.skipUnless(SECURE_IO, 'requires no-follow descriptor I/O')
+    def test_symlink_refused_without_reading_target(self):
+        from tests._helpers import run_cli
+        link = self.base / 'link.docx'; link.symlink_to(self.file)
+        result = run_cli(['office', '--data-dir', str(self.workspace), '--json',
+                      'documents', 'check', '--file', str(link)], cwd=self.base)
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(json.loads(result.stdout)['ok'])
+        self.assertFalse(self.workspace.exists())
+
+    def test_malformed_process_result_is_content_free_and_stderr_empty(self):
+        self.file.write_bytes(b'PK\x03\x04PRIVATE-CONTENT')
+        command = [sys.executable, '-m', 'pocketchat', 'office', '--data-dir',
+                   str(self.workspace), '--json', 'documents', 'check', '--file', str(self.file)]
+        result = subprocess.run(command, cwd=self.base, capture_output=True, text=True,
+                                env=subprocess_environment({'PYTHONPATH': str(ROOT)}), timeout=10)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stderr, '')
+        data = json.loads(result.stdout)
+        self.assertEqual(data['schema_version'], 'pocketchat-office-cli.v1')
+        self.assertFalse(data['ok'])
+        self.assertNotIn('PRIVATE-CONTENT', result.stdout)
+        self.assertNotIn(str(self.base), result.stdout)
+        self.assertFalse(self.workspace.exists())
