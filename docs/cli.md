@@ -1054,3 +1054,14 @@ Bounded ZIP/XML, content-type and relationship checks refuse unsafe/unsupported
 content; missing no-follow directory-descriptor support is a named refusal.
 Success is not text extraction, complete DOCX support or arbitrary-file safety.
 See [the closed profile and limits](office-document-reading.md#8-implemented-docx-package-check-not-p2-extraction).
+
+### Read a saved material copy
+
+`pocketchat office --data-dir PRIVATE_DIR --json materials show --conversation CID --source SID`
+returns the same owned snapshot as Web View: `id`, `conversation_id`, `name`,
+`citation` (conversation-local S label), full `text`, `sha256` and UTF-8 `bytes`.
+SID is not a host path. Deleting/changing the original file or importing a new
+copy does not replace the old snapshot. Archived copies remain readable. Unknown
+or foreign-conversation IDs refuse without source text. Viewing does not select
+a source, call a provider, create a run or verify model citation truth. Original
+auth/owner and JSON/exit boundaries remain. TXT/MD/CSV only, not PDF/DOCX reading.

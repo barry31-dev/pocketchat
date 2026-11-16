@@ -73,6 +73,21 @@ class OfficeCLITests(unittest.TestCase):
         self.assertNotIn(str(self.base), json.dumps(data))
         self.assertFalse(dest.exists())
 
+    def test_materials_show_process_uses_saved_copy_not_original_path(self):
+        with self.open_store() as store:
+            source = store.get(self.cid)['sources'][0]
+        code, data = self.cli('materials', 'show', '--conversation', self.cid,
+                              '--source', source['id'])
+        self.assertEqual(code, 0, data)
+        self.assertEqual(data['result']['text'], 'Three decisions')
+        self.assertEqual(data['result']['sha256'], source['sha256'])
+        self.assertEqual(data['result']['citation'], 'S1')
+        code, rejected = self.cli('materials', 'show', '--conversation', self.cid,
+                                  '--source', 'f'*32)
+        self.assertEqual(code, 2, rejected)
+        self.assertFalse(rejected['ok'])
+        self.assertNotIn('Three decisions', json.dumps(rejected))
+
     def test_offline_backup_does_not_steal_an_active_writer(self):
         with self.open_store():
             code, data = self.cli('backup', '--out', str(self.base / 'out.json'))

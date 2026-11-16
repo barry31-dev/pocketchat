@@ -59,6 +59,22 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(self.request('GET', '/api/conversations', extra={'Host':'evil.invalid'})[0], 403)
         self.assertEqual(self.request('GET', '/api/conversations', extra={'Origin':'https://evil.invalid'})[0], 403)
 
+    def test_material_snapshot_get_retains_browser_auth_origin_and_ownership(self):
+        cid = self.app.store.create('Read')['id']
+        sid = self.app.store.add_source(cid, 'a.md', 'Private snapshot')['id']
+        path = '/api/conversations/' + cid + '/sources/' + sid
+        self.assertEqual(self.request('GET', path)[0], 401)
+        self.login()
+        self.assertEqual(self.request('GET', path, extra={'Origin':'https://evil.invalid'})[0], 403)
+        status, _, raw = self.request('GET', path)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(raw)['text'], 'Private snapshot')
+        foreign = self.app.store.create('Foreign')['id']
+        status, _, raw = self.request('GET', '/api/conversations/' + foreign + '/sources/' + sid)
+        self.assertEqual(status, 404)
+        self.assertNotIn(b'Private snapshot', raw)
+        self.assertEqual(self.app.config['provider_adapter'].calls, [])
+
     def test_real_http_conversation_turn_and_reopen(self):
         self.login()
         status, _, raw = self.request('POST', '/api/conversations', {'title':'First'})

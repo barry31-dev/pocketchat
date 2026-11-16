@@ -40,3 +40,11 @@
   .topbar > div { flex: 0 0 100%; }
   #model-choice { flex: 1; max-width: 100%; min-width: 0; }
 }
+
+.source-row { display: flex; align-items: center; gap: 8px; }
+.source-row .source { flex: 1; min-width: 0; }
+.source-view { flex: 0 0 auto; min-height: 44px; }
+#material-preview { width: min(700px, calc(100vw - 32px)); box-sizing: border-box; }
+#material-meta, #material-text { overflow-wrap: anywhere; word-break: break-word; }
+#material-text { white-space: pre-wrap; max-height: 55vh; overflow: auto; padding: 12px; background: #f4f5f1; border-radius: 8px; }
+#material-preview :focus-visible, .source-view:focus-visible { outline: 3px solid #91ae9b; outline-offset: 2px; }

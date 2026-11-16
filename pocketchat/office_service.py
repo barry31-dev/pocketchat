@@ -143,6 +143,14 @@ def dispatch(app, path, method, body=None):
                     return result(save_office_summary(app.store, cid, **body))
         if len(parts) == 3 and method == 'GET':
             return result(app.store.get(cid))
+        if len(parts) == 5 and parts[3] == 'sources' and method == 'GET':
+            # Return the immutable owned copy, never reopen a caller host path.
+            with app.store.lock:
+                source = app.store.source(cid, parts[4])
+                return result(dict(id=source['id'], conversation_id=cid, name=source['name'],
+                                   citation=app.store.citation(cid, source['id']),
+                                   text=source['text'], sha256=source['sha256'],
+                                   bytes=len(source['text'].encode('utf-8'))))
         if len(parts) == 5 and parts[3] == 'requests' and method == 'GET':
             with app.guard, app.store.lock:
                 app.store._row('conversations', cid)

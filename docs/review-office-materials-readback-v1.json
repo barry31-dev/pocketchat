@@ -1,0 +1,113 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "pocketchat/office_service.py",
+    "pocketchat/office_cli.py",
+    "pocketchat/office_static/app.js",
+    "pocketchat/office_static/index.html",
+    "pocketchat/office_static/style.css",
+    "tests/test_office_service.py",
+    "tests/test_office_cli.py",
+    "tests/test_office_web.py",
+    "tests/office_materials_browser.cjs",
+    "tests/test_office_materials_browser.py",
+    "docs/cli.md",
+    "docs/cli.zh-CN.md",
+    "docs/office-web.md",
+    "docs/office-web.zh-CN.md",
+    "docs/review-office-materials-readback-v1.json",
+    "docs/handovers/2026-11-16-office-materials-readback.md",
+    "CHANGELOG.md",
+    "tests/office_p1_browser.cjs"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "MATERIAL-VIEW-SWITCH",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "opening-window-old-view-click",
+      "reason": "Opening early-return plus response checks; realhandler4thcase red expected0 got1 then green; targetedclosurepending. Independent targetedreviewclosed: actualminimum handlerprobe0calls/nooldresponse and Elementeventregistrationinvoked."
+    },
+    {
+      "id": "MATERIAL-LEGACY-EVENT",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "legacy-vm-no-event-listener-registration",
+      "reason": "Originalscope atomically extended to fixture; Element registers/dispatchesevents;18existingracesgreen, targetedclosurepending. Independent targetedreviewclosed: actualminimum handlerprobe0calls/nooldresponse and Elementeventregistrationinvoked."
+    }
+  ],
+  "approval": "approved-immutable-text-readback-only",
+  "ready_for_integration": true,
+  "base": "fdf823f6227ad000f3aae584a1db5fa0f94029eb",
+  "scope": "Deliver shared immutable text-material readback: Web View and office materials show return the same owned CID/SID/name/Slabel/fulltext/hash/bytes with no provider call or original file reopen. Preserve old source after changed import.",
+  "slice_contract": {
+    "goal": "Deliver shared immutable text-material readback: Web View and office materials show return the same owned CID/SID/name/Slabel/fulltext/hash/bytes with no provider call or original file reopen. Preserve old source after changed import.",
+    "not_doing": "No PDF/DOCXextraction/OCR/parserguard/sourcebackupupgrade, automatic citation truthchecking, paid provider quality, fullP2orformalRelease.",
+    "done_when": "Expected-red sharedGET and actualCLI tests; realbrowser/nativeCLI same snapshot old/new import/archivedread; unknown/foreignconversationIDs, noauth/wrongOrigin refuse contentfree; stale UI async response never exposes prior conversation snapshot. Browser keyboard close/mobile nooverflow/text notHTML, noprovidercall. Narrow existing docguards/review/exact7CI/mainreadback.",
+    "evidence": "Review/handover and original run-retained transcripts/screenshots.",
+    "budget_stop": "One timeboxed slice; stale/foreign reads refuse.",
+    "rollback_next": "Revert additive readback only; original source history unchanged. Supported P2 parser guard next."
+  },
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest new shared-service, CLI-process and HTTP tests -v",
+      "result": "3 cases expectedred404/noCLIshow RC1 before implementation then greenRC0. Same CJK/HTMLliteral/old-new/archived snapshot, foreign/authOrigin refusal, no provider/run."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "NodeVM viewer race test; node tests/office_materials_browser.cjs owned real browser fixture",
+      "result": "1test/3races green after harnessmissing$ correction (not product defect); realChrome/Node22.23.4/macOS27/Python3.13.9 RC0 sameCLIWebfulltext/hash/deletedoriginal/reimport oldretained/EnterEscape/literalHTMLinert/noautosource/mobile390nooverflow/0pageerror/0providerrequests."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest tests.test_office_service tests.test_office_cli tests.test_office_web tests.test_office_materials_browser -v; Ruff E9,F",
+      "result": "55 affected tests RC0 on macOS27/CPython3.9.6 after additive readback; no fullsuite. Node VM test only3races; actual browser journey separately recorded."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.13.9 new service/CLI/HTTP/race tests; python3 -m unittest tests.test_release_process_docs -v",
+      "result": "4 focused tests RC0 on same macOS27/Python3.13.9;16existing documentguards RC0. Screenshot mobile390 visually inspected: fullwrapped digest and literalHTMLplain text, nooffscreen dialog."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest tests.test_office_materials_browser -v; OFFICE_RACE_ONLY=1 node tests/office_p1_browser.cjs",
+      "result": "Opening-window expectedredcorrected RC1 before runtimefix then1test4racesgreenRC0; original18VMracesgreenRC0 after fixtureeventregistration. Doesnotconstitute realbrowserretest."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Focused real Chrome/nativeCLI materials journey after opening guard UI change; Ruff E9,F; git diff --check",
+      "result": "Necessaryrerun newUI changed since firstbrowser: RC0 sameimmutabletext/hash, oldcopy/keyboard/mobile/literalHTML/noselection/0pageerrors/0providerrequests; no fullP1repeat."
+    }
+  ],
+  "unverified_scope": "No PDF/DOCXextraction/OCR/parserguard/sourcebackupupgrade, automatic citation truthchecking, paid provider quality, fullP2orformalRelease.",
+  "review_history": [
+    {
+      "reviewer_id": "01a1e36d-5b7b-70d0-9bb7-0a2ae0b0f55e",
+      "phase": "initial",
+      "status": "two-changes-requested",
+      "coverage": "Full17paths inclHTML/CSS/document/newtests; actualswitchwindowprobe showed OLD PRIVATE and legacy18races initializationfail. Noauthor55/fullbrowser repeated."
+    },
+    {
+      "reviewer_id": "01a1e36d-5b7b-70d0-9bb7-0a2ae0b0f55e",
+      "phase": "targeted-correction",
+      "status": "approved-18paths-both-findings-closed",
+      "coverage": "Firstfull17pathscope+new18fixture eventregistration; minimumrealhandler openingclick0requests/successanderrorlatecontentnotshown, eventlistenerinvoked; nofullsuite or authorbrowserrepeat."
+    }
+  ]
+}

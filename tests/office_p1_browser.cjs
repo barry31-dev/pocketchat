@@ -43,6 +43,8 @@ async function raceAcceptance() {
   prepend(...children) {for (const c of children) if (typeof c !== 'string') c.parent = this; this.children.unshift(...children);}
   replaceChildren(...children) {this._text = ''; this.children = []; this.append(...children);}
   setAttribute(key, value) {this.attributes[key] = value;}
+  addEventListener(name, listener) {this.listeners ??= {}; (this.listeners[name] ??= []).push(listener);}
+  dispatchEvent(event) {for (const listener of this.listeners?.[event.type] || []) listener(event);}
   focus() {} scrollIntoView() {} close() {} showModal() {}
   remove() {if (this.parent) this.parent.children = this.parent.children.filter(c => c !== this);}
   querySelectorAll(selector) {

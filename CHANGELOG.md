@@ -1,5 +1,12 @@
 # Changelog
 
+## Text material readback
+
+- Added matching Web View and office CLI materials show for owned immutable
+  TXT/Markdown/CSV copies with full text/hash/S labels and no model call.
+- Reject foreign reads and discard stale browser viewer responses.
+
+
 ## Unreleased — DOCX package check
 
 - Add read-only bounded DOCX package checks to the office CLI, with explicit
