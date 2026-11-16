@@ -1,0 +1,67 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "scripts/office_document_guard_probe.py",
+    "tests/test_office_document_guard_probe.py",
+    "docs/office-document-reading.md",
+    "docs/review-office-document-guard-probe-v1.json",
+    "docs/handovers/2026-11-16-office-document-guard-probe.md"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "GUARD-READER-START",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "reader-init-outside-ownedchild-cleanup",
+      "reason": "Scopedreview actual1test+8constructor/startRuntimeErrorMemoryErrorvariants all capture_failed, childreaped/pipesclosed/noreadersalive."
+    }
+  ],
+  "approval": "approved-trusted-diagnostic-only",
+  "ready_for_integration": true,
+  "base": "7beedbcb0f16b318466b4915d42a83c86ac4f8c5",
+  "scope": "Trustedguard diagnostic only, notparserpermission",
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest tests.test_office_document_guard_probe -v; python3 -I scripts/office_document_guard_probe.py; Ruff E9,F",
+      "result": "Missingmodule redRC1\u21924focusedgreenRC0; noargumentdiagnosticactualmacOS27CPython3.9.6: threeunguardedbindsallowed vs OSdenybindings, memoryinstallunsupported, sleepkilled/reaped, output1024bytebudget refusal. Notfullnetworkorallocationproof."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.13.9 -m unittest tests.test_office_document_guard_probe -v; noargument CLI with unexpected argument",
+      "result": "Same4focusedtests green onmacOS27Python3.13.9; unexpectedargument refusedRC2 no stdout. Separateinterpreter compatibility check, notarbitraryparserproof."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest readerstartfailure; python3 -m unittest tests.test_office_document_guard_probe -v; Ruff E9,F",
+      "result": "FirststartfailureredRC1 beforefix\u2192first/secondstartassert childreaped+closedpipes;5testgreenCPython3.9.6/macOS27, no arbitraryparserenablement. Samecorrected5testsgreen onmacOSCPython3.13.9; interpreter checkdistinct."
+    }
+  ],
+  "unverified_scope": "Arbitraryparser/resourceenforcement, otherOSpositiveguards, descendantscleanup, optionalparser/ingestion, fullP2/release",
+  "review_history": [
+    {
+      "reviewer_id": "01a1e28e-c322-7ea0-9c2d-d4bc9ffdda3c",
+      "phase": "initial",
+      "status": "reader-cleanup-changes-requested",
+      "coverage": "5scopedfiles/actualreports; actualfirstthreadstartfailure alivechildrepro, cleanedbyreviewer; simulatedLinuxWindowsunsupported notactualOS."
+    },
+    {
+      "reviewer_id": "01a1e28e-c322-7ea0-9c2d-d4bc9ffdda3c",
+      "phase": "reader-start-correction",
+      "status": "approved-cleanup-new-diff",
+      "coverage": "Onlycleanup/testdiff;actual1test/8variants, noedit orfullcheckrepeat; docs/metadataselfreview separate."
+    }
+  ]
+}
