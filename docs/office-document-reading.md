@@ -258,3 +258,29 @@ remains disabled pending actual platform resource/network/termination evidence.
 No claim is made about extraction fidelity, CJK layout, completeness or model
 citations. A successful check cannot be reused as source acceptance or parser
 permission; future extraction must validate the exact bytes again.
+
+
+## 9. Trusted worker guard diagnostic (not parser enablement)
+
+Run `python -I scripts/office_document_guard_probe.py` with no arguments. It
+executes only fixed trusted child snippets, never user code or document bytes,
+and prints one `pocketchat-document-guard-probe.v1` JSON object. Exit 0 means the
+diagnostic completed, **not** that a parser is safe or ready. `parser_ready` is
+always false until separately evidenced enforcement and parser isolation exist.
+The script performs no installation, configuration, workspace or file writes.
+
+On macOS it compares unguarded versus `sandbox-exec` deny-network loopback binds
+for IPv4 TCP, IPv4 UDP and IPv6 TCP. These three denied operations are not proof
+of all networking or arbitrary parser confinement. Linux/Windows return an
+explicit unavailable OS-network-guard outcome rather than monkeypatch fallback.
+It attempts a 256 MiB address-space-limit installation without allocating large
+memory; even a successful readback does not prove enforcement. Timeout and
+output cases verify owned-child kill/reap and bounded retained stdout/stderr,
+not arbitrary child descendants or document parsing performance.
+
+Measured macOS 27 arm64 / CPython 3.9.6: all three ordinary loopback bindings
+succeeded and guarded bindings were denied; memory installation returned
+`address_space_limit_install_failed`; a fixed sleep timed out and was killed/
+reaped; fixed output was refused with 1,024 retained bytes. Therefore memory
+and arbitrary-parser isolation remain named blockers. No PDF/DOCX extraction
+is enabled by this diagnostic. Other Python/OS behavior is distinct evidence.
