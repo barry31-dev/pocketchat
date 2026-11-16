@@ -63,3 +63,19 @@ Third review is limited to this new diff, not a repeat of the original four.
 Third narrow review explicitly closed the name mismatch with 1 test, 4 matching
 and 12 mismatch probes. All five findings closed; package-check-only code review
 ready for integration gates. Exact candidate CI and remote main are still pending.
+
+
+Exact first-candidate CI exposed a test-layer issue on Ubuntu/Python 3.13.18:
+1904 cases, one failure, two skipped. Delayed ResourceWarnings from unrelated
+prior fixtures entered the in-process stderr capture. The malformed refusal
+still returned its structured error. Move the empty-stderr assertion into a
+real malformed-input subprocess test, preserving all in-process config/store
+and no-write assertions. Five new CLI cases passed; an injected ResourceWarning
+also leaves the in-process behavior check passing. Production code unchanged.
+New-diff-only test correction review requested; prior security findings remain
+closed. Exact final-head CI must pass before integration.
+
+CI test-layer narrow reviewer approved: injected warning reproduced capture, two
+assertion paths passed; an injected false exit still failed. Documentation and
+review metadata were author-checked separately, not part of that independent
+test review. Final exact-head CI remains pending.

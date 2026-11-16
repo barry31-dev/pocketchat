@@ -59,7 +59,7 @@
     }
   ],
   "open_findings": 0,
-  "approval": "approved-package-check-only",
+  "approval": "approved-package-check-and-ci-test-layer-only",
   "ready_for_integration": true,
   "scope": "Read-only bounded DOCX package admission only, not text extraction or P2 completion.",
   "base": "4f51772c71a61e17c994a1d86c148e8a48f37719",
@@ -106,10 +106,25 @@
       "status": "verified",
       "command": "python3 -m unittest local-header-name repro; python3 -m unittest tests.test_office_document_admission -v; ruff E9,F",
       "result": "Localheadername mismatchredRC1 beforefix\u219219admissiongreenRC0 afterencodedlocalcentralname comparison; CPython3.9.6/macOS27. Rerun necessary due newsecurityfix. FourCLInewcases rerun after implementationnamefix;greenRC0."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Exactfirsthead GitHubCI job133092175185; python3 -m unittest tests.test_office_cli.DocumentPackageCLITests -v; injectedResourceWarning probe; Ruff E9,F",
+      "result": "FirstheadUbuntuPython3.13.18 1904tests1failure2skip: inprocessstderr captured unrelatedResourceWarnings. Move stderr assertion to realmalformed subprocess while preserving no-effect assertions; fiveCLIcasesgreenCPython3.9.6/macOS27 and injectedwarningtestgreen. Productioncodeunchanged; finalCIpending."
     }
   ],
   "unverified_scope": "ArbitraryPDF/DOCX parserenablement, hardwall/memory/network isolation, textfidelity/layout, Web/sourceacceptance/storeupgrade/backup, modelquality/fullP2/formalrelease; Windowsfunctionality not locallyrun.",
   "security_review_depth": "deep",
   "tier_note": "Mechanical path/category classifier returns medium/standard; this security boundary additionally receives deep independent review and explicit rollback/process evidence.",
-  "rounds_note": "At thirdround reconsider/new-diff-only: selected raw-stream validation remains bounded; only newlocalnamecorrection reviewed, originalfourclosed not rerun/fullreview. No unresolved blocker."
+  "rounds_note": "At thirdround reconsider/new-diff-only: selected raw-stream validation remains bounded; only newlocalnamecorrection reviewed, originalfourclosed not rerun/fullreview. No unresolved blocker.",
+  "new_diff_reviews": [
+    {
+      "reviewer_id": "01a1e28e-c322-7ea0-9c2d-d4bc9ffdda3c",
+      "base": "800b95bb5dc52a2ce2b434364aa8090990c140e6",
+      "scope": "OnlyCItestlayercorrection; nooriginalsecurityimplementationchange",
+      "status": "approved-test-diff-only",
+      "coverage": "RawCIlog confirmed one ResourceWarningstderrfailure; actualinjectedwarning+2testsgreen; falseexit0 stillfails. No productionchange/fullreview; docs/reviewmetadata selfreview only."
+    }
+  ]
 }

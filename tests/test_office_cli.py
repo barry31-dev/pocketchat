@@ -606,7 +606,8 @@ class DocumentPackageCLITests(unittest.TestCase):
             result = run_cli(['office', '--data-dir', str(self.workspace), '--json',
                           'documents', 'check', '--file', str(self.file)], cwd=self.base)
         self.assertEqual(result.returncode, 2)
-        self.assertEqual(result.stderr, '')
+        # Process stdout/stderr is checked below. In-process capture can receive
+        # delayed ResourceWarnings from unrelated earlier suite fixtures.
         data = json.loads(result.stdout)
         self.assertFalse(data['ok'])
         self.assertNotIn('PRIVATE-CONTENT', result.stdout)
@@ -633,4 +634,19 @@ class DocumentPackageCLITests(unittest.TestCase):
                       'documents', 'check', '--file', str(link)], cwd=self.base)
         self.assertEqual(result.returncode, 2)
         self.assertFalse(json.loads(result.stdout)['ok'])
+        self.assertFalse(self.workspace.exists())
+
+    def test_malformed_process_result_is_content_free_and_stderr_empty(self):
+        self.file.write_bytes(b'PK\x03\x04PRIVATE-CONTENT')
+        command = [sys.executable, '-m', 'pocketchat', 'office', '--data-dir',
+                   str(self.workspace), '--json', 'documents', 'check', '--file', str(self.file)]
+        result = subprocess.run(command, cwd=self.base, capture_output=True, text=True,
+                                env=subprocess_environment({'PYTHONPATH': str(ROOT)}), timeout=10)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stderr, '')
+        data = json.loads(result.stdout)
+        self.assertEqual(data['schema_version'], 'pocketchat-office-cli.v1')
+        self.assertFalse(data['ok'])
+        self.assertNotIn('PRIVATE-CONTENT', result.stdout)
+        self.assertNotIn(str(self.base), result.stdout)
         self.assertFalse(self.workspace.exists())
