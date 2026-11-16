@@ -284,3 +284,40 @@ succeeded and guarded bindings were denied; memory installation returned
 reaped; fixed output was refused with 1,024 retained bytes. Therefore memory
 and arbitrary-parser isolation remain named blockers. No PDF/DOCX extraction
 is enabled by this diagnostic. Other Python/OS behavior is distinct evidence.
+
+
+### Native memory diagnostic (2026-11-16)
+
+`python -I scripts/office_document_memory_probe.py` is a source-checkout-only,
+no-argument trusted diagnostic, not a document reader. It compiles the adjacent
+fixed C source with the system compiler in a temporary directory, runs only
+`baseline`, `as` and `data`, and removes its temporary build. Missing compiler,
+build failure, timeout or malformed result is named; no parser is enabled.
+It does not inspect a caller file, load optional parser dependencies, alter an
+office project or call a provider. The existing production entry is unchanged.
+
+The allocation comparison uses a fixed **32 MiB limit / 48 MiB anonymous mmap**,
+touches one byte and unmaps it. Baseline success plus successful limit setup plus
+`ENOMEM` mapping refusal is reported as `mapping_refused`, **not** proof of a
+256 MiB peak-resident-memory guard. Successful setup with successful mapping is
+`not_enforced`; failed setup is `unsupported`; malformed/mismatched results or an
+unusable baseline are `inconclusive`. Reading limits back alone is never proof.
+The wrapper caps its reported JSON and waits for its own subprocess on timeout;
+this fixed-output diagnostic is not a hostile parser output/descendant sandbox.
+
+Actual local run: macOS 27, Apple clang 21.0.0, CPython 3.9.6. The unguarded
+48 MiB mapping succeeded. Native `setrlimit(RLIMIT_AS)` and `setrlimit(RLIMIT_DATA)`
+each failed with **errno 22 (`EINVAL`)** at the fixed 32 MiB target, and mappings
+still succeeded. The current SDK declares `RLIMIT_RSS == RLIMIT_AS`; RSS is not an
+independent alternative on this host. The same 256 MiB setup failed through libc
+from Python, including the strict-POSIX flag. This separates the observed native
+syscall failure from a Python-wrapper explanation; it does not establish the
+kernel's internal cause or a universal macOS rule. No large resident allocation
+was attempted. Linux mapping behavior and Windows compiler absence are separate
+observations, never inherited from this run.
+
+`parser_ready` stays **false in every result**, including `mapping_refused`.
+Next: select and independently exercise a supported production memory/network
+boundary (or a bounded parser implementation with a justified replacement
+contract) before optional PDF/DOCX extraction. A polled memory watchdog cannot be
+called a hard ceiling, and this diagnostic does not relax §2's production target.

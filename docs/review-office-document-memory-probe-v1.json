@@ -1,0 +1,89 @@
+{
+  "schema": "pocketchat-review-record.v1",
+  "paths": [
+    "scripts/office_document_memory_probe.py",
+    "scripts/office_document_memory_probe.c",
+    "tests/test_office_document_memory_probe.py",
+    "docs/office-document-reading.md",
+    "docs/review-office-document-memory-probe-v1.json",
+    "docs/handovers/2026-11-16-office-document-memory-probe.md"
+  ],
+  "categories": [
+    "docs",
+    "python-tools"
+  ],
+  "tier": "medium",
+  "review_depth": "standard",
+  "rounds": 2,
+  "round_decision": "review",
+  "round_scope": "full",
+  "findings": [
+    {
+      "id": "NATIVE-BUILD-TIMEOUT",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "compiler-timeout-as-unsupported",
+      "reason": "New expected-red test RC1 before fix; timeout now inconclusive/native_build_timeout; targeted closure pending. Scoped reviewer statically verified corrected branches/negative assertions and closed this finding; no new native run claimed."
+    },
+    {
+      "id": "NATIVE-BASELINE-CI",
+      "severity": "major",
+      "status": "fixed",
+      "fingerprint": "baseline-host-memory-as-ci-condition",
+      "reason": "Assertion helper accepts baseline ENOMEM and baseline timeout as honest inconclusive; targeted closure pending. Scoped reviewer statically verified corrected branches/negative assertions and closed this finding; no new native run claimed."
+    }
+  ],
+  "approval": "approved-fixed-native-diagnostic-only",
+  "ready_for_integration": true,
+  "base": "ba7312e19b0e984bb79af95c9d123496a7feb8ad",
+  "scope": "Deliver repeatable fixed-native memory guard evidence: libc errno, exact resource and small baseline/limited mmap comparison. Classify install versus actual allocation refusal separately, always leave arbitrary parser readiness false.",
+  "slice_contract": {
+    "goal": "Deliver repeatable fixed-native memory guard evidence: libc errno, exact resource and small baseline/limited mmap comparison. Classify install versus actual allocation refusal separately, always leave arbitrary parser readiness false.",
+    "not_doing": "No arbitrary PDF/DOCXparser, production256MiB enforcement, fullnetwork/descendants isolation, WebCLIinput acceptance/fullP2, paid provider or release.",
+    "done_when": "Fixed native trusted cases only, 32MiB test AS ceiling and at most 48MiB mapping, separate baseline vs guarded allocation, native errno/unsupported explicit, malformed/unknown result failclosed, CLI no caller code/path/limit, cleanup and bounded diagnostics. Redfocusedtests+nativemacOSrun, independentreview, exacthead necessaryCI/mainreadback; no parser enablement.",
+    "evidence": "Task review and handover; original test/native transcripts retained by the development run.",
+    "budget_stop": "Single bounded slice; unknown guards stay unsupported. No parser enablement or runtime installation.",
+    "rollback_next": "Revert this diagnostic only; existing office runtime untouched. Select a supported actual production guard next."
+  },
+  "verification": [
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest tests.test_office_document_memory_probe -v; python3 -I scripts/office_document_memory_probe.py",
+      "result": "Missing-module red RC1 before implementation; six focused tests green RC0 on macOS27/CPython3.9.6. Native baseline mapping allowed; AS/DATA setup errno22, not enforced. Output parser_ready false."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.13.9 -m unittest tests.test_office_document_memory_probe -v; Ruff E9,F; git diff --check",
+      "result": "Six focused tests RC0 on same macOS27 with Python3.13.9; Ruff fixed one unused import then RC0. Separate interpreter verification, not crossOS resident memory proof."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "python3 -m unittest NativeMemoryProbeTests.test_build_timeout_is_named_inconclusive; python3 -m unittest tests.test_office_document_memory_probe -v; Ruff E9,F",
+      "result": "Timeout expected-red RC1 (unsupported != inconclusive) before correction; eight focused cases RC0 after implementation/test correction. Full local suite not run."
+    },
+    {
+      "source_type": "local run (V)",
+      "status": "verified",
+      "command": "Python3.13.9 -m unittest tests.test_office_document_memory_probe -v",
+      "result": "Eight corrected cases RC0 on macOS27/Python3.13.9. Distinct interpreter compatibility check after new fix, not fullsuite/platformmemoryproof."
+    }
+  ],
+  "unverified_scope": "No arbitrary PDF/DOCXparser, production256MiB enforcement, fullnetwork/descendants isolation, WebCLIinput acceptance/fullP2, paid provider or release.",
+  "review_history": [
+    {
+      "reviewer_id": "01a1e36d-5b7b-70d0-9bb7-0a2ae0b0f55e",
+      "phase": "initial",
+      "status": "two-changes-requested",
+      "coverage": "Six-path read-only scoped review; targeted mock reproductions of compiler timeout and baseline host-resource assertion failures. No native/whole author suite repeated."
+    },
+    {
+      "reviewer_id": "01a1e36d-5b7b-70d0-9bb7-0a2ae0b0f55e",
+      "phase": "targeted-correction",
+      "status": "approved-both-findings-closed",
+      "coverage": "Only changed Python/test branches and assertions; C/docs/handover unchanged against initial review. Static closure, no author test/native runs independently repeated."
+    }
+  ]
+}
